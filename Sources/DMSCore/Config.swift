@@ -9,7 +9,16 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var barTransparent: Bool
     public var showDock: Bool
     public var showTelemetry: Bool
+    public var showWeather: Bool
+    public var showMedia: Bool
+    public var showSpaces: Bool
     public var launcherHotkey: Bool
+    public var dashHotkey: Bool
+    public var notepadHotkey: Bool
+    public var clipboardHotkey: Bool
+    public var weatherLocation: String
+    public var weatherUnits: String // "celsius" or "fahrenheit"
+    public var webSearchProvider: String // "google", "duckduckgo", "bing"
     public var pinnedApps: [String]
     public var apps: AppOverrides
 
@@ -43,7 +52,16 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         barTransparent: Bool = false,
         showDock: Bool = true,
         showTelemetry: Bool = true,
+        showWeather: Bool = true,
+        showMedia: Bool = true,
+        showSpaces: Bool = true,
         launcherHotkey: Bool = true,
+        dashHotkey: Bool = true,
+        notepadHotkey: Bool = true,
+        clipboardHotkey: Bool = true,
+        weatherLocation: String = "auto",
+        weatherUnits: String = "celsius",
+        webSearchProvider: String = "google",
         pinnedApps: [String] = [
             "com.apple.Terminal",
             "com.apple.Safari",
@@ -58,9 +76,45 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.barTransparent = barTransparent
         self.showDock = showDock
         self.showTelemetry = showTelemetry
+        self.showWeather = showWeather
+        self.showMedia = showMedia
+        self.showSpaces = showSpaces
         self.launcherHotkey = launcherHotkey
+        self.dashHotkey = dashHotkey
+        self.notepadHotkey = notepadHotkey
+        self.clipboardHotkey = clipboardHotkey
+        self.weatherLocation = weatherLocation
+        self.weatherUnits = weatherUnits
+        self.webSearchProvider = webSearchProvider
         self.pinnedApps = pinnedApps
         self.apps = apps
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.theme = try container.decodeIfPresent(String.self, forKey: .theme) ?? "purple"
+        self.isLightMode = try container.decodeIfPresent(Bool.self, forKey: .isLightMode) ?? false
+        self.barPosition = try container.decodeIfPresent(String.self, forKey: .barPosition) ?? "bottom"
+        self.barAutoHide = try container.decodeIfPresent(Bool.self, forKey: .barAutoHide) ?? false
+        self.barTransparent = try container.decodeIfPresent(Bool.self, forKey: .barTransparent) ?? false
+        self.showDock = try container.decodeIfPresent(Bool.self, forKey: .showDock) ?? true
+        self.showTelemetry = try container.decodeIfPresent(Bool.self, forKey: .showTelemetry) ?? true
+        self.showWeather = try container.decodeIfPresent(Bool.self, forKey: .showWeather) ?? true
+        self.showMedia = try container.decodeIfPresent(Bool.self, forKey: .showMedia) ?? true
+        self.showSpaces = try container.decodeIfPresent(Bool.self, forKey: .showSpaces) ?? true
+        self.launcherHotkey = try container.decodeIfPresent(Bool.self, forKey: .launcherHotkey) ?? true
+        self.dashHotkey = try container.decodeIfPresent(Bool.self, forKey: .dashHotkey) ?? true
+        self.notepadHotkey = try container.decodeIfPresent(Bool.self, forKey: .notepadHotkey) ?? true
+        self.clipboardHotkey = try container.decodeIfPresent(Bool.self, forKey: .clipboardHotkey) ?? true
+        self.weatherLocation = try container.decodeIfPresent(String.self, forKey: .weatherLocation) ?? "auto"
+        self.weatherUnits = try container.decodeIfPresent(String.self, forKey: .weatherUnits) ?? "celsius"
+        self.webSearchProvider = try container.decodeIfPresent(String.self, forKey: .webSearchProvider) ?? "google"
+        self.pinnedApps = try container.decodeIfPresent([String].self, forKey: .pinnedApps) ?? [
+            "com.apple.Terminal",
+            "com.apple.Safari",
+            "com.apple.finder"
+        ]
+        self.apps = try container.decodeIfPresent(AppOverrides.self, forKey: .apps) ?? AppOverrides()
     }
 
     public static let `default` = DMSConfig()

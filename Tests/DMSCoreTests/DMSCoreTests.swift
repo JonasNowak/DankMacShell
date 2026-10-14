@@ -97,8 +97,9 @@ struct DMSCoreTests {
         #expect(resNone == nil)
     }
 
-    @Test("IPC URL Command Parsing")
+    @Test("IPC URL and CLI Command Parsing")
     func testIPCCommands() {
+        // URLs
         let url1 = URL(string: "dms://toggleLauncher")!
         #expect(IPCCommand.parse(url: url1) == .toggleLauncher)
 
@@ -108,7 +109,93 @@ struct DMSCoreTests {
         let url3 = URL(string: "dms://powerMenu")!
         #expect(IPCCommand.parse(url: url3) == .powerMenu)
 
+        let urlDash = URL(string: "dms://dash")!
+        #expect(IPCCommand.parse(url: urlDash) == .toggleDash)
+
         let urlInvalid = URL(string: "https://google.com")!
         #expect(IPCCommand.parse(url: urlInvalid) == nil)
+
+        // CLI
+        let cli1 = IPCCommand.parseCLI(args: ["ipc", "call", "audio", "setvolume", "75"])
+        #expect(cli1 == .audio(action: "setvolume", value: "75"))
+
+        let cli2 = IPCCommand.parseCLI(args: ["notepad", "get"])
+        #expect(cli2 == .getNotepad)
+
+        let cli3 = IPCCommand.parseCLI(args: ["inhibit", "toggle"])
+        #expect(cli3 == .inhibit(action: "toggle"))
+    }
+
+    @Test("Clipboard Store Operations")
+    func testClipboardStore() {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_clip_\(UUID().uuidString).json")
+        let store = ClipboardStore(storageURL: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        #expect(store.getItems().isEmpty)
+
+        let item = store.add(text: "Hello DankMaterialShell")
+        #expect(item != nil)
+        #expect(store.getItems().count == 1)
+        #expect(store.getItems().first?.preview == "Hello DankMaterialShell")
+
+        // Search
+        let results = store.search(query: "Dank")
+        #expect(results.count == 1)
+
+        store.clear()
+        #expect(store.getItems().isEmpty)
+    }
+
+    @Test("Notepad Store Operations")
+    func testNotepadStore() {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_notes_\(UUID().uuidString).json")
+        let store = NotepadStore(storageURL: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let initial = store.getActiveNote()
+        #expect(!initial.title.isEmpty)
+
+        store.updateActiveNote(title: "My Note", content: "Line one\nLine two")
+        let updated = store.getActiveNote()
+        #expect(updated.title == "My Note")
+        #expect(updated.wordCount == 4)
+        #expect(updated.charCount == 17)
+    }
+
+    @Test("Weather Model and Symbols")
+    func testWeatherModel() {
+        let clearDay = WeatherData(temperatureC: 22.5, weatherCode: 0, isDay: true)
+        #expect(clearDay.conditionDescription == "Clear Sky")
+        #expect(clearDay.sfSymbol == "sun.max.fill")
+        #expect(abs(clearDay.temperatureF - 72.5) < 0.1)
+
+        let rain = WeatherData(temperatureC: 14.0, weatherCode: 61, isDay: false)
+        #expect(rain.conditionDescription == "Rain")
+        #expect(rain.sfSymbol == "cloud.drizzle.fill")
+    }
+
+    @Test("Now Playing Model Progress")
+    func testNowPlayingModel() {
+        let track = NowPlayingTrack(
+            title: "Song",
+            artist: "Artist",
+            isPlaying: true,
+            durationSeconds: 200,
+            elapsedSeconds: 50
+        )
+        #expect(track.formattedDuration == "3:20")
+        #expect(track.formattedElapsed == "0:50")
+        #expect(track.progress == 0.25)
+    }
+
+    @Test("Emoji and Web Search")
+    func testEmojisAndWebSearch() {
+        let rocket = AppSearch.searchEmojis(query: "rocket")
+        #expect(!rocket.isEmpty)
+        #expect(rocket.first?.emoji == "🚀")
+
+        let googleURL = AppSearch.webSearchURL(query: "DankMaterialShell", provider: "google")
+        #expect(googleURL?.absoluteString.contains("google.com/search") == true)
     }
 }

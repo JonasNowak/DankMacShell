@@ -17,7 +17,8 @@ BUILD_NUMBER=${BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null 
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BINARY" "$APP/Contents/MacOS/DMS"
+cp "$BINARY" "$APP/Contents/MacOS/DankMaterialShell"
+ln -sf "DankMaterialShell" "$APP/Contents/MacOS/DMS"
 cp "$PLIST" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
 

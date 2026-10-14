@@ -10,19 +10,18 @@ public struct ControlCenterView: View {
     private let brightness = BrightnessService.shared
     private let nightShift = NightShiftService.shared
     private let battery = BatteryService.shared
-
-    @State private var volumeValue: Double = 0.5
-    @State private var brightnessValue: Double = 0.7
+    @ObservedObject private var inhibit = IdleInhibitService.shared
+    @ObservedObject private var nowPlaying = NowPlayingService.shared
 
     public init() {}
 
     public var body: some View {
-        VStack(spacing: 14) {
-            // MARK: - Header: User Info & Host
+        VStack(spacing: 12) {
+            // MARK: - Header: User Info & Shortcuts
             HStack(spacing: 12) {
                 Image(systemName: "person.crop.circle.fill")
                     .resizable()
-                    .frame(width: 38, height: 38)
+                    .frame(width: 36, height: 36)
                     .foregroundColor(theme.primary)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -37,11 +36,26 @@ public struct ControlCenterView: View {
 
                 Spacer()
 
+                // DMS Settings Button
+                Button {
+                    ControlCenterController.shared.hide()
+                    SettingsController.shared.show()
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.onSurfaceVariant)
+                        .padding(8)
+                        .background(theme.surfaceContainerHigh)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+
+                // macOS System Settings Button
                 Button {
                     openSystemSettings()
                 } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
                         .padding(8)
                         .background(theme.surfaceContainerHigh)
@@ -51,8 +65,68 @@ public struct ControlCenterView: View {
             }
             .padding(.horizontal, 4)
 
-            // MARK: - Action Tiles (2x3 Grid)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            // MARK: - Media Player Card
+            VStack(spacing: 8) {
+                HStack(spacing: 12) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(theme.primary)
+                        .frame(width: 36, height: 36)
+                        .background(theme.primaryContainer)
+                        .cornerRadius(10)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(nowPlaying.currentTrack.title)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(theme.onSurface)
+                            .lineLimit(1)
+
+                        Text(nowPlaying.currentTrack.artist)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.onSurfaceVariant)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 10) {
+                        Button { nowPlaying.previous() } label: {
+                            Image(systemName: "backward.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(theme.onSurface)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button { nowPlaying.playPause() } label: {
+                            Image(systemName: nowPlaying.currentTrack.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.onPrimary)
+                                .frame(width: 30, height: 30)
+                                .background(theme.primary)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button { nowPlaying.next() } label: {
+                            Image(systemName: "forward.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(theme.onSurface)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if nowPlaying.currentTrack.durationSeconds > 0 {
+                    ProgressView(value: nowPlaying.currentTrack.progress)
+                        .accentColor(theme.primary)
+                }
+            }
+            .padding(12)
+            .background(theme.surfaceContainerHigh)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            // MARK: - Action Tiles (2 Columns Grid)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 // Wi-Fi Tile
                 M3ActionTile(
                     icon: wifi.symbolName,
@@ -102,15 +176,31 @@ public struct ControlCenterView: View {
                     }
                 )
 
+                // Sleep Inhibit / Caffeinate Tile
+                M3ActionTile(
+                    icon: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer",
+                    title: "Inhibit Sleep",
+                    subtitle: inhibit.isInhibited ? "Active" : "Off",
+                    isActive: inhibit.isInhibited,
+                    onTap: { inhibit.toggle() }
+                )
+
+                // Microphone Mute Tile
+                M3ActionTile(
+                    icon: audio.isMicMuted ? "mic.slash.fill" : "mic.fill",
+                    title: "Microphone",
+                    subtitle: audio.isMicMuted ? "Muted" : "Active",
+                    isActive: !audio.isMicMuted,
+                    onTap: { audio.isMicMuted.toggle() }
+                )
+
                 // Screen Capture Tile
                 M3ActionTile(
                     icon: "camera.viewfinder",
                     title: "Capture",
                     subtitle: "Area / Window",
                     isActive: false,
-                    onTap: {
-                        takeScreenshot()
-                    }
+                    onTap: { takeScreenshot() }
                 )
 
                 // Do Not Disturb / Focus Tile
@@ -119,26 +209,24 @@ public struct ControlCenterView: View {
                     title: "Focus",
                     subtitle: "Do Not Disturb",
                     isActive: false,
-                    onTap: {
-                        openFocusSettings()
-                    }
+                    onTap: { openFocusSettings() }
                 )
             }
 
             // MARK: - Sliders: Volume & Brightness
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 // Volume Slider
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Image(systemName: audio.isMuted ? "speaker.slash.fill" : "speaker.wave.3.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(theme.primary)
                         Text("Volume")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundColor(theme.onSurface)
                         Spacer()
                         Text("\(Int(audio.volume * 100))%")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
 
@@ -148,23 +236,24 @@ public struct ControlCenterView: View {
                     ), in: 0...1)
                     .tint(theme.primary)
                 }
-                .padding(10)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
                 .background(theme.surfaceContainerHigh)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 // Brightness Slider
                 if brightness.isAvailable {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Image(systemName: "sun.max.fill")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(theme.secondary)
                             Text("Brightness")
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
                                 .foregroundColor(theme.onSurface)
                             Spacer()
                             Text("\(Int(brightness.value * 100))%")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .foregroundColor(theme.onSurfaceVariant)
                         }
 
@@ -174,26 +263,27 @@ public struct ControlCenterView: View {
                         ), in: 0...1)
                         .tint(theme.secondary)
                     }
-                    .padding(10)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
 
             // MARK: - Themes Row
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("THEME PALETTES")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundColor(theme.outline)
                     Spacer()
                     Text(theme.themeName.capitalized)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.primary)
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         ThemeChip(name: "dynamic", label: "Dynamic", icon: "sparkles", isSelected: theme.themeName.lowercased() == "dynamic")
                         ThemeChip(name: "purple", label: "Purple", colorHex: "#D0BCFF", isSelected: theme.themeName.lowercased() == "purple")
                         ThemeChip(name: "blue", label: "Blue", colorHex: "#A8C7FA", isSelected: theme.themeName.lowercased() == "blue")
@@ -206,7 +296,8 @@ public struct ControlCenterView: View {
                     .padding(.vertical, 2)
                 }
             }
-            .padding(10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(theme.surfaceContainerHigh)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
@@ -285,32 +376,32 @@ public struct M3ActionTile: View {
         Button {
             onTap()
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(isActive ? theme.onPrimary : theme.primary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 22, height: 22)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(isActive ? theme.onPrimary : theme.onSurface)
 
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundColor(isActive ? theme.onPrimary.opacity(0.8) : theme.onSurfaceVariant)
                         .lineLimit(1)
                 }
 
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 46)
             .background(isActive ? theme.primary : theme.surfaceContainerHigh)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(isActive ? theme.primary : theme.outlineVariant.opacity(0.25), lineWidth: 1)
             )
         }

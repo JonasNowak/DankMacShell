@@ -64,11 +64,30 @@ public final class AudioService {
         onVolumeChanged?(volume, isMuted)
     }
 
-    public func toggleMute() {
+    public func setMuted(_ muted: Bool) {
         guard device != 0, Self.uint32(device, kAudioDevicePropertyMute) != nil else { return }
-        Self.setUInt32(device, kAudioDevicePropertyMute, isMuted ? 0 : 1)
-        isMuted.toggle()
+        Self.setUInt32(device, kAudioDevicePropertyMute, muted ? 1 : 0)
+        isMuted = muted
         onVolumeChanged?(volume, isMuted)
+    }
+
+    public func toggleMute() {
+        setMuted(!isMuted)
+    }
+
+    public var isMicMuted: Bool = false
+
+    public func setMicMuted(_ muted: Bool) {
+        isMicMuted = muted
+        let script = muted ? "set volume input volume 0" : "set volume input volume 100"
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            appleScript.executeAndReturnError(&error)
+        }
+    }
+
+    public func toggleMicMute() {
+        setMicMuted(!isMicMuted)
     }
 
     public func setDefaultOutput(_ id: AudioObjectID) {

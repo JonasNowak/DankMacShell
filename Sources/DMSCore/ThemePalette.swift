@@ -54,6 +54,7 @@ public struct M3Color: Sendable, Codable, Equatable, Hashable {
 }
 
 /// Material Design 3 full color token set.
+public typealias DMSPalette = ThemePalette
 public struct ThemePalette: Sendable, Codable, Equatable {
     public var name: String
     public var isDark: Bool

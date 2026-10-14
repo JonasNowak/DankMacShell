@@ -14,6 +14,11 @@ public final class BrightnessService {
     public private(set) var value: Double = 0
     public private(set) var isAvailable = false
 
+    public var brightness: Double {
+        get { value }
+        set { set(newValue) }
+    }
+
     @ObservationIgnored private var getBrightness: GetBrightness?
     @ObservationIgnored private var setBrightness: SetBrightness?
     @ObservationIgnored private var display: CGDirectDisplayID = 0

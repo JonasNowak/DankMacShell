@@ -8,13 +8,16 @@ let package = Package(
     name: "DMS",
     platforms: [.macOS(.v26)],
     products: [
-        .executable(name: "DMS", targets: ["DMS"]),
+        .executable(name: "DankMaterialShell", targets: ["DMS"]),
+        .executable(name: "dms", targets: ["DMSCLI"]),
     ],
     targets: [
-        // Pure logic: M3 color tokens, dynamic theme generator, config, fuzzy app search, telemetry models, IPC.
+        // Pure logic: M3 color tokens, dynamic theme generator, config, fuzzy app search, telemetry models, IPC, clipboard, notepad, weather.
         .target(name: "DMSCore"),
-        // Native macOS application: AppKit NSPanels, SwiftUI views, system event services.
+        // Native macOS application: AppKit NSPanels, SwiftUI views, system event services, Unix socket server.
         .executableTarget(name: "DMS", dependencies: ["DMSCore"]),
+        // Native dms CLI binary for terminal and keybind integration (dms run, dms ipc call ..., dms doctor, etc.).
+        .executableTarget(name: "DMSCLI", dependencies: ["DMSCore"], path: "Sources/DMSCLI"),
         // Unit tests for core logic.
         .testTarget(name: "DMSCoreTests", dependencies: ["DMSCore"]),
     ]

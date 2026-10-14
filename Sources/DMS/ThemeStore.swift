@@ -37,6 +37,11 @@ public final class ThemeStore: ObservableObject {
         refreshTheme()
     }
 
+    public func setLightMode(_ light: Bool) {
+        self.isLightMode = light
+        refreshTheme()
+    }
+
     public func refreshTheme() {
         if themeName.lowercased() == "dynamic" {
             if dynamicPalettes == nil {
@@ -164,6 +169,11 @@ public final class ThemeStore: ObservableObject {
     public var onBackground: Color { Color(hex: palette.onBackground.hex) }
     public var outline: Color { Color(hex: palette.outline.hex) }
     public var outlineVariant: Color { Color(hex: palette.outlineVariant.hex) }
+
+    public var error: Color { Color(hex: palette.error.hex) }
+    public var onError: Color { Color(hex: palette.onError.hex) }
+    public var errorContainer: Color { Color(hex: palette.errorContainer.hex) }
+    public var onErrorContainer: Color { Color(hex: palette.onErrorContainer.hex) }
 
     public var warning: Color { Color(hex: palette.warning.hex) }
     public var info: Color { Color(hex: palette.info.hex) }

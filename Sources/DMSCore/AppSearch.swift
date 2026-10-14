@@ -38,6 +38,59 @@ public struct SearchResult: Sendable, Identifiable, Equatable {
     }
 }
 
+/// File search result item.
+public struct FileItem: Sendable, Identifiable, Equatable {
+    public var id: String { path }
+    public let name: String
+    public let path: String
+    public let isDirectory: Bool
+    public let sfSymbol: String
+
+    public init(name: String, path: String, isDirectory: Bool) {
+        self.name = name
+        self.path = path
+        self.isDirectory = isDirectory
+
+        if isDirectory {
+            self.sfSymbol = "folder.fill"
+        } else {
+            let ext = (path as NSString).pathExtension.lowercased()
+            switch ext {
+            case "swift", "py", "rs", "go", "js", "ts", "cpp", "c", "h", "html", "css", "json", "sh":
+                self.sfSymbol = "chevron.left.forwardslash.chevron.right"
+            case "png", "jpg", "jpeg", "webp", "gif", "svg", "heic":
+                self.sfSymbol = "photo.fill"
+            case "mp3", "m4a", "wav", "flac", "aac":
+                self.sfSymbol = "music.note"
+            case "mp4", "mov", "mkv", "avi":
+                self.sfSymbol = "film.fill"
+            case "pdf":
+                self.sfSymbol = "doc.richtext.fill"
+            case "zip", "tar", "gz", "bz2", "7z", "dmg":
+                self.sfSymbol = "archivebox.fill"
+            default:
+                self.sfSymbol = "doc.text.fill"
+            }
+        }
+    }
+}
+
+/// Running window item for launcher window switcher.
+public struct WindowItem: Sendable, Identifiable, Equatable {
+    public var id: Int { windowID }
+    public let windowID: Int
+    public let ownerPID: Int32
+    public let ownerName: String
+    public let title: String
+
+    public init(windowID: Int, ownerPID: Int32, ownerName: String, title: String) {
+        self.windowID = windowID
+        self.ownerPID = ownerPID
+        self.ownerName = ownerName
+        self.title = title
+    }
+}
+
 /// Quick math evaluator result.
 public struct MathResult: Sendable, Equatable {
     public let expression: String
@@ -49,7 +102,21 @@ public struct MathResult: Sendable, Equatable {
     }
 }
 
-/// App searching, fuzzy matching, and calculator evaluations for DLauncherV2.
+/// Emoji search item.
+public struct EmojiItem: Sendable, Identifiable, Equatable {
+    public var id: String { emoji }
+    public let emoji: String
+    public let name: String
+    public let keywords: [String]
+
+    public init(emoji: String, name: String, keywords: [String] = []) {
+        self.emoji = emoji
+        self.name = name
+        self.keywords = keywords
+    }
+}
+
+/// App searching, fuzzy matching, files, windows, and calculator evaluations for DLauncherV2.
 public enum AppSearch {
 
     /// Scores an application against a search query.
@@ -149,9 +216,7 @@ public enum AppSearch {
         }
 
         // Parse with NSExpression
-        var exprString = clean.replacingOccurrences(of: "^", with: "**")
-        // Basic protection: convert 5**2 to pow function or NSExpression compatible
-        exprString = exprString.replacingOccurrences(of: "**", with: "**")
+        let exprString = clean.replacingOccurrences(of: "^", with: "**")
 
         let expr = NSExpression(format: exprString)
         if let val = expr.expressionValue(with: nil, context: nil) as? NSNumber {
@@ -162,6 +227,96 @@ public enum AppSearch {
         }
 
         return nil
+    }
+
+    /// Search for files in user common directories matching query.
+    public static func searchFiles(query: String, maxResults: Int = 12) -> [FileItem] {
+        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard clean.count >= 2 else { return [] }
+
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let searchDirs = [
+            home.appendingPathComponent("Documents"),
+            home.appendingPathComponent("Downloads"),
+            home.appendingPathComponent("Desktop"),
+            home.appendingPathComponent("Projects"),
+            home.appendingPathComponent("repos")
+        ]
+
+        var results: [FileItem] = []
+        let fm = FileManager.default
+
+        for dir in searchDirs {
+            guard fm.fileExists(atPath: dir.path) else { continue }
+            if let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+                for case let fileURL as URL in enumerator {
+                    let name = fileURL.lastPathComponent
+                    if name.lowercased().contains(clean) {
+                        let isDir = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                        results.append(FileItem(name: name, path: fileURL.path, isDirectory: isDir))
+                        if results.count >= maxResults {
+                            return results
+                        }
+                    }
+                }
+            }
+        }
+        return results
+    }
+
+    /// Common emojis dataset for quick emoji lookup.
+    public static let commonEmojis: [EmojiItem] = [
+        EmojiItem(emoji: "🚀", name: "Rocket", keywords: ["space", "launch", "fast", "speed"]),
+        EmojiItem(emoji: "🔥", name: "Fire", keywords: ["lit", "hot", "flame", "cool"]),
+        EmojiItem(emoji: "✨", name: "Sparkles", keywords: ["magic", "star", "clean", "shine"]),
+        EmojiItem(emoji: "💡", name: "Light Bulb", keywords: ["idea", "smart", "bright", "think"]),
+        EmojiItem(emoji: "⚡️", name: "Zap", keywords: ["fast", "electricity", "thunder", "power"]),
+        EmojiItem(emoji: "🎉", name: "Party Popper", keywords: ["celebrate", "tada", "fun"]),
+        EmojiItem(emoji: "👍", name: "Thumbs Up", keywords: ["ok", "good", "agree", "yes"]),
+        EmojiItem(emoji: "❤️", name: "Red Heart", keywords: ["love", "heart", "like"]),
+        EmojiItem(emoji: "💻", name: "Laptop", keywords: ["computer", "code", "tech", "mac"]),
+        EmojiItem(emoji: "☕️", name: "Coffee", keywords: ["drink", "cafe", "espresso", "morning"]),
+        EmojiItem(emoji: "🛠️", name: "Hammer and Wrench", keywords: ["tools", "build", "dev", "fix"]),
+        EmojiItem(emoji: "📦", name: "Package", keywords: ["box", "delivery", "bundle", "repo"]),
+        EmojiItem(emoji: "🔍", name: "Magnifying Glass", keywords: ["search", "find", "look"]),
+        EmojiItem(emoji: "🎨", name: "Artist Palette", keywords: ["art", "theme", "design", "color"]),
+        EmojiItem(emoji: "⏱️", name: "Stopwatch", keywords: ["time", "clock", "timer", "fast"]),
+        EmojiItem(emoji: "✅", name: "Check Mark", keywords: ["done", "yes", "pass", "ok"]),
+        EmojiItem(emoji: "❌", name: "Cross Mark", keywords: ["no", "fail", "bad", "delete"]),
+        EmojiItem(emoji: "⚠️", name: "Warning", keywords: ["alert", "caution", "danger"]),
+        EmojiItem(emoji: "🌟", name: "Glowing Star", keywords: ["fav", "star", "bright"]),
+        EmojiItem(emoji: "🌙", name: "Crescent Moon", keywords: ["night", "dark", "sleep"]),
+        EmojiItem(emoji: "☀️", name: "Sun", keywords: ["light", "day", "warm", "weather"]),
+        EmojiItem(emoji: "🌧️", name: "Cloud with Rain", keywords: ["rain", "storm", "weather"]),
+        EmojiItem(emoji: "❄️", name: "Snowflake", keywords: ["cold", "winter", "ice"])
+    ]
+
+    /// Searches emojis by name or keyword.
+    public static func searchEmojis(query: String) -> [EmojiItem] {
+        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !clean.isEmpty else { return Array(commonEmojis.prefix(12)) }
+
+        return commonEmojis.filter { item in
+            item.name.lowercased().contains(clean) ||
+            item.keywords.contains { $0.lowercased().contains(clean) }
+        }
+    }
+
+    /// Generates web search URL for configured provider.
+    public static func webSearchURL(query: String, provider: String = "google") -> URL? {
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            return nil
+        }
+        switch provider.lowercased() {
+        case "duckduckgo", "ddg":
+            return URL(string: "https://duckduckgo.com/?q=\(encoded)")
+        case "bing":
+            return URL(string: "https://www.bing.com/search?q=\(encoded)")
+        case "kagi":
+            return URL(string: "https://kagi.com/search?q=\(encoded)")
+        default:
+            return URL(string: "https://www.google.com/search?q=\(encoded)")
+        }
     }
 
     private static func formatNumber(_ num: Double) -> String {

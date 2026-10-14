@@ -6,54 +6,78 @@ import Carbon.HIToolbox
 public final class HotkeyService {
     public static let shared = HotkeyService()
 
-    private var reference: EventHotKeyRef?
+    private var references: [UInt32: EventHotKeyRef] = [:]
     private var handler: EventHandlerRef?
-    private var action: (@MainActor () -> Void)?
+    private var actions: [UInt32: @MainActor () -> Void] = [:]
 
-    private init() {}
+    private init() {
+        setupHandler()
+    }
 
-    public func register(keyCode: Int = kVK_Space, modifiers: Int = optionKey, action: @escaping @MainActor () -> Void) {
-        unregister()
-        self.action = action
-
+    private func setupHandler() {
         var spec = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
         )
 
-        let callback: EventHandlerUPP = { _, _, context in
-            guard let context else { return noErr }
+        let callback: EventHandlerUPP = { _, event, context in
+            guard let event = event, let context = context else { return noErr }
+            var hotKeyID = EventHotKeyID()
+            let status = GetEventParameter(
+                event,
+                EventParamName(kEventParamDirectObject),
+                EventParamType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &hotKeyID
+            )
+            guard status == noErr else { return noErr }
+
             let service = Unmanaged<HotkeyService>.fromOpaque(context).takeUnretainedValue()
             MainActor.assumeIsolated {
-                service.action?()
+                service.actions[hotKeyID.id]?()
             }
             return noErr
         }
 
         let context = Unmanaged.passUnretained(self).toOpaque()
-        guard InstallEventHandler(GetApplicationEventTarget(), callback, 1, &spec, context, &handler) == noErr else {
-            return
-        }
-
-        let id = EventHotKeyID(signature: OSType(0x444D_5348), id: 1) // 'DMSH'
-        _ = RegisterEventHotKey(
-            UInt32(keyCode),
-            UInt32(modifiers),
-            id,
-            GetApplicationEventTarget(),
-            0,
-            &reference
-        )
+        _ = InstallEventHandler(GetApplicationEventTarget(), callback, 1, &spec, context, &handler)
     }
 
-    public func unregister() {
-        if let reference {
-            UnregisterEventHotKey(reference)
+    public func register(id: UInt32 = 1, keyCode: Int = kVK_Space, modifiers: Int = optionKey, action: @escaping @MainActor () -> Void) {
+        unregister(id: id)
+        self.actions[id] = action
+
+        var hotKeyRef: EventHotKeyRef?
+        let hotKeyID = EventHotKeyID(signature: OSType(0x444D_5348), id: id) // 'DMSH'
+        let status = RegisterEventHotKey(
+            UInt32(keyCode),
+            UInt32(modifiers),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr, let ref = hotKeyRef {
+            references[id] = ref
         }
-        if let handler {
-            RemoveEventHandler(handler)
+    }
+
+    public func unregister(id: UInt32) {
+        if let ref = references[id] {
+            UnregisterEventHotKey(ref)
+            references.removeValue(forKey: id)
         }
-        reference = nil
-        handler = nil
+        actions.removeValue(forKey: id)
+    }
+
+    public func unregisterAll() {
+        for (_, ref) in references {
+            UnregisterEventHotKey(ref)
+        }
+        references.removeAll()
+        actions.removeAll()
     }
 }

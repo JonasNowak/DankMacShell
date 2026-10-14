@@ -10,15 +10,20 @@ public struct DankBarView: View {
     private let wifi = WiFiService.shared
     private let audio = AudioService.shared
     private let battery = BatteryService.shared
+    @ObservedObject private var nowPlaying = NowPlayingService.shared
+    @ObservedObject private var weather = WeatherService.shared
+    @ObservedObject private var inhibit = IdleInhibitService.shared
+    @ObservedObject private var configStore = ConfigStore.shared
 
     @State private var currentTime = Date()
+    @State private var activeSpace: Int = 1
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     public init() {}
 
     public var body: some View {
         HStack(spacing: 8) {
-            // MARK: - Left: Launcher + Active App + Dock
+            // MARK: - Left: Launcher + Spaces + Active App + Dock
             HStack(spacing: 6) {
                 // DMS Launcher Button
                 Button {
@@ -39,6 +44,31 @@ public struct DankBarView: View {
                 }
                 .buttonStyle(.plain)
 
+                // Workspaces / Spaces Indicator
+                if configStore.config.showSpaces {
+                    HStack(spacing: 3) {
+                        ForEach(1...4, id: \.self) { spaceNum in
+                            Button(action: {
+                                activeSpace = spaceNum
+                                // Send Ctrl+Number key event to switch spaces
+                                switchSpace(spaceNum)
+                            }) {
+                                Text("\(spaceNum)")
+                                    .font(.system(size: 11, weight: activeSpace == spaceNum ? .bold : .medium, design: .rounded))
+                                    .foregroundColor(activeSpace == spaceNum ? theme.onPrimary : theme.onSurface)
+                                    .frame(width: 20, height: 20)
+                                    .background(activeSpace == spaceNum ? theme.primary : Color.clear)
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(theme.surfaceContainerHigh)
+                    .clipShape(Capsule())
+                }
+
                 // Active App Pill
                 if let active = runningApps.activeApp {
                     HStack(spacing: 6) {
@@ -58,7 +88,7 @@ public struct DankBarView: View {
                 }
 
                 // Dock Apps
-                if ConfigStore.shared.config.showDock {
+                if configStore.config.showDock {
                     HStack(spacing: 4) {
                         ForEach(runningApps.dockApps) { app in
                             DockAppItemView(app: app)
@@ -73,28 +103,60 @@ public struct DankBarView: View {
 
             Spacer()
 
-            // MARK: - Center: Clock & Dynamic Island
+            // MARK: - Center: Dynamic Island / Clock & Media Pill
             HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(theme.primary)
-                    Text(timeFormatter.string(from: currentTime))
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundColor(theme.onSurface)
-                    Text("•")
-                        .foregroundColor(theme.outline)
-                    Text(dateFormatter.string(from: currentTime))
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(theme.onSurfaceVariant)
+                Button(action: {
+                    DashController.shared.toggle()
+                }) {
+                    HStack(spacing: 8) {
+                        // Clock
+                        HStack(spacing: 5) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(theme.primary)
+                            Text(timeFormatter.string(from: currentTime))
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundColor(theme.onSurface)
+                            Text("•")
+                                .foregroundColor(theme.outline)
+                            Text(dateFormatter.string(from: currentTime))
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundColor(theme.onSurfaceVariant)
+                        }
+
+                        // Media playback snippet inside Dynamic Island if playing
+                        if configStore.config.showMedia, nowPlaying.currentTrack.isPlaying {
+                            HStack(spacing: 6) {
+                                Text("|")
+                                    .foregroundColor(theme.outline)
+
+                                Image(systemName: "music.note")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(theme.primary)
+
+                                Text("\(nowPlaying.currentTrack.title)")
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .foregroundColor(theme.onSurface)
+                                    .lineLimit(1)
+
+                                Button(action: { nowPlaying.playPause() }) {
+                                    Image(systemName: "pause.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(theme.primary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(theme.surfaceContainerHigh)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(theme.outlineVariant.opacity(0.25), lineWidth: 1)
+                    )
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(theme.surfaceContainerHigh)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(theme.outlineVariant.opacity(0.25), lineWidth: 1)
-                )
+                .buttonStyle(.plain)
             }
             .onReceive(timer) { input in
                 currentTime = input
@@ -102,9 +164,29 @@ public struct DankBarView: View {
 
             Spacer()
 
-            // MARK: - Right: Telemetry + Controls
+            // MARK: - Right: Telemetry, Weather, Quick Toggles & Controls
             HStack(spacing: 6) {
-                if ConfigStore.shared.config.showTelemetry {
+                // Weather Pill
+                if configStore.config.showWeather {
+                    Button(action: { DashController.shared.toggle() }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: weather.currentWeather.sfSymbol)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(theme.primary)
+                            Text("\(Int(round(weather.currentWeather.temperatureC)))°")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundColor(theme.onSurface)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(theme.surfaceContainerHigh)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Hardware Telemetry
+                if configStore.config.showTelemetry {
                     // CPU Pill
                     HStack(spacing: 4) {
                         Image(systemName: "cpu")
@@ -150,25 +232,45 @@ public struct DankBarView: View {
                     }
                 }
 
+                // Sleep Inhibit (Caffeinate) Pill
+                Button(action: { inhibit.toggle() }) {
+                    Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(inhibit.isInhibited ? theme.onPrimary : theme.onSurface)
+                        .padding(6)
+                        .background(inhibit.isInhibited ? theme.primary : theme.surfaceContainerHigh)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+
+                // Mic Mute Toggle Pill
+                Button(action: { audio.isMicMuted.toggle() }) {
+                    Image(systemName: audio.isMicMuted ? "mic.slash.fill" : "mic.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(audio.isMicMuted ? theme.error : theme.primary)
+                        .padding(6)
+                        .background(theme.surfaceContainerHigh)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+
                 // Wi-Fi Pill
                 HStack(spacing: 4) {
                     Image(systemName: wifi.symbolName)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(wifi.isConnected ? theme.primary : theme.outline)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(6)
                 .background(theme.surfaceContainerHigh)
                 .clipShape(Circle())
 
-                // Audio Pill
+                // Audio Output Volume Pill
                 HStack(spacing: 4) {
                     Image(systemName: audio.isMuted ? "speaker.slash.fill" : (audio.volume > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill"))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(audio.isMuted ? theme.outline : theme.primary)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(6)
                 .background(theme.surfaceContainerHigh)
                 .clipShape(Circle())
 
@@ -177,9 +279,9 @@ public struct DankBarView: View {
                     ControlCenterController.shared.toggle()
                 } label: {
                     Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(ControlCenterController.shared.isVisible ? theme.onPrimary : theme.onSurface)
-                        .padding(8)
+                        .padding(7)
                         .background(ControlCenterController.shared.isVisible ? theme.primary : theme.surfaceContainerHigh)
                         .clipShape(Circle())
                 }
@@ -192,32 +294,47 @@ public struct DankBarView: View {
                     Image(systemName: "power")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.onSurface)
-                        .padding(8)
+                        .padding(7)
                         .background(theme.surfaceContainerHigh)
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        .frame(height: 48)
         .background(
             ZStack {
-                if ConfigStore.shared.config.barTransparent {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                if configStore.config.barTransparent {
+                    VisualEffectBlur(material: .headerView, blendingMode: .withinWindow)
+                        .background(theme.surface.opacity(0.85))
                 } else {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(theme.surfaceContainer)
+                    theme.surface
                 }
             }
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(Capsule())
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
+            Capsule().stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 4)
+        .shadow(color: Color.black.opacity(0.25), radius: 14, x: 0, y: 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+    }
+
+    private func switchSpace(_ number: Int) {
+        let src = CGEventSource(stateID: .hidSystemState)
+        let keyCodes: [Int: CGKeyCode] = [1: 18, 2: 19, 3: 20, 4: 21] // 1, 2, 3, 4
+        guard let code = keyCodes[number] else { return }
+
+        let down = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true)
+        down?.flags = .maskControl
+        down?.post(tap: .cghidEventTap)
+
+        let up = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false)
+        up?.flags = .maskControl
+        up?.post(tap: .cghidEventTap)
     }
 
     private var timeFormatter: DateFormatter {
@@ -233,44 +350,41 @@ public struct DankBarView: View {
     }
 }
 
-/// Dock app button with active running indicator dot and context menu.
+/// Dock item button with running status dot and context menu.
 public struct DockAppItemView: View {
     public let app: AppItem
     @ObservedObject private var theme = ThemeStore.shared
-    @State private var isHovered = false
 
     public var body: some View {
         Button {
             RunningAppsService.shared.activate(app: app)
         } label: {
             VStack(spacing: 2) {
-                AppIconImage(path: app.path, size: 24)
-                    .scaleEffect(isHovered ? 1.15 : 1.0)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isHovered)
+                AppIconImage(path: app.path, size: 22)
 
-                // Running indicator dot
                 Circle()
                     .fill(app.isRunning ? theme.primary : Color.clear)
                     .frame(width: 4, height: 4)
             }
-            .frame(width: 34, height: 36)
-            .background(isHovered ? theme.surfaceContainerHighest.opacity(0.6) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .frame(width: 30, height: 32)
+            .background(Color.clear)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hover in
-            isHovered = hover
-        }
         .contextMenu {
+            Text(app.name).font(.headline)
+            Divider()
+
             Button(app.isPinned ? "Unpin from Dock" : "Pin to Dock") {
-                RunningAppsService.shared.togglePin(bundleID: app.bundleID)
+                RunningAppsService.shared.togglePinned(bundleID: app.bundleID)
             }
+
             if app.isRunning {
                 Button("Hide") {
                     RunningAppsService.shared.hide(app: app)
                 }
-                Divider()
-                Button("Quit", role: .destructive) {
+
+                Button("Quit") {
                     RunningAppsService.shared.quit(app: app)
                 }
             }
@@ -278,26 +392,53 @@ public struct DockAppItemView: View {
     }
 }
 
-/// App icon loader from macOS workspace.
+/// Async App Icon image using NSWorkspace.
 public struct AppIconImage: View {
     public let path: String
     public let size: CGFloat
 
     public var body: some View {
-        if let img = iconImage() {
+        if let img = iconImage {
             Image(nsImage: img)
                 .resizable()
+                .scaledToFit()
                 .frame(width: size, height: size)
         } else {
             Image(systemName: "app.fill")
                 .resizable()
+                .scaledToFit()
                 .frame(width: size, height: size)
                 .foregroundColor(.secondary)
         }
     }
 
-    private func iconImage() -> NSImage? {
-        guard !path.isEmpty else { return nil }
-        return NSWorkspace.shared.icon(forFile: path)
+    private var iconImage: NSImage? {
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        icon.size = NSSize(width: size * 2, height: size * 2)
+        return icon
+    }
+}
+
+/// AppKit VisualEffectView wrapper for native liquid blur backgrounds.
+public struct VisualEffectBlur: NSViewRepresentable {
+    public var material: NSVisualEffectView.Material
+    public var blendingMode: NSVisualEffectView.BlendingMode
+
+    public init(material: NSVisualEffectView.Material = .headerView, blendingMode: NSVisualEffectView.BlendingMode = .withinWindow) {
+        self.material = material
+        self.blendingMode = blendingMode
+    }
+
+    public func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+
+    public func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
     }
 }

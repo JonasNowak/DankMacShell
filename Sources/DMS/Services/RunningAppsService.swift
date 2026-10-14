@@ -100,7 +100,7 @@ public final class RunningAppsService {
     public func activate(app: AppItem) {
         let running = NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == app.bundleID }
         if let running {
-            running.activate(options: [.activateIgnoringOtherApps])
+            running.activate()
         } else if let url = URL(string: "file://" + app.path) {
             NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         }
@@ -125,5 +125,9 @@ public final class RunningAppsService {
             }
         }
         refresh()
+    }
+
+    public func togglePinned(bundleID: String) {
+        togglePin(bundleID: bundleID)
     }
 }

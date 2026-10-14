@@ -34,6 +34,10 @@ public final class DankBarController {
         isVisible = false
     }
 
+    public func updateBarFrame() {
+        reposition()
+    }
+
     public func reposition() {
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.frame

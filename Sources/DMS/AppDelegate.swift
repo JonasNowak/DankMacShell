@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Carbon.HIToolbox
 import DMSCore
 
 @MainActor
@@ -21,18 +22,53 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         setupURLSchemeHandler()
         setupHotkeys()
 
+        // Start Unix domain socket server for `dms` CLI and scripts
+        IPCSocketServer.shared.start()
+
         // Show DankBar
         DankBarController.shared.show()
         _ = ToastController.shared
         _ = OSDController.shared
+        _ = ClipboardService.shared
+        _ = NowPlayingService.shared
+        _ = WeatherService.shared
 
         print("DankMaterialShell for macOS started successfully.")
     }
 
+    public func applicationWillTerminate(_ notification: Notification) {
+        IPCSocketServer.shared.stop()
+        HotkeyService.shared.unregisterAll()
+    }
+
     private func setupHotkeys() {
-        if ConfigStore.shared.config.launcherHotkey {
-            HotkeyService.shared.register {
+        let config = ConfigStore.shared.config
+
+        // ⌥Space: Spotlight Launcher
+        if config.launcherHotkey {
+            HotkeyService.shared.register(id: 1, keyCode: kVK_Space, modifiers: optionKey) {
                 LauncherController.shared.toggle()
+            }
+        }
+
+        // ⌥D: DankDash Overview
+        if config.dashHotkey {
+            HotkeyService.shared.register(id: 2, keyCode: kVK_ANSI_D, modifiers: optionKey) {
+                DashController.shared.toggle()
+            }
+        }
+
+        // ⌥N: Notepad Scratchpad
+        if config.notepadHotkey {
+            HotkeyService.shared.register(id: 3, keyCode: kVK_ANSI_N, modifiers: optionKey) {
+                NotepadController.shared.toggle()
+            }
+        }
+
+        // ⌥V: Clipboard History
+        if config.clipboardHotkey {
+            HotkeyService.shared.register(id: 4, keyCode: kVK_ANSI_V, modifiers: optionKey) {
+                ClipboardController.shared.toggle()
             }
         }
     }
@@ -53,43 +89,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        switch command {
-        case .toggleLauncher:
-            LauncherController.shared.toggle()
-        case .openLauncher:
-            LauncherController.shared.show()
-        case .closeLauncher:
-            LauncherController.shared.hide()
-        case .toggleControlCenter:
-            ControlCenterController.shared.toggle()
-        case .openControlCenter:
-            ControlCenterController.shared.show()
-        case .closeControlCenter:
-            ControlCenterController.shared.hide()
-        case .powerMenu:
-            PowerMenuController.shared.show()
-        case .setTheme(let name):
-            ThemeStore.shared.apply(theme: name, lightMode: ThemeStore.shared.isLightMode)
-            ConfigStore.shared.update { $0.theme = name }
-            ToastCenter.shared.show(icon: "paintpalette.fill", message: "Theme switched to \(name.capitalized)")
-        case .toggleThemeMode:
-            ThemeStore.shared.toggleLightMode()
-            ConfigStore.shared.update { $0.isLightMode = ThemeStore.shared.isLightMode }
-            ToastCenter.shared.show(
-                icon: ThemeStore.shared.isLightMode ? "sun.max.fill" : "moon.fill",
-                message: "Switched to \(ThemeStore.shared.isLightMode ? "Light" : "Dark") Mode"
-            )
-        case .screenshot:
-            let task = Process()
-            task.launchPath = "/usr/sbin/screencapture"
-            task.arguments = ["-i", "-c"]
-            task.launch()
-        case .reloadConfig:
-            ConfigStore.shared.loadConfig()
-            ThemeStore.shared.apply(theme: ConfigStore.shared.config.theme, lightMode: ConfigStore.shared.config.isLightMode)
-            ToastCenter.shared.show(icon: "arrow.clockwise", message: "Configuration reloaded")
-        case .unknown(let cmd):
-            print("Unknown DMS command: \(cmd)")
-        }
+        _ = IPCCommandExecutor.execute(command)
     }
 }

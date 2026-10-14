@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>DMS</string>
+	<string>DankMaterialShell</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.jonasnowak.dms</string>
 	<key>CFBundleName</key>

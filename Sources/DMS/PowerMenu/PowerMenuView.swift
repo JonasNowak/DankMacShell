@@ -29,7 +29,7 @@ public struct PowerMenuView: View {
                     color: theme.primary
                 ) {
                     onClose()
-                    Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["displaysleepnow"])
+                    PowerMenuView.lockScreen()
                 }
 
                 PowerOptionButton(
@@ -38,7 +38,7 @@ public struct PowerMenuView: View {
                     color: theme.secondary
                 ) {
                     onClose()
-                    Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["sleepnow"])
+                    PowerMenuView.sleepSystem()
                 }
 
                 PowerOptionButton(
@@ -47,7 +47,7 @@ public struct PowerMenuView: View {
                     color: theme.warning
                 ) {
                     onClose()
-                    executeAppleScript("tell application \"System Events\" to restart")
+                    PowerMenuView.restartSystem()
                 }
 
                 PowerOptionButton(
@@ -56,7 +56,7 @@ public struct PowerMenuView: View {
                     color: Color.red
                 ) {
                     onClose()
-                    executeAppleScript("tell application \"System Events\" to shut down")
+                    PowerMenuView.shutDownSystem()
                 }
 
                 PowerOptionButton(
@@ -65,7 +65,7 @@ public struct PowerMenuView: View {
                     color: theme.outline
                 ) {
                     onClose()
-                    executeAppleScript("tell application \"System Events\" to log out")
+                    PowerMenuView.logOut()
                 }
             }
 
@@ -93,11 +93,31 @@ public struct PowerMenuView: View {
         .shadow(color: Color.black.opacity(0.4), radius: 25, x: 0, y: 10)
     }
 
-    private func executeAppleScript(_ script: String) {
+    public static func executeAppleScript(_ script: String) {
         if let appleScript = NSAppleScript(source: script) {
             var error: NSDictionary?
             appleScript.executeAndReturnError(&error)
         }
+    }
+
+    public static func lockScreen() {
+        Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["displaysleepnow"])
+    }
+
+    public static func sleepSystem() {
+        Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["sleepnow"])
+    }
+
+    public static func restartSystem() {
+        executeAppleScript("tell application \"System Events\" to restart")
+    }
+
+    public static func shutDownSystem() {
+        executeAppleScript("tell application \"System Events\" to shut down")
+    }
+
+    public static func logOut() {
+        executeAppleScript("tell application \"System Events\" to log out")
     }
 }
 
