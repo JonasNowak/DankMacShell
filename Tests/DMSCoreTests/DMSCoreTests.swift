@@ -219,4 +219,41 @@ struct DMSCoreTests {
         let cliApplets = IPCCommand.parseCLI(args: ["applets", "toggle", "weather"])
         #expect(cliApplets == .toggleApplet(id: "weather"))
     }
+
+    @Test("Workspace Models and App Items")
+    func testWorkspaceModels() {
+        let app1 = WorkspaceAppItem(
+            pid: 1234,
+            name: "Kitty",
+            bundleID: "net.kovidgoyal.kitty",
+            path: "/Applications/kitty.app",
+            isActive: true,
+            omniWMWindowID: "ow_abc123"
+        )
+        #expect(app1.id == "ow_abc123")
+        #expect(app1.isActive == true)
+        #expect(app1.bundleID == "net.kovidgoyal.kitty")
+
+        let app2 = WorkspaceAppItem(
+            pid: 5678,
+            name: "Obsidian",
+            bundleID: "md.obsidian",
+            path: "/Applications/Obsidian.app",
+            isActive: false
+        )
+        #expect(app2.id == "5678_md.obsidian")
+        #expect(app2.isActive == false)
+
+        let ws = WorkspaceInfo(
+            id: "ws-1",
+            number: 1,
+            name: "1",
+            isCurrent: true,
+            apps: [app1, app2]
+        )
+        #expect(ws.number == 1)
+        #expect(ws.isCurrent == true)
+        #expect(ws.apps.count == 2)
+        #expect(ws.apps.first?.name == "Kitty")
+    }
 }

@@ -49,18 +49,23 @@ public struct DankBarView: View {
 
                 // Workspaces / Spaces Indicator (Live updating)
                 if configStore.config.showSpaces {
-                    let total = max(4, workspace.spacesCount)
+                    let workspaceItems: [WorkspaceInfo] = workspace.workspaces.isEmpty
+                        ? (1...max(4, workspace.spacesCount)).map { WorkspaceInfo(id: "\($0)", number: $0, name: "\($0)", isCurrent: workspace.activeSpaceIndex == $0) }
+                        : workspace.workspaces
+
                     HStack(spacing: 3) {
-                        ForEach(1...total, id: \.self) { spaceNum in
+                        ForEach(workspaceItems) { ws in
+                            let isSelected = ws.isCurrent || workspace.activeSpaceIndex == ws.number
                             Button(action: {
-                                workspace.switchSpace(spaceNum)
+                                workspace.switchSpace(ws.number)
                             }) {
-                                Text("\(spaceNum)")
-                                    .font(.system(size: 11, weight: workspace.activeSpaceIndex == spaceNum ? .bold : .medium, design: .rounded))
-                                    .foregroundColor(workspace.activeSpaceIndex == spaceNum ? theme.onPrimary : theme.onSurface)
-                                    .frame(width: 20, height: 20)
-                                    .background(workspace.activeSpaceIndex == spaceNum ? theme.primary : Color.clear)
-                                    .clipShape(Circle())
+                                Text(ws.name)
+                                    .font(.system(size: 11, weight: isSelected ? .bold : .medium, design: .rounded))
+                                    .foregroundColor(isSelected ? theme.onPrimary : theme.onSurface)
+                                    .frame(minWidth: 20, minHeight: 20)
+                                    .padding(.horizontal, ws.name.count > 1 ? 4 : 0)
+                                    .background(isSelected ? theme.primary : Color.clear)
+                                    .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
                         }
