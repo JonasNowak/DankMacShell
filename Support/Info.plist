@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>DMS</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.jonasnowak.dms</string>
+	<key>CFBundleName</key>
+	<string>DankMaterialShell</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>io.github.jonasnowak.dms</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dms</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>DMS uses System Events for Log Out, Restart and Shut Down in the power menu.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>DMS uses Bluetooth to display and toggle adapter power in the control center.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>DankMaterialShell</string>
+</dict>
+</plist>
