@@ -51,14 +51,34 @@ public final class ControlCenterController {
     public func reposition(on screen: NSScreen) {
         let isBottom = ConfigStore.shared.config.barPosition.lowercased() == "bottom"
         let popoutWidth: CGFloat = 360
-        let popoutHeight: CGFloat = 530
-        let marginX: CGFloat = 16
-        let gap: CGFloat = 10
+        let marginX: CGFloat = CGFloat(ConfigStore.shared.config.barMarginX)
+        let gap: CGFloat = 12
 
-        let xPos = screen.frame.maxX - popoutWidth - marginX
-        let yPos: CGFloat = isBottom
-            ? (screen.frame.minY + 10 + DankBarController.barHeight + gap)
-            : (screen.frame.maxY - 10 - DankBarController.barHeight - gap - popoutHeight)
+        let visibleFrame = screen.visibleFrame
+        let fullFrame = screen.frame
+
+        let xPos = fullFrame.maxX - popoutWidth - marginX
+
+        let popoutHeight: CGFloat
+        let yPos: CGFloat
+
+        if isBottom {
+            // Anchor strictly above the top edge of the bottom bar
+            let barFrame = DankBarController.shared.panel.frame
+            let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
+            yPos = barTop + gap
+
+            let availableHeight = visibleFrame.maxY - yPos - gap
+            popoutHeight = min(620, max(300, availableHeight))
+        } else {
+            // Anchor strictly below the bottom edge of the top bar
+            let barFrame = DankBarController.shared.panel.frame
+            let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
+
+            let availableHeight = barBottom - visibleFrame.minY - gap
+            popoutHeight = min(620, max(300, availableHeight))
+            yPos = barBottom - popoutHeight - gap
+        }
 
         let frame = NSRect(x: xPos, y: yPos, width: popoutWidth, height: popoutHeight)
         panel.setFrame(frame, display: true)

@@ -28,9 +28,9 @@ public final class AppCatalogService {
 
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            // Return top installed apps sorted alphabetically
-            let top = apps.prefix(12).map { SearchResult(app: $0, score: 0) }
-            return (math, Array(top))
+            // Return all installed apps sorted alphabetically so user can scroll through all
+            let all = apps.map { SearchResult(app: $0, score: 0) }
+            return (math, all)
         }
 
         var matches: [SearchResult] = []
@@ -41,7 +41,7 @@ public final class AppCatalogService {
         }
 
         matches.sort { $0.score > $1.score }
-        return (math, Array(matches.prefix(15)))
+        return (math, matches)
     }
 
     nonisolated private static func scanApplications() -> [AppItem] {

@@ -16,7 +16,8 @@ public struct ControlCenterView: View {
     public init() {}
 
     public var body: some View {
-        VStack(spacing: 12) {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 12) {
             // MARK: - Header: User Info & Shortcuts
             HStack(spacing: 12) {
                 Image(systemName: "person.crop.circle.fill")
@@ -318,8 +319,9 @@ public struct ControlCenterView: View {
                     PowerMenuController.shared.show()
                 }
             }
+            .padding(16)
         }
-        .padding(16)
+        }
         .frame(width: 360)
         .background(theme.surfaceContainer)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))

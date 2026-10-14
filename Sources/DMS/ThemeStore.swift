@@ -32,6 +32,17 @@ public final class ThemeStore: ObservableObject {
         refreshTheme()
     }
 
+    public func apply(theme: String) {
+        self.themeName = theme
+        refreshTheme()
+    }
+
+    public func setDynamicWallpaper() {
+        self.themeName = "dynamic"
+        extractWallpaperSeed()
+        refreshTheme()
+    }
+
     public func toggleLightMode() {
         self.isLightMode.toggle()
         refreshTheme()

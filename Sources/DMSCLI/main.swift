@@ -39,7 +39,8 @@ func printHelp() {
       dms mpris [status|play|pause|next|prev]   Media playback control
       dms theme [get|set <name>|list|toggle-mode]
       dms screenshot [region|full|window]
-      dms toast <info|warn|error> <message>
+      dms plugins [search|list|install|uninstall|enable|disable|lock|restore]
+      dms applets [list|toggle <name>]  Customize DankBar widgets and applets
       dms version                      Show version info
     """)
 }

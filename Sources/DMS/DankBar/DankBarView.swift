@@ -5,7 +5,7 @@ import DMSCore
 
 public struct DankBarView: View {
     @ObservedObject private var theme = ThemeStore.shared
-    private let runningApps = RunningAppsService.shared
+    @ObservedObject private var workspace = WorkspaceService.shared
     private let telemetry = TelemetryService.shared
     private let wifi = WiFiService.shared
     private let audio = AudioService.shared
@@ -16,48 +16,50 @@ public struct DankBarView: View {
     @ObservedObject private var configStore = ConfigStore.shared
 
     @State private var currentTime = Date()
-    @State private var activeSpace: Int = 1
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     public init() {}
 
     public var body: some View {
         HStack(spacing: 8) {
-            // MARK: - Left: Launcher + Spaces + Active App + Dock
+            // MARK: - Left: Launcher + Spaces + Workspace Apps
             HStack(spacing: 6) {
                 // DMS Launcher Button
-                Button {
-                    LauncherController.shared.toggle()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "circle.grid.3x3.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(theme.onPrimary)
-                        Text("DMS")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundColor(theme.onPrimary)
+                if configStore.config.showLauncher {
+                    Button {
+                        LauncherController.shared.toggle()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "circle.grid.3x3.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(theme.onPrimary)
+                            Text("DMS")
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundColor(theme.onPrimary)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(theme.primary)
+                        .clipShape(Capsule())
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(theme.primary)
-                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
 
-                // Workspaces / Spaces Indicator
+                // Workspaces / Spaces Indicator (Live updating)
                 if configStore.config.showSpaces {
+                    let total = max(4, workspace.spacesCount)
                     HStack(spacing: 3) {
-                        ForEach(1...4, id: \.self) { spaceNum in
+                        ForEach(1...total, id: \.self) { spaceNum in
                             Button(action: {
-                                activeSpace = spaceNum
-                                // Send Ctrl+Number key event to switch spaces
-                                switchSpace(spaceNum)
+                                workspace.switchSpace(spaceNum)
                             }) {
                                 Text("\(spaceNum)")
-                                    .font(.system(size: 11, weight: activeSpace == spaceNum ? .bold : .medium, design: .rounded))
-                                    .foregroundColor(activeSpace == spaceNum ? theme.onPrimary : theme.onSurface)
+                                    .font(.system(size: 11, weight: workspace.activeSpaceIndex == spaceNum ? .bold : .medium, design: .rounded))
+                                    .foregroundColor(workspace.activeSpaceIndex == spaceNum ? theme.onPrimary : theme.onSurface)
                                     .frame(width: 20, height: 20)
-                                    .background(activeSpace == spaceNum ? theme.primary : Color.clear)
+                                    .background(workspace.activeSpaceIndex == spaceNum ? theme.primary : Color.clear)
                                     .clipShape(Circle())
                             }
                             .buttonStyle(.plain)
@@ -69,104 +71,132 @@ public struct DankBarView: View {
                     .clipShape(Capsule())
                 }
 
-                // Active App Pill
-                if let active = runningApps.activeApp {
-                    HStack(spacing: 6) {
-                        AppIconImage(path: active.path, size: 16)
-                        Text(active.name)
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundColor(theme.onSurface)
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(theme.surfaceContainerHigh)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(theme.outlineVariant.opacity(0.3), lineWidth: 1)
-                    )
-                }
-
-                // Dock Apps
-                if configStore.config.showDock {
+                // Workspace Running Apps (Shows all apps open in said workspace)
+                if configStore.config.showWorkspaceApps && !workspace.currentWorkspaceApps.isEmpty {
                     HStack(spacing: 4) {
-                        ForEach(runningApps.dockApps) { app in
-                            DockAppItemView(app: app)
+                        ForEach(workspace.currentWorkspaceApps) { app in
+                            WorkspaceAppItemView(app: app)
                         }
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(theme.surfaceContainerLow)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(theme.surfaceContainerHigh.opacity(0.7))
                     .clipShape(Capsule())
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 12)
 
             // MARK: - Center: Dynamic Island / Clock & Media Pill
-            HStack(spacing: 8) {
-                Button(action: {
-                    DashController.shared.toggle()
-                }) {
-                    HStack(spacing: 8) {
-                        // Clock
-                        HStack(spacing: 5) {
-                            Image(systemName: "clock.fill")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(theme.primary)
-                            Text(timeFormatter.string(from: currentTime))
-                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                .foregroundColor(theme.onSurface)
-                            Text("•")
-                                .foregroundColor(theme.outline)
-                            Text(dateFormatter.string(from: currentTime))
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundColor(theme.onSurfaceVariant)
-                        }
-
-                        // Media playback snippet inside Dynamic Island if playing
-                        if configStore.config.showMedia, nowPlaying.currentTrack.isPlaying {
-                            HStack(spacing: 6) {
-                                Text("|")
-                                    .foregroundColor(theme.outline)
-
-                                Image(systemName: "music.note")
-                                    .font(.system(size: 10, weight: .bold))
+            if configStore.config.showClock {
+                HStack(spacing: 8) {
+                    Button(action: {
+                        DashController.shared.toggle()
+                    }) {
+                        HStack(spacing: 8) {
+                            // Clock
+                            HStack(spacing: 5) {
+                                Image(systemName: "clock.fill")
+                                    .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(theme.primary)
-
-                                Text("\(nowPlaying.currentTrack.title)")
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                Text(timeFormatter.string(from: currentTime))
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
                                     .foregroundColor(theme.onSurface)
                                     .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                Text("•")
+                                    .foregroundColor(theme.outline)
+                                Text(dateFormatter.string(from: currentTime))
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .foregroundColor(theme.onSurfaceVariant)
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
 
-                                Button(action: { nowPlaying.playPause() }) {
-                                    Image(systemName: "pause.fill")
-                                        .font(.system(size: 10))
+                            // Media playback snippet inside Dynamic Island if playing
+                            if configStore.config.showMedia, nowPlaying.currentTrack.isPlaying {
+                                HStack(spacing: 6) {
+                                    Text("|")
+                                        .foregroundColor(theme.outline)
+
+                                    Image(systemName: "music.note")
+                                        .font(.system(size: 10, weight: .bold))
                                         .foregroundColor(theme.primary)
+
+                                    Text("\(nowPlaying.currentTrack.title)")
+                                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                                        .foregroundColor(theme.onSurface)
+                                        .lineLimit(1)
+
+                                    Button(action: { nowPlaying.playPause() }) {
+                                        Image(systemName: "pause.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(theme.primary)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(theme.surfaceContainerHigh)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule().stroke(theme.outlineVariant.opacity(0.25), lineWidth: 1)
+                        )
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(theme.surfaceContainerHigh)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(theme.outlineVariant.opacity(0.25), lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
-            .onReceive(timer) { input in
-                currentTime = input
+                .onReceive(timer) { input in
+                    currentTime = input
+                }
             }
 
-            Spacer()
+            Spacer(minLength: 12)
 
             // MARK: - Right: Telemetry, Weather, Quick Toggles & Controls
             HStack(spacing: 6) {
-                // Weather Pill
+                // Optional Applets: Notepad, Clipboard, ColorPicker shortcuts
+                if configStore.config.showNotepadApplet {
+                    Button(action: { NotepadController.shared.toggle() }) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(theme.onSurface)
+                            .padding(6)
+                            .background(theme.surfaceContainerHigh)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Notepad Scratchpad")
+                }
+
+                if configStore.config.showClipboardApplet {
+                    Button(action: { ClipboardController.shared.toggle() }) {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(theme.onSurface)
+                            .padding(6)
+                            .background(theme.surfaceContainerHigh)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clipboard History")
+                }
+
+                if configStore.config.showColorPickerApplet {
+                    Button(action: { ColorPickerController.shared.show() }) {
+                        Image(systemName: "eyedropper")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(theme.onSurface)
+                            .padding(6)
+                            .background(theme.surfaceContainerHigh)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Color Eyedropper")
+                }
+
+                // Weather Pill (Text cut-off fixed)
                 if configStore.config.showWeather {
                     Button(action: { DashController.shared.toggle() }) {
                         HStack(spacing: 4) {
@@ -174,18 +204,21 @@ public struct DankBarView: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(theme.primary)
                             Text("\(Int(round(weather.currentWeather.temperatureC)))°")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
                                 .foregroundColor(theme.onSurface)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 9)
                         .padding(.vertical, 5)
                         .background(theme.surfaceContainerHigh)
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .help("Live Weather: \(weather.currentWeather.conditionDescription)")
                 }
 
-                // Hardware Telemetry
+                // Hardware Telemetry (CPU, RAM, Battery - Text cut-off fixed)
                 if configStore.config.showTelemetry {
                     // CPU Pill
                     HStack(spacing: 4) {
@@ -193,10 +226,12 @@ public struct DankBarView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.primary)
                         Text("\(Int(telemetry.telemetry.cpuPercent))%")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .foregroundColor(theme.onSurface)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 9)
                     .padding(.vertical, 5)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(Capsule())
@@ -207,10 +242,12 @@ public struct DankBarView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.secondary)
                         Text("\(Int(telemetry.telemetry.ramPercent))%")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .foregroundColor(theme.onSurface)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 9)
                     .padding(.vertical, 5)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(Capsule())
@@ -222,10 +259,12 @@ public struct DankBarView: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(bat.isCharging ? theme.success : theme.onSurface)
                             Text("\(bat.capacity)%")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
                                 .foregroundColor(theme.onSurface)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 9)
                         .padding(.vertical, 5)
                         .background(theme.surfaceContainerHigh)
                         .clipShape(Capsule())
@@ -233,77 +272,95 @@ public struct DankBarView: View {
                 }
 
                 // Sleep Inhibit (Caffeinate) Pill
-                Button(action: { inhibit.toggle() }) {
-                    Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(inhibit.isInhibited ? theme.onPrimary : theme.onSurface)
-                        .padding(6)
-                        .background(inhibit.isInhibited ? theme.primary : theme.surfaceContainerHigh)
-                        .clipShape(Circle())
+                if configStore.config.showInhibit {
+                    Button(action: { inhibit.toggle() }) {
+                        Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(inhibit.isInhibited ? theme.onPrimary : theme.onSurface)
+                            .padding(6)
+                            .background(inhibit.isInhibited ? theme.primary : theme.surfaceContainerHigh)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(inhibit.isInhibited ? "Sleep Inhibit Active" : "Sleep Inhibit Off")
                 }
-                .buttonStyle(.plain)
 
                 // Mic Mute Toggle Pill
-                Button(action: { audio.isMicMuted.toggle() }) {
-                    Image(systemName: audio.isMicMuted ? "mic.slash.fill" : "mic.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(audio.isMicMuted ? theme.error : theme.primary)
-                        .padding(6)
-                        .background(theme.surfaceContainerHigh)
-                        .clipShape(Circle())
+                if configStore.config.showMic {
+                    Button(action: { audio.isMicMuted.toggle() }) {
+                        Image(systemName: audio.isMicMuted ? "mic.slash.fill" : "mic.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(audio.isMicMuted ? theme.error : theme.primary)
+                            .padding(6)
+                            .background(theme.surfaceContainerHigh)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(audio.isMicMuted ? "Microphone Muted" : "Microphone Active")
                 }
-                .buttonStyle(.plain)
 
                 // Wi-Fi Pill
-                HStack(spacing: 4) {
-                    Image(systemName: wifi.symbolName)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(wifi.isConnected ? theme.primary : theme.outline)
+                if configStore.config.showWifi {
+                    HStack(spacing: 4) {
+                        Image(systemName: wifi.symbolName)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(wifi.isConnected ? theme.primary : theme.outline)
+                    }
+                    .padding(6)
+                    .background(theme.surfaceContainerHigh)
+                    .clipShape(Circle())
+                    .help(wifi.subtitle)
                 }
-                .padding(6)
-                .background(theme.surfaceContainerHigh)
-                .clipShape(Circle())
 
                 // Audio Output Volume Pill
-                HStack(spacing: 4) {
-                    Image(systemName: audio.isMuted ? "speaker.slash.fill" : (audio.volume > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill"))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(audio.isMuted ? theme.outline : theme.primary)
+                if configStore.config.showVolume {
+                    HStack(spacing: 4) {
+                        Image(systemName: audio.isMuted ? "speaker.slash.fill" : (audio.volume > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill"))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(audio.isMuted ? theme.outline : theme.primary)
+                    }
+                    .padding(6)
+                    .background(theme.surfaceContainerHigh)
+                    .clipShape(Circle())
+                    .help("Volume: \(Int(audio.volume * 100))%")
                 }
-                .padding(6)
-                .background(theme.surfaceContainerHigh)
-                .clipShape(Circle())
 
                 // Control Center Trigger
-                Button {
-                    ControlCenterController.shared.toggle()
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(ControlCenterController.shared.isVisible ? theme.onPrimary : theme.onSurface)
-                        .padding(7)
-                        .background(ControlCenterController.shared.isVisible ? theme.primary : theme.surfaceContainerHigh)
-                        .clipShape(Circle())
+                if configStore.config.showControlCenter {
+                    Button {
+                        ControlCenterController.shared.toggle()
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(ControlCenterController.shared.isVisible ? theme.onPrimary : theme.onSurface)
+                            .padding(7)
+                            .background(ControlCenterController.shared.isVisible ? theme.primary : theme.surfaceContainerHigh)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Quick Settings & Control Center")
                 }
-                .buttonStyle(.plain)
 
                 // Power Menu Trigger
-                Button {
-                    PowerMenuController.shared.toggle()
-                } label: {
-                    Image(systemName: "power")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(theme.onSurface)
-                        .padding(7)
-                        .background(theme.surfaceContainerHigh)
-                        .clipShape(Circle())
+                if configStore.config.showPowerMenu {
+                    Button {
+                        PowerMenuController.shared.toggle()
+                    } label: {
+                        Image(systemName: "power")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(theme.onSurface)
+                            .padding(7)
+                            .background(theme.surfaceContainerHigh)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Power & Session Menu")
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .frame(height: 48)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             ZStack {
                 if configStore.config.barTransparent {
@@ -319,22 +376,6 @@ public struct DankBarView: View {
             Capsule().stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.25), radius: 14, x: 0, y: 4)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
-    }
-
-    private func switchSpace(_ number: Int) {
-        let src = CGEventSource(stateID: .hidSystemState)
-        let keyCodes: [Int: CGKeyCode] = [1: 18, 2: 19, 3: 20, 4: 21] // 1, 2, 3, 4
-        guard let code = keyCodes[number] else { return }
-
-        let down = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true)
-        down?.flags = .maskControl
-        down?.post(tap: .cghidEventTap)
-
-        let up = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false)
-        up?.flags = .maskControl
-        up?.post(tap: .cghidEventTap)
     }
 
     private var timeFormatter: DateFormatter {
@@ -347,48 +388,6 @@ public struct DankBarView: View {
         let f = DateFormatter()
         f.dateFormat = "EEE, d MMM"
         return f
-    }
-}
-
-/// Dock item button with running status dot and context menu.
-public struct DockAppItemView: View {
-    public let app: AppItem
-    @ObservedObject private var theme = ThemeStore.shared
-
-    public var body: some View {
-        Button {
-            RunningAppsService.shared.activate(app: app)
-        } label: {
-            VStack(spacing: 2) {
-                AppIconImage(path: app.path, size: 22)
-
-                Circle()
-                    .fill(app.isRunning ? theme.primary : Color.clear)
-                    .frame(width: 4, height: 4)
-            }
-            .frame(width: 30, height: 32)
-            .background(Color.clear)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Text(app.name).font(.headline)
-            Divider()
-
-            Button(app.isPinned ? "Unpin from Dock" : "Pin to Dock") {
-                RunningAppsService.shared.togglePinned(bundleID: app.bundleID)
-            }
-
-            if app.isRunning {
-                Button("Hide") {
-                    RunningAppsService.shared.hide(app: app)
-                }
-
-                Button("Quit") {
-                    RunningAppsService.shared.quit(app: app)
-                }
-            }
-        }
     }
 }
 
@@ -413,6 +412,7 @@ public struct AppIconImage: View {
     }
 
     private var iconImage: NSImage? {
+        guard !path.isEmpty else { return nil }
         let icon = NSWorkspace.shared.icon(forFile: path)
         icon.size = NSSize(width: size * 2, height: size * 2)
         return icon
@@ -440,5 +440,41 @@ public struct VisualEffectBlur: NSViewRepresentable {
     public func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
+    }
+}
+
+/// Represents an interactive application pill open in the current workspace.
+public struct WorkspaceAppItemView: View {
+    public let app: WorkspaceAppItem
+    @ObservedObject private var theme = ThemeStore.shared
+
+    public init(app: WorkspaceAppItem) {
+        self.app = app
+    }
+
+    public var body: some View {
+        Button {
+            WorkspaceService.shared.activate(app: app)
+        } label: {
+            HStack(spacing: 5) {
+                AppIconImage(path: app.path, size: 16)
+                if app.isActive {
+                    Text(app.name)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.onSurface)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .padding(.horizontal, app.isActive ? 8 : 6)
+            .padding(.vertical, 4)
+            .background(app.isActive ? theme.primaryContainer.opacity(0.6) : theme.surfaceContainerLow)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(app.isActive ? theme.primary.opacity(0.4) : theme.outlineVariant.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(app.name)
     }
 }

@@ -151,15 +151,17 @@ public struct LauncherView: View {
                 VStack(spacing: 4) {
                     switch activeTab {
                     case .all:
-                        // Apps section
+                        // Apps section (Full scrollable catalog)
                         let appList = appSearchResult.results
                         if !appList.isEmpty {
-                            ForEach(Array(appList.prefix(8).enumerated()), id: \.element.id) { index, item in
-                                LauncherItemRow(
-                                    item: item.app,
-                                    isSelected: index == selectedIndex,
-                                    onSelect: { launchApp(item.app) }
-                                )
+                            LazyVStack(spacing: 4) {
+                                ForEach(Array(appList.enumerated()), id: \.element.id) { index, item in
+                                    LauncherItemRow(
+                                        item: item.app,
+                                        isSelected: index == selectedIndex,
+                                        onSelect: { launchApp(item.app) }
+                                    )
+                                }
                             }
                         }
 
@@ -193,12 +195,14 @@ public struct LauncherView: View {
                         if list.isEmpty && !query.isEmpty {
                             webSearchFallbackRow
                         } else {
-                            ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
-                                LauncherItemRow(
-                                    item: item.app,
-                                    isSelected: index == selectedIndex,
-                                    onSelect: { launchApp(item.app) }
-                                )
+                            LazyVStack(spacing: 4) {
+                                ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
+                                    LauncherItemRow(
+                                        item: item.app,
+                                        isSelected: index == selectedIndex,
+                                        onSelect: { launchApp(item.app) }
+                                    )
+                                }
                             }
                         }
 

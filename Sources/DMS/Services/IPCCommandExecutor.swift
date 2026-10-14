@@ -427,6 +427,68 @@ public enum IPCCommandExecutor {
         case .status:
             return "active"
 
+        case .listPlugins:
+            let installed = PluginService.shared.plugins.filter { $0.isInstalled }
+            if installed.isEmpty {
+                return "No plugins installed. Run 'dms plugins search' to view available plugins."
+            }
+            return installed.map { "[\($0.isEnabled ? "ON" : "OFF")] \($0.id) (v\($0.version)) - \($0.name)" }.joined(separator: "\n")
+
+        case .searchPlugins(let query):
+            let all = PluginService.shared.plugins
+            let filtered = query.isEmpty ? all : all.filter {
+                $0.id.localizedCaseInsensitiveContains(query) ||
+                $0.name.localizedCaseInsensitiveContains(query) ||
+                $0.description.localizedCaseInsensitiveContains(query)
+            }
+            if filtered.isEmpty { return "No matching plugins found." }
+            return filtered.map { p in
+                "• \(p.id) (v\(p.version)) [\(p.type.title)] - \(p.name)\n  \(p.description)\n  Status: \(p.isInstalled ? (p.isEnabled ? "Installed (Enabled)" : "Installed (Disabled)") : "Available")"
+            }.joined(separator: "\n\n")
+
+        case .installPlugin(let id):
+            PluginService.shared.installPlugin(id: id)
+            return "Plugin '\(id)' installed and enabled."
+
+        case .uninstallPlugin(let id):
+            PluginService.shared.uninstallPlugin(id: id)
+            return "Plugin '\(id)' uninstalled."
+
+        case .enablePlugin(let id):
+            guard let p = PluginService.shared.plugins.first(where: { $0.id == id }) else {
+                return "Plugin '\(id)' not found."
+            }
+            if !p.isEnabled {
+                PluginService.shared.togglePlugin(id: id)
+            }
+            return "Plugin '\(id)' enabled."
+
+        case .disablePlugin(let id):
+            guard let p = PluginService.shared.plugins.first(where: { $0.id == id }) else {
+                return "Plugin '\(id)' not found."
+            }
+            if p.isEnabled {
+                PluginService.shared.togglePlugin(id: id)
+            }
+            return "Plugin '\(id)' disabled."
+
+        case .lockPlugins:
+            PluginService.shared.saveLockfile()
+            return "Plugins locked to plugins.lock.json"
+
+        case .restorePlugins(let path):
+            let ok = PluginService.shared.restoreLockfile(from: path)
+            return ok ? "Plugins restored from lockfile." : "Failed to restore lockfile."
+
+        case .listApplets:
+            let applets = PluginService.shared.applets
+            return applets.map { "[\($0.isEnabled ? "ON" : "OFF")] \($0.id) - \($0.name) (\($0.description))" }.joined(separator: "\n")
+
+        case .toggleApplet(let id):
+            PluginService.shared.toggleApplet(id: id)
+            let cur = PluginService.shared.applets.first(where: { $0.id == id })?.isEnabled ?? false
+            return "Applet '\(id)' is now \(cur ? "enabled" : "disabled")."
+
         case .unknown(let raw):
             return "Unknown command: \(raw)"
         }

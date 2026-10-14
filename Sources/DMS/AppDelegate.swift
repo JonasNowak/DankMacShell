@@ -27,6 +27,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Show DankBar
         DankBarController.shared.show()
+        _ = WorkspaceService.shared
+        _ = PluginService.shared
         _ = ToastController.shared
         _ = OSDController.shared
         _ = ClipboardService.shared

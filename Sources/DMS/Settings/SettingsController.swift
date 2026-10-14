@@ -25,8 +25,8 @@ public final class SettingsController: ObservableObject {
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 
-        let width: CGFloat = 680
-        let height: CGFloat = 500
+        let width: CGFloat = 760
+        let height: CGFloat = 580
         let rect = NSRect(
             x: visibleFrame.minX + (visibleFrame.width - width) / 2,
             y: visibleFrame.minY + (visibleFrame.height - height) / 2,

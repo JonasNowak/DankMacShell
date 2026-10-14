@@ -7,11 +7,25 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var barPosition: String // "top" or "bottom"
     public var barAutoHide: Bool
     public var barTransparent: Bool
+    public var barMarginX: Double
     public var showDock: Bool
     public var showTelemetry: Bool
     public var showWeather: Bool
     public var showMedia: Bool
     public var showSpaces: Bool
+    public var showWorkspaceApps: Bool
+    public var showLauncher: Bool
+    public var showClock: Bool
+    public var showInhibit: Bool
+    public var showMic: Bool
+    public var showWifi: Bool
+    public var showVolume: Bool
+    public var showControlCenter: Bool
+    public var showPowerMenu: Bool
+    public var showNotepadApplet: Bool
+    public var showClipboardApplet: Bool
+    public var showColorPickerApplet: Bool
+    public var enabledPlugins: [String]
     public var launcherHotkey: Bool
     public var dashHotkey: Bool
     public var notepadHotkey: Bool
@@ -50,11 +64,25 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         barPosition: String = "bottom",
         barAutoHide: Bool = false,
         barTransparent: Bool = false,
-        showDock: Bool = true,
+        barMarginX: Double = 8.0,
+        showDock: Bool = false,
         showTelemetry: Bool = true,
         showWeather: Bool = true,
         showMedia: Bool = true,
         showSpaces: Bool = true,
+        showWorkspaceApps: Bool = true,
+        showLauncher: Bool = true,
+        showClock: Bool = true,
+        showInhibit: Bool = true,
+        showMic: Bool = true,
+        showWifi: Bool = true,
+        showVolume: Bool = true,
+        showControlCenter: Bool = true,
+        showPowerMenu: Bool = true,
+        showNotepadApplet: Bool = false,
+        showClipboardApplet: Bool = false,
+        showColorPickerApplet: Bool = false,
+        enabledPlugins: [String] = ["github-notifications"],
         launcherHotkey: Bool = true,
         dashHotkey: Bool = true,
         notepadHotkey: Bool = true,
@@ -74,11 +102,25 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.barPosition = barPosition
         self.barAutoHide = barAutoHide
         self.barTransparent = barTransparent
+        self.barMarginX = barMarginX
         self.showDock = showDock
         self.showTelemetry = showTelemetry
         self.showWeather = showWeather
         self.showMedia = showMedia
         self.showSpaces = showSpaces
+        self.showWorkspaceApps = showWorkspaceApps
+        self.showLauncher = showLauncher
+        self.showClock = showClock
+        self.showInhibit = showInhibit
+        self.showMic = showMic
+        self.showWifi = showWifi
+        self.showVolume = showVolume
+        self.showControlCenter = showControlCenter
+        self.showPowerMenu = showPowerMenu
+        self.showNotepadApplet = showNotepadApplet
+        self.showClipboardApplet = showClipboardApplet
+        self.showColorPickerApplet = showColorPickerApplet
+        self.enabledPlugins = enabledPlugins
         self.launcherHotkey = launcherHotkey
         self.dashHotkey = dashHotkey
         self.notepadHotkey = notepadHotkey
@@ -97,11 +139,25 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.barPosition = try container.decodeIfPresent(String.self, forKey: .barPosition) ?? "bottom"
         self.barAutoHide = try container.decodeIfPresent(Bool.self, forKey: .barAutoHide) ?? false
         self.barTransparent = try container.decodeIfPresent(Bool.self, forKey: .barTransparent) ?? false
-        self.showDock = try container.decodeIfPresent(Bool.self, forKey: .showDock) ?? true
+        self.barMarginX = try container.decodeIfPresent(Double.self, forKey: .barMarginX) ?? 8.0
+        self.showDock = try container.decodeIfPresent(Bool.self, forKey: .showDock) ?? false
         self.showTelemetry = try container.decodeIfPresent(Bool.self, forKey: .showTelemetry) ?? true
         self.showWeather = try container.decodeIfPresent(Bool.self, forKey: .showWeather) ?? true
         self.showMedia = try container.decodeIfPresent(Bool.self, forKey: .showMedia) ?? true
         self.showSpaces = try container.decodeIfPresent(Bool.self, forKey: .showSpaces) ?? true
+        self.showWorkspaceApps = try container.decodeIfPresent(Bool.self, forKey: .showWorkspaceApps) ?? true
+        self.showLauncher = try container.decodeIfPresent(Bool.self, forKey: .showLauncher) ?? true
+        self.showClock = try container.decodeIfPresent(Bool.self, forKey: .showClock) ?? true
+        self.showInhibit = try container.decodeIfPresent(Bool.self, forKey: .showInhibit) ?? true
+        self.showMic = try container.decodeIfPresent(Bool.self, forKey: .showMic) ?? true
+        self.showWifi = try container.decodeIfPresent(Bool.self, forKey: .showWifi) ?? true
+        self.showVolume = try container.decodeIfPresent(Bool.self, forKey: .showVolume) ?? true
+        self.showControlCenter = try container.decodeIfPresent(Bool.self, forKey: .showControlCenter) ?? true
+        self.showPowerMenu = try container.decodeIfPresent(Bool.self, forKey: .showPowerMenu) ?? true
+        self.showNotepadApplet = try container.decodeIfPresent(Bool.self, forKey: .showNotepadApplet) ?? false
+        self.showClipboardApplet = try container.decodeIfPresent(Bool.self, forKey: .showClipboardApplet) ?? false
+        self.showColorPickerApplet = try container.decodeIfPresent(Bool.self, forKey: .showColorPickerApplet) ?? false
+        self.enabledPlugins = try container.decodeIfPresent([String].self, forKey: .enabledPlugins) ?? ["github-notifications"]
         self.launcherHotkey = try container.decodeIfPresent(Bool.self, forKey: .launcherHotkey) ?? true
         self.dashHotkey = try container.decodeIfPresent(Bool.self, forKey: .dashHotkey) ?? true
         self.notepadHotkey = try container.decodeIfPresent(Bool.self, forKey: .notepadHotkey) ?? true

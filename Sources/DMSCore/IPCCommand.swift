@@ -91,6 +91,19 @@ public enum IPCCommand: Sendable, Equatable {
     case doctor
     case reloadConfig
     case status
+
+    // Plugins & Applets
+    case listPlugins
+    case searchPlugins(query: String)
+    case installPlugin(id: String)
+    case uninstallPlugin(id: String)
+    case enablePlugin(id: String)
+    case disablePlugin(id: String)
+    case lockPlugins
+    case restorePlugins(path: String?)
+    case listApplets
+    case toggleApplet(id: String)
+
     case unknown(String)
 
     // MARK: - URL Parser (dms:// scheme)
@@ -249,6 +262,22 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "reloadconfig":
             return .reloadConfig
+
+        case "plugins", "plugin":
+            let act = param("action") ?? subPath
+            if act == "search" { return .searchPlugins(query: param("q") ?? param("query") ?? "") }
+            if act == "install", let id = param("id") { return .installPlugin(id: id) }
+            if act == "uninstall", let id = param("id") { return .uninstallPlugin(id: id) }
+            if act == "enable", let id = param("id") { return .enablePlugin(id: id) }
+            if act == "disable", let id = param("id") { return .disablePlugin(id: id) }
+            if act == "lock" { return .lockPlugins }
+            if act == "restore" { return .restorePlugins(path: param("path")) }
+            return .listPlugins
+
+        case "applets", "applet":
+            let act = param("action") ?? subPath
+            if act == "toggle", let id = param("id") { return .toggleApplet(id: id) }
+            return .listApplets
 
         case "status":
             return .status
@@ -414,6 +443,43 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "reload":
             return .reloadConfig
+
+        case "plugins", "plugin":
+            switch action {
+            case "search":
+                return .searchPlugins(query: extra.joined(separator: " "))
+            case "install":
+                if let id = extra.first { return .installPlugin(id: id) }
+                return .unknown("plugins install requires plugin id")
+            case "uninstall", "remove":
+                if let id = extra.first { return .uninstallPlugin(id: id) }
+                return .unknown("plugins uninstall requires plugin id")
+            case "enable":
+                if let id = extra.first { return .enablePlugin(id: id) }
+                return .unknown("plugins enable requires plugin id")
+            case "disable":
+                if let id = extra.first { return .disablePlugin(id: id) }
+                return .unknown("plugins disable requires plugin id")
+            case "lock":
+                return .lockPlugins
+            case "restore":
+                return .restorePlugins(path: extra.first)
+            case "list":
+                return .listPlugins
+            default:
+                return .listPlugins
+            }
+
+        case "applets", "applet":
+            switch action {
+            case "toggle":
+                if let id = extra.first { return .toggleApplet(id: id) }
+                return .unknown("applets toggle requires applet id")
+            case "list":
+                return .listApplets
+            default:
+                return .listApplets
+            }
 
         case "status":
             return .status

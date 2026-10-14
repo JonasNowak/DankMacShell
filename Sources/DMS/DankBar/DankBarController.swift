@@ -43,8 +43,9 @@ public final class DankBarController {
         let screenFrame = screen.frame
         let isBottom = ConfigStore.shared.config.barPosition.lowercased() == "bottom"
 
-        let marginX: CGFloat = 16
-        let marginY: CGFloat = 10
+        // Tight margins so the bar stretches comfortably across the width of the display
+        let marginX: CGFloat = CGFloat(ConfigStore.shared.config.barMarginX)
+        let marginY: CGFloat = 8
         let barWidth = screenFrame.width - (marginX * 2)
 
         let yPos: CGFloat = isBottom ? (screenFrame.minY + marginY) : (screenFrame.maxY - Self.barHeight - marginY)

@@ -198,4 +198,25 @@ struct DMSCoreTests {
         let googleURL = AppSearch.webSearchURL(query: "DankMaterialShell", provider: "google")
         #expect(googleURL?.absoluteString.contains("google.com/search") == true)
     }
+
+    @Test("Plugin Models and Lockfile")
+    func testPluginModels() throws {
+        let lock = DMSPluginLockfile(version: 1, plugins: [
+            "github-notifications": DMSPluginLockfile.DMSPluginLockEntry(version: "1.2.0", enabled: true)
+        ])
+        let data = try JSONEncoder().encode(lock)
+        let decoded = try JSONDecoder().decode(DMSPluginLockfile.self, from: data)
+        #expect(decoded.plugins["github-notifications"]?.version == "1.2.0")
+        #expect(decoded.plugins["github-notifications"]?.enabled == true)
+
+        let plugin = DMSPluginRegistry.standardPlugins.first { $0.id == "github-notifications" }
+        #expect(plugin != nil)
+        #expect(plugin?.type == .barWidget)
+
+        let cliPlugins = IPCCommand.parseCLI(args: ["plugins", "search", "github"])
+        #expect(cliPlugins == .searchPlugins(query: "github"))
+
+        let cliApplets = IPCCommand.parseCLI(args: ["applets", "toggle", "weather"])
+        #expect(cliApplets == .toggleApplet(id: "weather"))
+    }
 }
