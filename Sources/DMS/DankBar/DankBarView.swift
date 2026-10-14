@@ -21,7 +21,8 @@ public struct DankBarView: View {
     public init() {}
 
     public var body: some View {
-        HStack(spacing: 8) {
+        ZStack {
+            HStack(spacing: 8) {
             // MARK: - Left: Launcher + Spaces + Workspace Apps
             HStack(spacing: 6) {
                 // DMS Launcher Button
@@ -90,74 +91,7 @@ public struct DankBarView: View {
                 }
             }
 
-            Spacer(minLength: 12)
-
-            // MARK: - Center: Dynamic Island / Clock & Media Pill
-            if configStore.config.showClock {
-                HStack(spacing: 8) {
-                    Button(action: {
-                        DashController.shared.toggle()
-                    }) {
-                        HStack(spacing: 8) {
-                            // Clock
-                            HStack(spacing: 5) {
-                                Image(systemName: "clock.fill")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(theme.primary)
-                                Text(timeFormatter.string(from: currentTime))
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(theme.onSurface)
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                Text("•")
-                                    .foregroundColor(theme.outline)
-                                Text(dateFormatter.string(from: currentTime))
-                                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                                    .foregroundColor(theme.onSurfaceVariant)
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
-                            }
-
-                            // Media playback snippet inside Dynamic Island if playing
-                            if configStore.config.showMedia, nowPlaying.currentTrack.isPlaying {
-                                HStack(spacing: 6) {
-                                    Text("|")
-                                        .foregroundColor(theme.outline)
-
-                                    Image(systemName: "music.note")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(theme.primary)
-
-                                    Text("\(nowPlaying.currentTrack.title)")
-                                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                                        .foregroundColor(theme.onSurface)
-                                        .lineLimit(1)
-
-                                    Button(action: { nowPlaying.playPause() }) {
-                                        Image(systemName: "pause.fill")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(theme.primary)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(theme.surfaceContainerHigh)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule().stroke(theme.outlineVariant.opacity(0.25), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-                .onReceive(timer) { input in
-                    currentTime = input
-                }
-            }
-
-            Spacer(minLength: 12)
+            Spacer(minLength: 24)
 
             // MARK: - Right: Telemetry, Weather, Quick Toggles & Controls
             HStack(spacing: 6) {
@@ -363,24 +297,95 @@ public struct DankBarView: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            ZStack {
-                if configStore.config.barTransparent {
-                    VisualEffectBlur(material: .headerView, blendingMode: .withinWindow)
-                        .background(theme.surface.opacity(0.85))
-                } else {
-                    theme.surface
-                }
+
+        // MARK: - Center: Dynamic Island / Clock & Media Pill (True Geometric Center)
+        if configStore.config.showClock {
+            centerClockPill
+        }
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 6)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(
+        ZStack {
+            if configStore.config.barTransparent {
+                VisualEffectBlur(material: .headerView, blendingMode: .withinWindow)
+                    .background(theme.surface.opacity(0.85))
+            } else {
+                theme.surface
             }
-        )
-        .clipShape(Capsule())
-        .overlay(
-            Capsule().stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.25), radius: 14, x: 0, y: 4)
+        }
+    )
+    .clipShape(Capsule())
+    .overlay(
+        Capsule().stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
+    )
+    .shadow(color: Color.black.opacity(0.25), radius: 14, x: 0, y: 4)
+}
+
+    @ViewBuilder
+    private var centerClockPill: some View {
+        HStack(spacing: 8) {
+            Button(action: {
+                DashController.shared.toggle()
+            }) {
+                HStack(spacing: 8) {
+                    // Clock
+                    HStack(spacing: 5) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.primary)
+                        Text(timeFormatter.string(from: currentTime))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(theme.onSurface)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                        Text("•")
+                            .foregroundColor(theme.outline)
+                        Text(dateFormatter.string(from: currentTime))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(theme.onSurfaceVariant)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+
+                    // Media playback snippet inside Dynamic Island if playing
+                    if configStore.config.showMedia, nowPlaying.currentTrack.isPlaying {
+                        HStack(spacing: 6) {
+                            Text("|")
+                                .foregroundColor(theme.outline)
+
+                            Image(systemName: "music.note")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(theme.primary)
+
+                            Text("\(nowPlaying.currentTrack.title)")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundColor(theme.onSurface)
+                                .lineLimit(1)
+
+                            Button(action: { nowPlaying.playPause() }) {
+                                Image(systemName: "pause.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(theme.primary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(theme.surfaceContainerHigh)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule().stroke(theme.outlineVariant.opacity(0.25), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .onReceive(timer) { input in
+            currentTime = input
+        }
     }
 
     private var timeFormatter: DateFormatter {
