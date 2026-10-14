@@ -45,7 +45,7 @@ public struct ControlCenterView: View {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
-                        .padding(8)
+                        .frame(width: 32, height: 32)
                         .background(theme.surfaceContainerHigh)
                         .clipShape(Circle())
                 }
@@ -58,13 +58,12 @@ public struct ControlCenterView: View {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
-                        .padding(8)
+                        .frame(width: 32, height: 32)
                         .background(theme.surfaceContainerHigh)
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 4)
 
             // MARK: - Media Player Card
             VStack(spacing: 8) {
@@ -297,10 +296,9 @@ public struct ControlCenterView: View {
                     .padding(.vertical, 2)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(12)
             .background(theme.surfaceContainerHigh)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             // MARK: - Power & Session Quick Actions
             HStack(spacing: 8) {
@@ -319,8 +317,8 @@ public struct ControlCenterView: View {
                     PowerMenuController.shared.show()
                 }
             }
-            .padding(16)
         }
+        .padding(16)
         }
         .frame(width: 360)
         .background(theme.surfaceContainer)

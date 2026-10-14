@@ -32,16 +32,16 @@ public struct DankBarView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "circle.grid.3x3.fill")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(size: 13, weight: .bold))
                                 .foregroundColor(theme.onPrimary)
                             Text("DMS")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
                                 .foregroundColor(theme.onPrimary)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
                         .background(theme.primary)
                         .clipShape(Capsule())
                     }
@@ -71,8 +71,8 @@ public struct DankBarView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 5)
+                    .frame(height: 28)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(Capsule())
                 }
@@ -85,7 +85,7 @@ public struct DankBarView: View {
                         }
                     }
                     .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
+                    .frame(height: 28)
                     .background(theme.surfaceContainerHigh.opacity(0.7))
                     .clipShape(Capsule())
                 }
@@ -101,7 +101,7 @@ public struct DankBarView: View {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(theme.onSurface)
-                            .padding(6)
+                            .frame(width: 28, height: 28)
                             .background(theme.surfaceContainerHigh)
                             .clipShape(Circle())
                     }
@@ -114,7 +114,7 @@ public struct DankBarView: View {
                         Image(systemName: "doc.on.clipboard")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(theme.onSurface)
-                            .padding(6)
+                            .frame(width: 28, height: 28)
                             .background(theme.surfaceContainerHigh)
                             .clipShape(Circle())
                     }
@@ -127,7 +127,7 @@ public struct DankBarView: View {
                         Image(systemName: "eyedropper")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(theme.onSurface)
-                            .padding(6)
+                            .frame(width: 28, height: 28)
                             .background(theme.surfaceContainerHigh)
                             .clipShape(Circle())
                     }
@@ -149,7 +149,7 @@ public struct DankBarView: View {
                                 .fixedSize(horizontal: true, vertical: false)
                         }
                         .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
+                        .frame(height: 28)
                         .background(theme.surfaceContainerHigh)
                         .clipShape(Capsule())
                     }
@@ -171,7 +171,7 @@ public struct DankBarView: View {
                             .fixedSize(horizontal: true, vertical: false)
                     }
                     .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                    .frame(height: 28)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(Capsule())
 
@@ -187,7 +187,7 @@ public struct DankBarView: View {
                             .fixedSize(horizontal: true, vertical: false)
                     }
                     .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                    .frame(height: 28)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(Capsule())
 
@@ -204,7 +204,7 @@ public struct DankBarView: View {
                                 .fixedSize(horizontal: true, vertical: false)
                         }
                         .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
+                        .frame(height: 28)
                         .background(theme.surfaceContainerHigh)
                         .clipShape(Capsule())
                     }
@@ -216,7 +216,7 @@ public struct DankBarView: View {
                         Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(inhibit.isInhibited ? theme.onPrimary : theme.onSurface)
-                            .padding(6)
+                            .frame(width: 28, height: 28)
                             .background(inhibit.isInhibited ? theme.primary : theme.surfaceContainerHigh)
                             .clipShape(Circle())
                     }
@@ -230,7 +230,7 @@ public struct DankBarView: View {
                         Image(systemName: audio.isMicMuted ? "mic.slash.fill" : "mic.fill")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(audio.isMicMuted ? theme.error : theme.primary)
-                            .padding(6)
+                            .frame(width: 28, height: 28)
                             .background(theme.surfaceContainerHigh)
                             .clipShape(Circle())
                     }
@@ -240,12 +240,12 @@ public struct DankBarView: View {
 
                 // Wi-Fi Pill
                 if configStore.config.showWifi {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 0) {
                         Image(systemName: wifi.symbolName)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(wifi.isConnected ? theme.primary : theme.outline)
                     }
-                    .padding(6)
+                    .frame(width: 28, height: 28)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(Circle())
                     .help(wifi.subtitle)
@@ -253,12 +253,12 @@ public struct DankBarView: View {
 
                 // Audio Output Volume Pill
                 if configStore.config.showVolume {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 0) {
                         Image(systemName: audio.isMuted ? "speaker.slash.fill" : (audio.volume > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill"))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(audio.isMuted ? theme.outline : theme.primary)
                     }
-                    .padding(6)
+                    .frame(width: 28, height: 28)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(Circle())
                     .help("Volume: \(Int(audio.volume * 100))%")
@@ -272,7 +272,7 @@ public struct DankBarView: View {
                         Image(systemName: "slider.horizontal.3")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(ControlCenterController.shared.isVisible ? theme.onPrimary : theme.onSurface)
-                            .padding(7)
+                            .frame(width: 28, height: 28)
                             .background(ControlCenterController.shared.isVisible ? theme.primary : theme.surfaceContainerHigh)
                             .clipShape(Circle())
                     }
@@ -288,7 +288,7 @@ public struct DankBarView: View {
                         Image(systemName: "power")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(theme.onSurface)
-                            .padding(7)
+                            .frame(width: 28, height: 28)
                             .background(theme.surfaceContainerHigh)
                             .clipShape(Circle())
                     }
@@ -374,7 +374,7 @@ public struct DankBarView: View {
                     }
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 6)
+                .frame(height: 28)
                 .background(theme.surfaceContainerHigh)
                 .clipShape(Capsule())
                 .overlay(
@@ -466,23 +466,33 @@ public struct WorkspaceAppItemView: View {
         Button {
             WorkspaceService.shared.activate(app: app)
         } label: {
-            HStack(spacing: 5) {
-                AppIconImage(path: app.path, size: 16)
+            Group {
                 if app.isActive {
-                    Text(app.name)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.onSurface)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
+                    HStack(spacing: 5) {
+                        AppIconImage(path: app.path, size: 14)
+                        Text(app.name)
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundColor(theme.onSurface)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .padding(.horizontal, 8)
+                    .frame(height: 22)
+                    .background(theme.primaryContainer.opacity(0.7))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(theme.primary.opacity(0.4), lineWidth: 1)
+                    )
+                } else {
+                    AppIconImage(path: app.path, size: 14)
+                        .frame(width: 22, height: 22)
+                        .background(theme.surfaceContainerLow)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle().stroke(theme.outlineVariant.opacity(0.2), lineWidth: 1)
+                        )
                 }
             }
-            .padding(.horizontal, app.isActive ? 8 : 6)
-            .padding(.vertical, 4)
-            .background(app.isActive ? theme.primaryContainer.opacity(0.6) : theme.surfaceContainerLow)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule().stroke(app.isActive ? theme.primary.opacity(0.4) : theme.outlineVariant.opacity(0.2), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
         .help(app.name)

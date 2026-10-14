@@ -297,7 +297,7 @@ private struct CalendarCard: View {
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 6) {
                 ForEach(0..<max(0, firstWeekday - 1), id: \.self) { _ in
-                    Text("").frame(width: 24, height: 24)
+                    Text("").frame(width: 26, height: 26)
                 }
                 ForEach(1...range.count, id: \.self) { d in
                     Text("\(d)")

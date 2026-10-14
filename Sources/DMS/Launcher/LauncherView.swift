@@ -261,7 +261,7 @@ public struct LauncherView: View {
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(theme.surfaceContainerHigh)
-                                    .cornerRadius(10)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -462,9 +462,9 @@ public struct FileItemRow: View {
                     .foregroundColor(theme.outline)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .background(theme.surfaceContainerHigh)
-            .cornerRadius(10)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
     }
