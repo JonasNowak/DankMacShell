@@ -1,12 +1,38 @@
-# DankMaterialShell (DMS) for macOS
+# DankMacShell (DMS) for macOS
 
-A modern, native desktop shell for macOS inspired by Google's **Material Design 3 (Material You)**, achieving full 1-to-1 feature parity with [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell).
+This is build as a adaption of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) for MacOS.
 
-Built with **Swift 6, AppKit, and SwiftUI** with pure SwiftPM, zero third-party dependencies, event-driven architecture, and ~0% idle CPU usage.
+DankMacShell is an additional shell for MacOS with [OmniWM](https://github.com/OmniNull/OmniWM). It adds the features that make a mac feel more akin to the typical WM experience on Linux systems.
+
 
 ---
 
-## Complete Feature Matrix (1-to-1 Feature Parity)
+## Installation
+
+Right now no prebuilt binary is provided. You have to build this yourself.
+
+### Requirements
+- macOS 14+ (macOS 26+ compatible)
+- Apple Command Line Tools or Xcode
+- OmniWM with IPC turned on!
+
+### Build, Assemble & Install
+```bash
+./build.sh
+```
+This builds both release binaries, packages `~/Applications/DankMaterialShell.app`, signs it, installs `dms` into `~/.local/bin/dms`, and launches the application.
+
+To build without launching:
+```bash
+./build.sh --no-launch
+```
+
+### Run Unit Tests
+```bash
+./test.sh
+```
+
+## Complete Feature Matrix
 
 ### 1. DankBar (Top/Bottom Status Bar & Dock)
 - **Material 3 Design:** Rounded pill chips, dynamic tonal elevation surfaces, and fluid spring animations.
@@ -136,29 +162,7 @@ dms toast <info|warn|error> <message>
 dms version
 ```
 
----
 
-## Building and Installing
-
-### Requirements
-- macOS 14+ (macOS 26+ compatible)
-- Apple Command Line Tools or Xcode
-
-### Build, Assemble & Install
-```bash
-./build.sh
-```
-This builds both release binaries, packages `~/Applications/DankMaterialShell.app`, signs it, installs `dms` into `~/.local/bin/dms`, and launches the application.
-
-To build without launching:
-```bash
-./build.sh --no-launch
-```
-
-### Run Unit Tests
-```bash
-./test.sh
-```
 
 ---
 
