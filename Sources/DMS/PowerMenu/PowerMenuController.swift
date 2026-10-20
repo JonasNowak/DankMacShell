@@ -38,9 +38,10 @@ public final class PowerMenuController {
         guard let screen = NSScreen.main else { return }
         ControlCenterController.shared.hide()
         LauncherController.shared.hide()
+        DashController.shared.hide()
 
-        let width: CGFloat = 440
-        let height: CGFloat = 200
+        let width: CGFloat = 295
+        let height: CGFloat = 135
         let xPos = screen.frame.midX - (width / 2)
         let yPos = screen.frame.midY - (height / 2)
 

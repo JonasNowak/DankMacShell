@@ -22,11 +22,12 @@ public final class NotepadController: ObservableObject {
     public func show() {
         guard !isVisible else { return }
 
+        DashController.shared.hide()
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 
-        let width: CGFloat = 500
-        let height: CGFloat = 440
+        let width: CGFloat = 335
+        let height: CGFloat = 295
         let rect = NSRect(
             x: visibleFrame.maxX - width - 24,
             y: visibleFrame.minY + (visibleFrame.height - height) / 2,

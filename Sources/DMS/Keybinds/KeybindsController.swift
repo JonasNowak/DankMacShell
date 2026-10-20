@@ -22,11 +22,12 @@ public final class KeybindsController: ObservableObject {
     public func show() {
         guard !isVisible else { return }
 
+        DashController.shared.hide()
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 
-        let width: CGFloat = 500
-        let height: CGFloat = 480
+        let width: CGFloat = 335
+        let height: CGFloat = 320
         let rect = NSRect(
             x: visibleFrame.minX + (visibleFrame.width - width) / 2,
             y: visibleFrame.minY + (visibleFrame.height - height) / 2,

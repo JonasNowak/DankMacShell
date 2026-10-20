@@ -1,6 +1,6 @@
 import Foundation
 
-/// Hardware telemetry metrics for CPU, RAM, and Battery.
+/// Hardware telemetry metrics for CPU, RAM, GPU, and Battery.
 public struct SystemTelemetry: Sendable, Codable, Equatable {
     public var cpuPercent: Double
     public var ramPercent: Double
@@ -9,6 +9,7 @@ public struct SystemTelemetry: Sendable, Codable, Equatable {
     public var batteryPercent: Int?
     public var isCharging: Bool
     public var timeRemainingMinutes: Int?
+    public var gpuPercent: Double?
 
     public init(
         cpuPercent: Double = 0.0,
@@ -17,7 +18,8 @@ public struct SystemTelemetry: Sendable, Codable, Equatable {
         ramTotalGB: Double = 0.0,
         batteryPercent: Int? = nil,
         isCharging: Bool = false,
-        timeRemainingMinutes: Int? = nil
+        timeRemainingMinutes: Int? = nil,
+        gpuPercent: Double? = nil
     ) {
         self.cpuPercent = cpuPercent
         self.ramPercent = ramPercent
@@ -26,5 +28,6 @@ public struct SystemTelemetry: Sendable, Codable, Equatable {
         self.batteryPercent = batteryPercent
         self.isCharging = isCharging
         self.timeRemainingMinutes = timeRemainingMinutes
+        self.gpuPercent = gpuPercent
     }
 }

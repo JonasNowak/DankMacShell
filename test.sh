@@ -18,12 +18,15 @@ CLT=/Library/Developer/CommandLineTools
 FW=$CLT/Library/Developer/Frameworks
 LIB=$CLT/Library/Developer/usr/lib
 
+xattr -cr "$SCRATCH" 2>/dev/null || true
+
 if [ ! -d "$FW/Testing.framework" ]; then
     exec swift test --scratch-path "$SCRATCH" "$@"
 fi
 
 swift test --scratch-path "$SCRATCH" \
     -Xswiftc -F"$FW" \
+    -Xswiftc -plugin-path -Xswiftc "$CLT/usr/lib/swift/host/plugins" \
     -Xswiftc -plugin-path -Xswiftc "$CLT/usr/lib/swift/host/plugins/testing" \
     -Xlinker -F"$FW" \
     -Xlinker -rpath -Xlinker "$FW" \

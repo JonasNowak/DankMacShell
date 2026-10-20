@@ -22,11 +22,12 @@ public final class ColorPickerController: ObservableObject {
     public func show() {
         guard !isVisible else { return }
 
+        DashController.shared.hide()
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 
-        let width: CGFloat = 440
-        let height: CGFloat = 380
+        let width: CGFloat = 295
+        let height: CGFloat = 255
         let rect = NSRect(
             x: visibleFrame.minX + (visibleFrame.width - width) / 2,
             y: visibleFrame.minY + (visibleFrame.height - height) / 2,

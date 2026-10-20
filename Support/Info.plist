@@ -33,6 +33,8 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>DMS uses System Events for Log Out, Restart and Shut Down in the power menu.</string>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>DMS uses Accessibility to manage virtual workspaces and detect running application windows.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>DMS uses Bluetooth to display and toggle adapter power in the control center.</string>
 	<key>NSHumanReadableCopyright</key>

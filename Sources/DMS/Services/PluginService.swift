@@ -102,7 +102,48 @@ public final class PluginService: ObservableObject {
             case "colorPicker": cfg.showColorPickerApplet = newState
             default: break
             }
+
+            let targetWidgetIds: [String]
+            switch id {
+            case "launcher": targetWidgetIds = ["launcherButton"]
+            case "spaces": targetWidgetIds = ["workspaceSwitcher"]
+            case "workspaceApps": targetWidgetIds = ["runningApps", "workspaceApps"]
+            case "clock": targetWidgetIds = ["clock"]
+            case "weather": targetWidgetIds = ["weather"]
+            case "cpu": targetWidgetIds = ["cpuMonitor", "telemetry"]
+            case "ram": targetWidgetIds = ["ramMonitor", "ram", "memory"]
+            case "battery": targetWidgetIds = ["battery"]
+            case "inhibit": targetWidgetIds = ["inhibit"]
+            case "mic": targetWidgetIds = ["mic"]
+            case "wifi": targetWidgetIds = ["wifi"]
+            case "volume": targetWidgetIds = ["volume", "audioVisualization"]
+            case "controlCenter": targetWidgetIds = ["controlCenterButton"]
+            case "powerMenu": targetWidgetIds = ["powerMenuButton"]
+            case "notepad": targetWidgetIds = ["notepad"]
+            case "clipboard": targetWidgetIds = ["clipboard"]
+            case "colorPicker": targetWidgetIds = ["colorPicker"]
+            default: targetWidgetIds = [id]
+            }
+
+            for bIdx in cfg.barConfigs.indices {
+                for lIdx in cfg.barConfigs[bIdx].layout.left.indices {
+                    if targetWidgetIds.contains(cfg.barConfigs[bIdx].layout.left[lIdx].widgetId) {
+                        cfg.barConfigs[bIdx].layout.left[lIdx].enabled = newState
+                    }
+                }
+                for cIdx in cfg.barConfigs[bIdx].layout.center.indices {
+                    if targetWidgetIds.contains(cfg.barConfigs[bIdx].layout.center[cIdx].widgetId) {
+                        cfg.barConfigs[bIdx].layout.center[cIdx].enabled = newState
+                    }
+                }
+                for rIdx in cfg.barConfigs[bIdx].layout.right.indices {
+                    if targetWidgetIds.contains(cfg.barConfigs[bIdx].layout.right[rIdx].widgetId) {
+                        cfg.barConfigs[bIdx].layout.right[rIdx].enabled = newState
+                    }
+                }
+            }
         }
+        DankBarController.shared.reposition()
     }
 
     public func installPlugin(id: String) {

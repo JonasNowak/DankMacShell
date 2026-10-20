@@ -9,6 +9,12 @@ public struct NowPlayingTrack: Sendable, Codable, Equatable {
     public var durationSeconds: Double
     public var elapsedSeconds: Double
     public var appName: String
+    public var artworkData: Data?
+
+    public var hasArtwork: Bool {
+        guard let data = artworkData else { return false }
+        return !data.isEmpty
+    }
 
     public var formattedElapsed: String {
         formatTime(elapsedSeconds)
@@ -30,7 +36,8 @@ public struct NowPlayingTrack: Sendable, Codable, Equatable {
         isPlaying: Bool = false,
         durationSeconds: Double = 0.0,
         elapsedSeconds: Double = 0.0,
-        appName: String = ""
+        appName: String = "",
+        artworkData: Data? = nil
     ) {
         self.title = title
         self.artist = artist
@@ -39,6 +46,7 @@ public struct NowPlayingTrack: Sendable, Codable, Equatable {
         self.durationSeconds = durationSeconds
         self.elapsedSeconds = elapsedSeconds
         self.appName = appName
+        self.artworkData = artworkData
     }
 
     private func formatTime(_ seconds: Double) -> String {

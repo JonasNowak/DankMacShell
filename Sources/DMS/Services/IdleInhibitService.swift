@@ -1,5 +1,6 @@
 import Foundation
 import IOKit.pwr_mgt
+import DMSCore
 
 /// Manages system and display sleep inhibition (caffeinate).
 @MainActor
@@ -32,6 +33,7 @@ public final class IdleInhibitService: ObservableObject {
 
         if result == kIOReturnSuccess {
             isInhibited = true
+            ConfigStore.shared.update { $0.setSetting("sleepInhibitEnabled", value: AnyCodable(true)) }
             ToastCenter.shared.show(icon: "cup.and.saucer.fill", message: "Sleep Inhibit: Enabled (Caffeinated)")
         }
     }
@@ -43,6 +45,7 @@ public final class IdleInhibitService: ObservableObject {
         if result == kIOReturnSuccess {
             assertionID = 0
             isInhibited = false
+            ConfigStore.shared.update { $0.setSetting("sleepInhibitEnabled", value: AnyCodable(false)) }
             ToastCenter.shared.show(icon: "cup.and.saucer", message: "Sleep Inhibit: Disabled")
         }
     }

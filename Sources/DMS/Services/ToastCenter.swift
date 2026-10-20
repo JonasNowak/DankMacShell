@@ -27,12 +27,17 @@ public final class ToastCenter {
     public func show(icon: String, message: String, duration: TimeInterval = 2.5) {
         let toast = ToastItem(icon: icon, message: message, duration: duration)
         self.activeToast = toast
+        ToastController.shared.show()
 
         Task {
             try? await Task.sleep(for: .seconds(duration))
             if self.activeToast?.id == toast.id {
                 withAnimation(.easeOut(duration: 0.25)) {
                     self.activeToast = nil
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+                if self.activeToast == nil {
+                    ToastController.shared.hide()
                 }
             }
         }

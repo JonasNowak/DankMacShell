@@ -6,67 +6,310 @@ import DMSCore
 public final class ThemeStore: ObservableObject {
     public static let shared = ThemeStore()
 
-    @Published public private(set) var palette: ThemePalette
+    @Published public private(set) var palette: ThemePalette {
+        didSet {
+            rebuildCachedColors()
+        }
+    }
+
     @Published public var themeName: String = "purple" {
         didSet {
+            guard !isBatchUpdating, oldValue != themeName else { return }
             refreshTheme()
         }
     }
+
     @Published public var isLightMode: Bool = false {
         didSet {
+            guard !isBatchUpdating, oldValue != isLightMode else { return }
             refreshTheme()
         }
     }
 
-    private var dynamicPalettes: (dark: ThemePalette, light: ThemePalette)?
+    @Published public var themeMode: String = "dark" {
+        didSet {
+            guard !isBatchUpdating, oldValue != themeMode else { return }
+            applyThemeMode()
+        }
+    }
+
+    @Published public var customSeedHex: String = "#D0BCFF" {
+        didSet {
+            guard !isBatchUpdating, oldValue != customSeedHex else { return }
+            refreshTheme()
+        }
+    }
+
+    @Published public var matugenScheme: MatugenScheme = .tonalSpot {
+        didSet {
+            guard !isBatchUpdating, oldValue != matugenScheme else { return }
+            refreshTheme()
+        }
+    }
+
+    @Published public var matugenContrast: Double = 0.0 {
+        didSet {
+            guard !isBatchUpdating, oldValue != matugenContrast else { return }
+            refreshTheme()
+        }
+    }
+
+    // MARK: - M3 Design System Token Sets
+    @Published public var shapeTokens: M3ShapeTokens = M3ShapeTokens()
+    @Published public var motionTokens: M3MotionTokens = M3MotionTokens()
+    @Published public var typographyTokens: M3TypographyTokens = M3TypographyTokens()
+    @Published public var surfaceTokens: M3SurfaceTokens = M3SurfaceTokens()
+    @Published public var shadowTokens: M3ShadowTokens = M3ShadowTokens()
+    @Published public private(set) var dank16Palette: [M3Color] = []
+    @Published public private(set) var primaryTonalPalette: M3TonalPalette = M3TonalPalette(hue: 275, chroma: 48)
+
+    private var isBatchUpdating = false
+    private var dynamicSeedColor: M3Color?
+    private var lastWallpaperURL: URL?
+
+    // MARK: - Cached SwiftUI Colors (Eliminates per-render hex string parsing)
+    public private(set) var primary: Color = .clear
+    public private(set) var onPrimary: Color = .clear
+    public private(set) var primaryContainer: Color = .clear
+    public private(set) var onPrimaryContainer: Color = .clear
+
+    public private(set) var secondary: Color = .clear
+    public private(set) var onSecondary: Color = .clear
+    public private(set) var secondaryContainer: Color = .clear
+    public private(set) var onSecondaryContainer: Color = .clear
+
+    public private(set) var tertiary: Color = .clear
+    public private(set) var onTertiary: Color = .clear
+    public private(set) var tertiaryContainer: Color = .clear
+    public private(set) var onTertiaryContainer: Color = .clear
+
+    public private(set) var surface: Color = .clear
+    public private(set) var onSurface: Color = .clear
+    public private(set) var surfaceVariant: Color = .clear
+    public private(set) var onSurfaceVariant: Color = .clear
+
+    public private(set) var surfaceContainerLowest: Color = .clear
+    public private(set) var surfaceContainerLow: Color = .clear
+    public private(set) var surfaceContainer: Color = .clear
+    public private(set) var surfaceContainerHigh: Color = .clear
+    public private(set) var surfaceContainerHighest: Color = .clear
+
+    public private(set) var background: Color = .clear
+    public private(set) var onBackground: Color = .clear
+    public private(set) var outline: Color = .clear
+    public private(set) var outlineVariant: Color = .clear
+    public private(set) var scrim: Color = .clear
+    public private(set) var shadow: Color = .clear
+
+    public private(set) var error: Color = .clear
+    public private(set) var onError: Color = .clear
+    public private(set) var errorContainer: Color = .clear
+    public private(set) var onErrorContainer: Color = .clear
+
+    public private(set) var warning: Color = .clear
+    public private(set) var onWarning: Color = .clear
+    public private(set) var warningContainer: Color = .clear
+    public private(set) var onWarningContainer: Color = .clear
+
+    public private(set) var info: Color = .clear
+    public private(set) var onInfo: Color = .clear
+    public private(set) var infoContainer: Color = .clear
+    public private(set) var onInfoContainer: Color = .clear
+
+    public private(set) var success: Color = .clear
+    public private(set) var onSuccess: Color = .clear
+    public private(set) var successContainer: Color = .clear
+    public private(set) var onSuccessContainer: Color = .clear
 
     private init() {
-        self.palette = StockThemes.theme(named: "purple", isDark: true)
+        let initialPalette = StockThemes.theme(named: "purple", isDark: true)
+        self.palette = initialPalette
+        rebuildCachedColors()
         setupWallpaperObserver()
+        setupSystemAppearanceObserver()
         extractWallpaperSeed()
     }
 
+    private func rebuildCachedColors() {
+        primary = Color(hex: palette.primary.hex)
+        onPrimary = Color(hex: palette.onPrimary.hex)
+        primaryContainer = Color(hex: palette.primaryContainer.hex)
+        onPrimaryContainer = Color(hex: palette.onPrimaryContainer.hex)
+
+        secondary = Color(hex: palette.secondary.hex)
+        onSecondary = Color(hex: palette.onSecondary.hex)
+        secondaryContainer = Color(hex: palette.secondaryContainer.hex)
+        onSecondaryContainer = Color(hex: palette.onSecondaryContainer.hex)
+
+        tertiary = Color(hex: palette.tertiary.hex)
+        onTertiary = Color(hex: palette.onTertiary.hex)
+        tertiaryContainer = Color(hex: palette.tertiaryContainer.hex)
+        onTertiaryContainer = Color(hex: palette.onTertiaryContainer.hex)
+
+        surface = Color(hex: palette.surface.hex)
+        onSurface = Color(hex: palette.onSurface.hex)
+        surfaceVariant = Color(hex: palette.surfaceVariant.hex)
+        onSurfaceVariant = Color(hex: palette.onSurfaceVariant.hex)
+
+        surfaceContainerLowest = Color(hex: palette.surfaceContainerLowest.hex)
+        surfaceContainerLow = Color(hex: palette.surfaceContainerLow.hex)
+        surfaceContainer = Color(hex: palette.surfaceContainer.hex)
+        surfaceContainerHigh = Color(hex: palette.surfaceContainerHigh.hex)
+        surfaceContainerHighest = Color(hex: palette.surfaceContainerHighest.hex)
+
+        background = Color(hex: palette.background.hex)
+        onBackground = Color(hex: palette.onBackground.hex)
+        outline = Color(hex: palette.outline.hex)
+        outlineVariant = Color(hex: palette.outlineVariant.hex)
+        scrim = Color(hex: palette.scrim.hex)
+        shadow = Color(hex: palette.shadow.hex)
+
+        error = Color(hex: palette.error.hex)
+        onError = Color(hex: palette.onError.hex)
+        errorContainer = Color(hex: palette.errorContainer.hex)
+        onErrorContainer = Color(hex: palette.onErrorContainer.hex)
+
+        warning = Color(hex: palette.warning.hex)
+        onWarning = Color(hex: palette.onWarning.hex)
+        warningContainer = Color(hex: palette.warningContainer.hex)
+        onWarningContainer = Color(hex: palette.onWarningContainer.hex)
+
+        info = Color(hex: palette.info.hex)
+        onInfo = Color(hex: palette.onInfo.hex)
+        infoContainer = Color(hex: palette.infoContainer.hex)
+        onInfoContainer = Color(hex: palette.onInfoContainer.hex)
+
+        success = Color(hex: palette.success.hex)
+        onSuccess = Color(hex: palette.onSuccess.hex)
+        successContainer = Color(hex: palette.successContainer.hex)
+        onSuccessContainer = Color(hex: palette.onSuccessContainer.hex)
+
+        dank16Palette = Dank16Generator.generate(from: palette).colors
+        let hct = HCT.from(color: palette.primary)
+        primaryTonalPalette = M3TonalPalette(hue: hct.hue, chroma: max(36.0, hct.chroma))
+    }
+
+    /// Synchronizes all global theme, shape, motion, typography, surface, and shadow tokens from `DMSConfig` in a single batch.
+    public func sync(with config: DMSConfig) {
+        isBatchUpdating = true
+        self.themeName = config.theme
+        self.themeMode = config.themeMode
+        if config.themeMode == "system" {
+            self.isLightMode = Self.detectSystemLightMode()
+        } else {
+            self.isLightMode = config.isLightMode
+        }
+        self.customSeedHex = config.themeSeedColor
+        self.matugenScheme = config.matugenScheme
+        self.matugenContrast = config.matugenContrast
+        self.shapeTokens = config.shapeTokens
+        self.motionTokens = config.motionTokens
+        self.typographyTokens = config.typographyTokens
+        self.surfaceTokens = config.surfaceTokens
+        self.shadowTokens = config.shadowTokens
+        isBatchUpdating = false
+        refreshTheme()
+    }
+
     public func apply(theme: String, lightMode: Bool) {
+        isBatchUpdating = true
         self.themeName = theme
         self.isLightMode = lightMode
+        isBatchUpdating = false
         refreshTheme()
     }
 
     public func apply(theme: String) {
         self.themeName = theme
-        refreshTheme()
     }
 
     public func setDynamicWallpaper() {
         self.themeName = "dynamic"
-        extractWallpaperSeed()
-        refreshTheme()
+        extractWallpaperSeed(force: true)
     }
 
     public func toggleLightMode() {
         self.isLightMode.toggle()
-        refreshTheme()
     }
 
     public func setLightMode(_ light: Bool) {
         self.isLightMode = light
-        refreshTheme()
+    }
+
+    private func applyThemeMode() {
+        switch themeMode.lowercased() {
+        case "light":
+            isLightMode = true
+        case "dark":
+            isLightMode = false
+        case "system":
+            isLightMode = Self.detectSystemLightMode()
+        default:
+            break
+        }
+    }
+
+    public static func detectSystemLightMode() -> Bool {
+        let appearance = NSApp?.effectiveAppearance ?? NSAppearance.currentDrawing()
+        let match = appearance.bestMatch(from: [.aqua, .darkAqua])
+        return match == .aqua
     }
 
     public func refreshTheme() {
-        if themeName.lowercased() == "dynamic" {
-            if dynamicPalettes == nil {
-                extractWallpaperSeed()
-            }
-            if let dp = dynamicPalettes {
-                self.palette = isLightMode ? dp.light : dp.dark
+        let lower = themeName.lowercased()
+        let contrast: ContrastLevel = matugenContrast >= 0.5 ? .high : (matugenContrast >= 0.2 ? .medium : .standard)
+
+        if lower == "dynamic" {
+            if let seed = dynamicSeedColor {
+                let (dark, light) = DynamicThemeGenerator.generate(
+                    from: seed,
+                    name: "Dynamic",
+                    contrast: contrast,
+                    scheme: matugenScheme
+                )
+                self.palette = isLightMode ? light : dark
             } else {
+                extractWallpaperSeed(force: true)
                 self.palette = StockThemes.theme(named: "purple", isDark: !isLightMode)
             }
+        } else if lower == "custom" || lower.hasPrefix("#") {
+            let hex = lower.hasPrefix("#") ? themeName : customSeedHex
+            let seed = M3Color(hex)
+            let (dark, light) = DynamicThemeGenerator.generate(
+                from: seed,
+                name: "Custom",
+                contrast: contrast,
+                scheme: matugenScheme
+            )
+            self.palette = isLightMode ? light : dark
         } else {
             self.palette = StockThemes.theme(named: themeName, isDark: !isLightMode)
         }
     }
+
+    // MARK: - Typography & Shape Helpers
+
+    public func scaledRadius(_ base: CGFloat) -> CGFloat {
+        CGFloat(shapeTokens.scaled(Double(base)))
+    }
+
+    public func font(size: CGFloat, weight: Font.Weight = .regular, mono: Bool = false, display: Bool = false) -> Font {
+        let scaledSize = size * CGFloat(typographyTokens.fontScale)
+        let family = mono ? typographyTokens.fontFamilyMono : (display ? typographyTokens.fontFamilyDisplay : typographyTokens.fontFamilyUI)
+        let lower = family.lowercased()
+        if lower == "system" || lower == "sf pro" || lower.isEmpty {
+            return .system(size: scaledSize, weight: weight, design: mono ? .monospaced : .default)
+        } else if lower == "sf mono" && mono {
+            return .system(size: scaledSize, weight: weight, design: .monospaced)
+        } else if lower == "New York".lowercased() || lower == "serif" {
+            return .system(size: scaledSize, weight: weight, design: .serif)
+        } else if lower == "sf pro rounded" || lower == "rounded" {
+            return .system(size: scaledSize, weight: weight, design: .rounded)
+        }
+        return .custom(family, size: scaledSize).weight(weight)
+    }
+
+    // MARK: - Observers & Off-Main-Thread Wallpaper Extraction
 
     private func setupWallpaperObserver() {
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -75,29 +318,49 @@ public final class ThemeStore: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.extractWallpaperSeed()
+                self?.extractWallpaperSeed(force: false)
             }
         }
     }
 
-    public func extractWallpaperSeed() {
-        guard let screen = NSScreen.main,
-              let url = NSWorkspace.shared.desktopImageURL(for: screen),
-              let img = NSImage(contentsOf: url) else {
-            return
-        }
-
-        guard let seedColor = extractDominantColor(from: img) else { return }
-        let (dark, light) = DynamicThemeGenerator.generate(from: seedColor, name: "Dynamic")
-        self.dynamicPalettes = (dark, light)
-
-        if themeName.lowercased() == "dynamic" {
-            self.palette = isLightMode ? light : dark
+    private func setupSystemAppearanceObserver() {
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self, self.themeMode.lowercased() == "system" else { return }
+                self.isLightMode = Self.detectSystemLightMode()
+            }
         }
     }
 
-    private func extractDominantColor(from image: NSImage) -> M3Color? {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+    public func extractWallpaperSeed(force: Bool = false) {
+        guard let screen = NSScreen.main,
+              let url = NSWorkspace.shared.desktopImageURL(for: screen) else {
+            return
+        }
+        if !force, url == lastWallpaperURL, dynamicSeedColor != nil {
+            return
+        }
+        lastWallpaperURL = url
+
+        Task.detached(priority: .utility) { [weak self] in
+            guard let seedColor = Self.extractDominantColorOffMainThread(from: url) else { return }
+            await MainActor.run {
+                guard let self = self else { return }
+                self.dynamicSeedColor = seedColor
+                if self.themeName.lowercased() == "dynamic" {
+                    self.refreshTheme()
+                }
+            }
+        }
+    }
+
+    nonisolated private static func extractDominantColorOffMainThread(from url: URL) -> M3Color? {
+        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
             return nil
         }
         let width = 32
@@ -131,7 +394,6 @@ public final class ThemeStore: ObservableObject {
             let a = Double(rawData[i + 3]) / 255.0
 
             if a > 0.5 {
-                // Ignore extreme darks and extreme whites for seed extraction
                 let l = (r + g + b) / 3.0
                 if l > 0.1 && l < 0.9 {
                     totalR += r
@@ -148,47 +410,6 @@ public final class ThemeStore: ObservableObject {
 
         return M3Color.from(r: totalR / count, g: totalG / count, b: totalB / count)
     }
-
-    // MARK: - Convenient Color Accessors
-    public var primary: Color { Color(hex: palette.primary.hex) }
-    public var onPrimary: Color { Color(hex: palette.onPrimary.hex) }
-    public var primaryContainer: Color { Color(hex: palette.primaryContainer.hex) }
-    public var onPrimaryContainer: Color { Color(hex: palette.onPrimaryContainer.hex) }
-
-    public var secondary: Color { Color(hex: palette.secondary.hex) }
-    public var onSecondary: Color { Color(hex: palette.onSecondary.hex) }
-    public var secondaryContainer: Color { Color(hex: palette.secondaryContainer.hex) }
-    public var onSecondaryContainer: Color { Color(hex: palette.onSecondaryContainer.hex) }
-
-    public var tertiary: Color { Color(hex: palette.tertiary.hex) }
-    public var onTertiary: Color { Color(hex: palette.onTertiary.hex) }
-    public var tertiaryContainer: Color { Color(hex: palette.tertiaryContainer.hex) }
-    public var onTertiaryContainer: Color { Color(hex: palette.onTertiaryContainer.hex) }
-
-    public var surface: Color { Color(hex: palette.surface.hex) }
-    public var onSurface: Color { Color(hex: palette.onSurface.hex) }
-    public var surfaceVariant: Color { Color(hex: palette.surfaceVariant.hex) }
-    public var onSurfaceVariant: Color { Color(hex: palette.onSurfaceVariant.hex) }
-
-    public var surfaceContainerLowest: Color { Color(hex: palette.surfaceContainerLowest.hex) }
-    public var surfaceContainerLow: Color { Color(hex: palette.surfaceContainerLow.hex) }
-    public var surfaceContainer: Color { Color(hex: palette.surfaceContainer.hex) }
-    public var surfaceContainerHigh: Color { Color(hex: palette.surfaceContainerHigh.hex) }
-    public var surfaceContainerHighest: Color { Color(hex: palette.surfaceContainerHighest.hex) }
-
-    public var background: Color { Color(hex: palette.background.hex) }
-    public var onBackground: Color { Color(hex: palette.onBackground.hex) }
-    public var outline: Color { Color(hex: palette.outline.hex) }
-    public var outlineVariant: Color { Color(hex: palette.outlineVariant.hex) }
-
-    public var error: Color { Color(hex: palette.error.hex) }
-    public var onError: Color { Color(hex: palette.onError.hex) }
-    public var errorContainer: Color { Color(hex: palette.errorContainer.hex) }
-    public var onErrorContainer: Color { Color(hex: palette.onErrorContainer.hex) }
-
-    public var warning: Color { Color(hex: palette.warning.hex) }
-    public var info: Color { Color(hex: palette.info.hex) }
-    public var success: Color { Color(hex: palette.success.hex) }
 }
 
 public extension Color {

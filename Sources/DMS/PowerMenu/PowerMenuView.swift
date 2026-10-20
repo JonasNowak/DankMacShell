@@ -73,24 +73,24 @@ public struct PowerMenuView: View {
                 onClose()
             } label: {
                 Text("Cancel")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.onSurfaceVariant)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 5)
                     .background(theme.surfaceContainerHigh)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
         }
-        .padding(24)
-        .frame(width: 440)
+        .padding(14)
+        .frame(width: 295)
         .background(theme.surfaceContainer)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.4), radius: 25, x: 0, y: 10)
+        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
     }
 
     public static func executeAppleScript(_ script: String) {
@@ -134,11 +134,11 @@ public struct PowerOptionButton: View {
         Button {
             action()
         } label: {
-            VStack(spacing: 8) {
+            VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(color)
-                    .frame(width: 52, height: 52)
+                    .frame(width: 36, height: 36)
                     .background(isHovered ? color.opacity(0.2) : theme.surfaceContainerHigh)
                     .clipShape(Circle())
                     .overlay(
@@ -146,7 +146,7 @@ public struct PowerOptionButton: View {
                     )
 
                 Text(label)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
             }
         }

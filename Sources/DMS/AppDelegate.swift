@@ -21,12 +21,25 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupURLSchemeHandler()
         setupHotkeys()
+        setupSignalHandlers()
 
         // Start Unix domain socket server for `dms` CLI and scripts
         IPCSocketServer.shared.start()
 
-        // Show DankBar
+        // Restore persistent theme and settings
+        let cfg = ConfigStore.shared.config
+        ThemeStore.shared.sync(with: cfg)
+        if cfg.theme.lowercased() == "dynamic" {
+            ThemeStore.shared.setDynamicWallpaper()
+        }
+        if cfg.getSetting("sleepInhibitEnabled")?.boolValue == true {
+            IdleInhibitService.shared.enable()
+        }
+
+        // Show DankBar & Dynamic Island
         DankBarController.shared.show()
+        _ = DIslandController.shared
+        DockController.shared.reposition()
         _ = WorkspaceService.shared
         _ = PluginService.shared
         _ = ToastController.shared
@@ -38,7 +51,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         print("DankMaterialShell for macOS started successfully.")
     }
 
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
+    }
+
+    public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if SettingsController.shared.isVisible {
+            SettingsController.shared.hide()
+            return .terminateCancel
+        }
+        return .terminateNow
+    }
+
     public func applicationWillTerminate(_ notification: Notification) {
+        ConfigStore.shared.flushSave()
         IPCSocketServer.shared.stop()
         HotkeyService.shared.unregisterAll()
     }
@@ -73,6 +99,30 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 ClipboardController.shared.toggle()
             }
         }
+    }
+
+    private var sigtermSource: (any DispatchSourceSignal)?
+    private var sigintSource: (any DispatchSourceSignal)?
+
+    private func setupSignalHandlers() {
+        signal(SIGTERM, SIG_IGN)
+        signal(SIGINT, SIG_IGN)
+
+        let term = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        term.setEventHandler {
+            ConfigStore.shared.flushSave()
+            NSApp.terminate(nil)
+        }
+        term.resume()
+        self.sigtermSource = term
+
+        let intr = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+        intr.setEventHandler {
+            ConfigStore.shared.flushSave()
+            NSApp.terminate(nil)
+        }
+        intr.resume()
+        self.sigintSource = intr
     }
 
     private func setupURLSchemeHandler() {

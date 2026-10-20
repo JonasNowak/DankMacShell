@@ -86,7 +86,14 @@ struct OmniWMAppInfo: Decodable {
 public final class WorkspaceService: ObservableObject {
     public static let shared = WorkspaceService()
 
-    @Published public private(set) var activeSpaceIndex: Int = 1
+    @Published public private(set) var activeSpaceIndex: Int = 1 {
+        didSet {
+            EventSubscriptionBroker.shared.broadcast(
+                event: "events.workspaces",
+                payload: ["activeSpace": activeSpaceIndex, "spacesCount": spacesCount]
+            )
+        }
+    }
     @Published public private(set) var spacesCount: Int = 4
     @Published public private(set) var workspaces: [WorkspaceInfo] = []
     @Published public private(set) var currentWorkspaceApps: [WorkspaceAppItem] = []
@@ -165,15 +172,15 @@ public final class WorkspaceService: ObservableObject {
 
         if isRunning {
             self.isOmniWMRunning = true
-            fetchOmniWMStateSynchronously()
+            fetchOmniWMStateAsync()
             startOmniWMSubscription()
         } else {
             stopOmniWMSubscription()
         }
     }
 
-    private func runOmniWMQueryRaw(_ argument: String) -> Data? {
-        guard let ctl = omniWMCtlPath, FileManager.default.isExecutableFile(atPath: ctl) else { return nil }
+    private nonisolated static func runOmniWMQueryRaw(ctlPath: String?, argument: String) -> Data? {
+        guard let ctl = ctlPath, FileManager.default.isExecutableFile(atPath: ctl) else { return nil }
         let task = Process()
         task.launchPath = ctl
         task.arguments = ["query", argument, "--json"]
@@ -191,33 +198,49 @@ public final class WorkspaceService: ObservableObject {
         }
     }
 
-    /// Fetches initial OmniWM state via fast synchronous queries (~20ms total).
-    private func fetchOmniWMStateSynchronously() {
-        var activeNum = self.activeSpaceIndex
+    /// Fetches initial OmniWM state asynchronously off the main thread.
+    private func fetchOmniWMStateAsync() {
+        let ctl = self.omniWMCtlPath
+        let fallbackActive = self.activeSpaceIndex
 
-        if let actData = runOmniWMQueryRaw("active-workspace"),
-           let actMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: actData),
-           let num = actMsg.result?.payload?.workspace?.number {
-            activeNum = num
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var activeNum = fallbackActive
+            var wsDetails: [OmniWMWorkspaceDetail] = []
+            var winItems: [OmniWMWindowItem] = []
+
+            if let actData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "active-workspace"),
+               let actMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: actData),
+               let num = actMsg.result?.payload?.workspace?.number {
+                activeNum = num
+            }
+
+            if let wsData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "workspaces"),
+               let wsMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: wsData),
+               let wsList = wsMsg.result?.payload?.workspaces {
+                wsDetails = wsList
+            }
+
+            if let winData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "windows"),
+               let winMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: winData),
+               let winList = winMsg.result?.payload?.windows {
+                winItems = winList
+            }
+
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                if !wsDetails.isEmpty {
+                    self.cachedWorkspaceDetails = wsDetails
+                }
+                if !winItems.isEmpty {
+                    self.cachedWindows = winItems
+                }
+                self.updateWorkspacesWithWindows(
+                    workspaceDetails: self.cachedWorkspaceDetails,
+                    windows: self.cachedWindows,
+                    activeNumber: activeNum
+                )
+            }
         }
-
-        if let wsData = runOmniWMQueryRaw("workspaces"),
-           let wsMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: wsData),
-           let wsList = wsMsg.result?.payload?.workspaces {
-            self.cachedWorkspaceDetails = wsList
-        }
-
-        if let winData = runOmniWMQueryRaw("windows"),
-           let winMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: winData),
-           let winList = winMsg.result?.payload?.windows {
-            self.cachedWindows = winList
-        }
-
-        updateWorkspacesWithWindows(
-            workspaceDetails: self.cachedWorkspaceDetails,
-            windows: self.cachedWindows,
-            activeNumber: activeNum
-        )
     }
 
     private func startOmniWMSubscription() {
@@ -239,7 +262,11 @@ public final class WorkspaceService: ObservableObject {
 
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
+            guard let chunk = String(data: data, encoding: .utf8) else { return }
             Task { @MainActor [weak self] in
                 self?.processOmniWMStreamChunk(chunk)
             }
@@ -251,12 +278,14 @@ public final class WorkspaceService: ObservableObject {
             self.omniWMPipe = pipe
             self.isOmniWMRunning = true
         } catch {
+            pipe.fileHandleForReading.readabilityHandler = nil
             self.omniWMProcess = nil
             self.omniWMPipe = nil
         }
     }
 
     private func handleOmniWMProcessTerminated() {
+        self.omniWMPipe?.fileHandleForReading.readabilityHandler = nil
         self.omniWMProcess = nil
         self.omniWMPipe = nil
         self.omniWMBuffer = ""
@@ -323,6 +352,7 @@ public final class WorkspaceService: ObservableObject {
         } else if message.channel == "workspace-bar" || result.kind == "workspace-bar" {
             if let monitors = result.payload?.monitors {
                 var newDetails: [OmniWMWorkspaceDetail] = []
+                var barWindows: [OmniWMWindowItem] = []
                 for monitor in monitors {
                     for ws in monitor.workspaces ?? [] {
                         newDetails.append(OmniWMWorkspaceDetail(
@@ -333,6 +363,18 @@ public final class WorkspaceService: ObservableObject {
                             isCurrent: ws.number == self.activeSpaceIndex,
                             isFocused: ws.number == self.activeSpaceIndex
                         ))
+                        for win in ws.windows ?? [] {
+                            barWindows.append(OmniWMWindowItem(
+                                id: win.id,
+                                pid: nil,
+                                title: nil,
+                                isFocused: win.isFocused,
+                                isVisible: true,
+                                mode: nil,
+                                app: OmniWMAppInfo(name: win.appName, bundleId: win.bundleId),
+                                workspace: OmniWMWorkspace(id: ws.id, number: ws.number, displayName: ws.displayName, rawName: ws.rawName)
+                            ))
+                        }
                     }
                 }
                 if !newDetails.isEmpty {
@@ -343,6 +385,22 @@ public final class WorkspaceService: ObservableObject {
                         unique.append(d)
                     }
                     self.cachedWorkspaceDetails = unique.sorted(by: { $0.number < $1.number })
+                    if !barWindows.isEmpty && (self.cachedWindows.isEmpty || barWindows.count >= self.cachedWindows.count) {
+                        let cachedByID = Dictionary(self.cachedWindows.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                        self.cachedWindows = barWindows.map { bw in
+                            let existing = cachedByID[bw.id]
+                            return OmniWMWindowItem(
+                                id: bw.id,
+                                pid: existing?.pid ?? bw.pid,
+                                title: existing?.title ?? bw.title,
+                                isFocused: bw.isFocused ?? existing?.isFocused,
+                                isVisible: bw.isVisible ?? existing?.isVisible,
+                                mode: existing?.mode ?? bw.mode,
+                                app: bw.app ?? existing?.app,
+                                workspace: bw.workspace ?? existing?.workspace
+                            )
+                        }
+                    }
                     updateWorkspacesWithWindows(
                         workspaceDetails: self.cachedWorkspaceDetails,
                         windows: self.cachedWindows,
@@ -361,6 +419,8 @@ public final class WorkspaceService: ObservableObject {
     ) {
         let runningApps = NSWorkspace.shared.runningApplications
         let runningByBundle = Dictionary(grouping: runningApps, by: { $0.bundleIdentifier ?? "" })
+        let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let frontBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
 
         var details = workspaceDetails
         if details.isEmpty {
@@ -374,6 +434,7 @@ public final class WorkspaceService: ObservableObject {
 
         for ws in details.sorted(by: { $0.number < $1.number }) {
             let wsWindows = windows.filter { $0.workspace?.number == ws.number }
+            let isCurrent = (ws.number == activeNumber)
 
             var wsApps: [WorkspaceAppItem] = []
             var seenBundleIDs = Set<String>()
@@ -383,18 +444,30 @@ public final class WorkspaceService: ObservableObject {
                 let rawName = win.app?.name ?? "App"
                 let key = bundleID.isEmpty ? rawName : bundleID
 
-                // Deduplicate distinct apps in the workspace pill list
-                if seenBundleIDs.contains(key) {
-                    continue
-                }
-                seenBundleIDs.insert(key)
-
                 let appMatches = runningByBundle[bundleID] ?? []
                 let matchingApp = appMatches.first
                 let pid = win.pid ?? matchingApp?.processIdentifier ?? 0
                 let name = matchingApp?.localizedName ?? rawName
                 let path = matchingApp?.bundleURL?.path ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?.path ?? ""
-                let isActive = (win.isFocused == true)
+                let isFrontApp = (pid != 0 && pid == frontPID) || (!bundleID.isEmpty && bundleID == frontBundleID)
+                let isActive = (win.isFocused == true) || (isCurrent && isFrontApp)
+
+                // Deduplicate distinct apps in the workspace pill list
+                if seenBundleIDs.contains(key) {
+                    if isActive, let existingIndex = wsApps.firstIndex(where: { ($0.bundleID.isEmpty ? $0.name : $0.bundleID) == key }) {
+                        let prev = wsApps[existingIndex]
+                        wsApps[existingIndex] = WorkspaceAppItem(
+                            pid: prev.pid != 0 ? prev.pid : pid,
+                            name: prev.name,
+                            bundleID: prev.bundleID,
+                            path: !prev.path.isEmpty ? prev.path : path,
+                            isActive: true,
+                            omniWMWindowID: win.id
+                        )
+                    }
+                    continue
+                }
+                seenBundleIDs.insert(key)
 
                 wsApps.append(WorkspaceAppItem(
                     pid: pid,
@@ -406,7 +479,6 @@ public final class WorkspaceService: ObservableObject {
                 ))
             }
 
-            let isCurrent = (ws.number == activeNumber)
             resultWorkspaces.append(WorkspaceInfo(
                 id: ws.id,
                 number: ws.number,
@@ -440,6 +512,7 @@ public final class WorkspaceService: ObservableObject {
     }
 
     private func stopOmniWMSubscription() {
+        omniWMPipe?.fileHandleForReading.readabilityHandler = nil
         if let proc = omniWMProcess, proc.isRunning {
             proc.terminate()
         }
@@ -479,9 +552,27 @@ public final class WorkspaceService: ObservableObject {
         // Listen for active app changes
         wsCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self = self, !self.isOmniWMRunning else { return }
-                self.updateWorkspaceApps()
+            .sink { [weak self] notif in
+                guard let self = self else { return }
+                if self.isOmniWMRunning {
+                    if let frontApp = notif.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+                        let frontPID = frontApp.processIdentifier
+                        let frontBundle = frontApp.bundleIdentifier ?? ""
+                        self.currentWorkspaceApps = self.currentWorkspaceApps.map { item in
+                            let active = (item.pid != 0 && item.pid == frontPID) || (!item.bundleID.isEmpty && item.bundleID == frontBundle)
+                            return WorkspaceAppItem(
+                                pid: item.pid,
+                                name: item.name,
+                                bundleID: item.bundleID,
+                                path: item.path,
+                                isActive: active,
+                                omniWMWindowID: item.omniWMWindowID
+                            )
+                        }
+                    }
+                } else {
+                    self.updateWorkspaceApps()
+                }
             }
             .store(in: &cancellables)
 
@@ -581,12 +672,12 @@ public final class WorkspaceService: ObservableObject {
             let height = bounds?["Height"] as? CGFloat ?? 0
             let alpha = info[kCGWindowAlpha as String] as? Double ?? 1.0
 
-            if layer == 0 && width > 60 && height > 60 && alpha > 0.05 && pid != dmsPID && !seenPIDs.contains(pid) {
+            if (layer == 0 || layer == 3) && width > 60 && height > 60 && alpha > 0.05 && pid != dmsPID && !seenPIDs.contains(pid) {
                 seenPIDs.insert(pid)
                 if let app = runningDict[pid], app.activationPolicy == .regular {
                     let name = app.localizedName ?? (info[kCGWindowOwnerName as String] as? String ?? "App")
                     let bundleID = app.bundleIdentifier ?? ""
-                    let path = app.bundleURL?.path ?? ""
+                    let path = app.bundleURL?.path ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?.path ?? ""
                     let isActive = (pid == frontPID)
 
                     apps.append(WorkspaceAppItem(
@@ -666,6 +757,18 @@ public final class WorkspaceService: ObservableObject {
             running.activate()
         } else if let running = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == app.bundleID && !app.bundleID.isEmpty }) {
             running.activate()
+        }
+
+        // Optimistically update active app pill
+        self.currentWorkspaceApps = self.currentWorkspaceApps.map { item in
+            WorkspaceAppItem(
+                pid: item.pid,
+                name: item.name,
+                bundleID: item.bundleID,
+                path: item.path,
+                isActive: (item.id == app.id),
+                omniWMWindowID: item.omniWMWindowID
+            )
         }
 
         if !isOmniWMRunning {

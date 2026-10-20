@@ -16,6 +16,7 @@ public enum IPCCommand: Sendable, Equatable {
     // Dash / Overview
     case toggleDash
     case openDash
+    case openDashTab(tab: String)
     case closeDash
 
     // Power Menu & Session
@@ -104,6 +105,17 @@ public enum IPCCommand: Sendable, Equatable {
     case listApplets
     case toggleApplet(id: String)
 
+    // Weather
+    case weatherRefresh
+    case weatherSetLocation(location: String)
+    case weatherStatus
+
+    // Dynamic Island (Spec 24)
+    case island(action: String, value: String? = nil)
+
+    // Danksearch / File Search Diagnostics & Control (Spec 18 / 35)
+    case danksearch(action: String, query: String? = nil)
+
     case unknown(String)
 
     // MARK: - URL Parser (dms:// scheme)
@@ -152,6 +164,9 @@ public enum IPCCommand: Sendable, Equatable {
             return .closeControlCenter
 
         case "toggledash", "dash", "dankdash":
+            if let tab = param("tab"), !tab.isEmpty {
+                return .openDashTab(tab: tab)
+            }
             if subPath == "open" || param("action") == "open" { return .openDash }
             if subPath == "close" || param("action") == "close" { return .closeDash }
             return .toggleDash
@@ -282,6 +297,25 @@ public enum IPCCommand: Sendable, Equatable {
         case "status":
             return .status
 
+        case "weather":
+            let act = param("action") ?? subPath
+            if act == "refresh" || act == "reload" { return .weatherRefresh }
+            if act == "set" || act == "location", let loc = param("location") ?? param("loc") ?? param("q") {
+                return .weatherSetLocation(location: loc)
+            }
+            if let loc = param("location") ?? param("q") {
+                return .weatherSetLocation(location: loc)
+            }
+            return .weatherStatus
+
+        case "island", "disland":
+            let act = subPath.isEmpty ? (param("action") ?? "toggle") : subPath
+            return .island(action: act, value: param("value") ?? param("activity") ?? param("edge"))
+
+        case "danksearch", "dsearch":
+            let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
+            return .danksearch(action: act, query: param("q") ?? param("query"))
+
         default:
             return .unknown(url.absoluteString)
         }
@@ -329,7 +363,16 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "dash", "dankdash":
             switch action {
-            case "open": return .openDash
+            case "open":
+                if let tabIdx = extra.firstIndex(of: "--tab"), tabIdx + 1 < extra.count {
+                    return .openDashTab(tab: extra[tabIdx + 1])
+                } else if let first = extra.first, !first.starts(with: "-") {
+                    return .openDashTab(tab: first)
+                }
+                return .openDash
+            case "opentab":
+                if let first = extra.first { return .openDashTab(tab: first) }
+                return .openDash
             case "close": return .closeDash
             default: return .toggleDash
             }
@@ -483,6 +526,34 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "status":
             return .status
+
+        case "weather":
+            switch action {
+            case "refresh", "reload":
+                return .weatherRefresh
+            case "set", "location":
+                if !extra.isEmpty {
+                    return .weatherSetLocation(location: extra.joined(separator: " "))
+                }
+                return .unknown("weather set/location requires location string")
+            case "status":
+                return .weatherStatus
+            default:
+                if !action.isEmpty {
+                    let locArgs = ([action] + extra).joined(separator: " ")
+                    return .weatherSetLocation(location: locArgs)
+                }
+                return .weatherStatus
+            }
+
+        case "island", "disland":
+            return .island(action: action.isEmpty ? "toggle" : action, value: extra.first)
+
+        case "danksearch", "dsearch":
+            return .danksearch(
+                action: action.isEmpty ? "status" : action,
+                query: extra.isEmpty ? nil : extra.joined(separator: " ")
+            )
 
         default:
             return .unknown(args.joined(separator: " "))

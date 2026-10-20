@@ -11,6 +11,8 @@ public final class LauncherController {
 
     private var globalClickMonitor: Any?
 
+    private var hostingView: NSHostingView<LauncherView>?
+
     private init() {
         panel = ShellPanel(
             contentRect: .zero,
@@ -20,10 +22,12 @@ public final class LauncherController {
         )
         panel.level = .floating
 
-        let rootView = LauncherView { [weak self] in
+        let rootView = LauncherView(initialQuery: "") { [weak self] in
             self?.hide()
         }
-        panel.contentView = NSHostingView(rootView: rootView)
+        let host = NSHostingView(rootView: rootView)
+        panel.contentView = host
+        self.hostingView = host
     }
 
     public func toggle() {
@@ -34,18 +38,30 @@ public final class LauncherController {
         }
     }
 
-    public func show() {
+    public func show(query initialQuery: String = "") {
         guard let screen = NSScreen.main else { return }
         ControlCenterController.shared.hide()
         PowerMenuController.shared.hide()
+        DashController.shared.hide()
 
-        let width: CGFloat = 580
-        let height: CGFloat = 520
+        let width: CGFloat = 680
+        let height: CGFloat = 540
         let xPos = screen.frame.midX - (width / 2)
         let yPos = screen.frame.midY - (height / 2) + 60
 
         let frame = NSRect(x: xPos, y: yPos, width: width, height: height)
         panel.setFrame(frame, display: true)
+
+        let rootView = LauncherView(initialQuery: initialQuery) { [weak self] in
+            self?.hide()
+        }
+        if let host = hostingView {
+            host.rootView = rootView
+        } else {
+            let host = NSHostingView(rootView: rootView)
+            panel.contentView = host
+            self.hostingView = host
+        }
 
         AppCatalogService.shared.refresh()
         panel.makeKeyAndOrderFront(nil)

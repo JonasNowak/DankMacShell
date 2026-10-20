@@ -31,8 +31,12 @@ public final class ControlCenterController {
 
     public func show() {
         guard let screen = NSScreen.main else { return }
+        DashController.shared.hide()
         LauncherController.shared.hide()
         PowerMenuController.shared.hide()
+        ProcessListController.shared.hide()
+        AudioPopoutController.shared.hide()
+        BatteryPopoutController.shared.hide()
 
         reposition(on: screen)
         panel.orderFront(nil)
@@ -49,35 +53,42 @@ public final class ControlCenterController {
     }
 
     public func reposition(on screen: NSScreen) {
-        let isBottom = ConfigStore.shared.config.barPosition.lowercased() == "bottom"
-        let popoutWidth: CGFloat = 360
+        let barPosition = ConfigStore.shared.config.barPosition.lowercased()
+        let isBottom = barPosition == "bottom"
+        let isVertical = barPosition == "left" || barPosition == "right"
+        let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
+        let popoutWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
         let marginX: CGFloat = CGFloat(ConfigStore.shared.config.barMarginX)
-        let gap: CGFloat = 12
+        let gap: CGFloat = 10
+        let popoutHeight: CGFloat = 348
 
         let visibleFrame = screen.visibleFrame
         let fullFrame = screen.frame
 
-        let xPos = fullFrame.maxX - popoutWidth - marginX
+        let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == screen }) ?? DankBarController.shared.panel
+        let barFrame = barPanel.frame
 
-        let popoutHeight: CGFloat
         let yPos: CGFloat
+        let xPos: CGFloat
 
-        if isBottom {
-            // Anchor strictly above the top edge of the bottom bar
-            let barFrame = DankBarController.shared.panel.frame
+        if isVertical {
+            let mouseLoc = NSEvent.mouseLocation
+            yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - popoutHeight - 12, mouseLoc.y - popoutHeight / 2.0))
+            if barPosition == "left" {
+                let barRight = barFrame.width > 0 ? barFrame.maxX : (fullFrame.minX + DankBarController.verticalBarWidth + 8)
+                xPos = barRight + gap
+            } else {
+                let barLeft = barFrame.width > 0 ? barFrame.minX : (fullFrame.maxX - DankBarController.verticalBarWidth - 8)
+                xPos = barLeft - popoutWidth - gap
+            }
+        } else if isBottom {
+            xPos = fullFrame.maxX - popoutWidth - marginX
             let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
-            yPos = barTop + gap
-
-            let availableHeight = visibleFrame.maxY - yPos - gap
-            popoutHeight = min(620, max(300, availableHeight))
+            yPos = min(visibleFrame.maxY - popoutHeight - gap, barTop + gap)
         } else {
-            // Anchor strictly below the bottom edge of the top bar
-            let barFrame = DankBarController.shared.panel.frame
+            xPos = fullFrame.maxX - popoutWidth - marginX
             let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
-
-            let availableHeight = barBottom - visibleFrame.minY - gap
-            popoutHeight = min(620, max(300, availableHeight))
-            yPos = barBottom - popoutHeight - gap
+            yPos = max(visibleFrame.minY + gap, barBottom - popoutHeight - gap)
         }
 
         let frame = NSRect(x: xPos, y: yPos, width: popoutWidth, height: popoutHeight)

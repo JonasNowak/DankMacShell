@@ -105,8 +105,22 @@ public struct ThemePalette: Sendable, Codable, Equatable {
     public var onErrorContainer: M3Color
 
     public var warning: M3Color
+    public var onWarning: M3Color
+    public var warningContainer: M3Color
+    public var onWarningContainer: M3Color
+
     public var info: M3Color
+    public var onInfo: M3Color
+    public var infoContainer: M3Color
+    public var onInfoContainer: M3Color
+
     public var success: M3Color
+    public var onSuccess: M3Color
+    public var successContainer: M3Color
+    public var onSuccessContainer: M3Color
+
+    public var scrim: M3Color
+    public var shadow: M3Color
 
     public init(
         name: String,
@@ -143,8 +157,19 @@ public struct ThemePalette: Sendable, Codable, Equatable {
         errorContainer: M3Color = M3Color("#8C1D18"),
         onErrorContainer: M3Color = M3Color("#F9DEDC"),
         warning: M3Color = M3Color("#FFB74D"),
+        onWarning: M3Color? = nil,
+        warningContainer: M3Color? = nil,
+        onWarningContainer: M3Color? = nil,
         info: M3Color = M3Color("#4FC3F7"),
-        success: M3Color = M3Color("#81C784")
+        onInfo: M3Color? = nil,
+        infoContainer: M3Color? = nil,
+        onInfoContainer: M3Color? = nil,
+        success: M3Color = M3Color("#81C784"),
+        onSuccess: M3Color? = nil,
+        successContainer: M3Color? = nil,
+        onSuccessContainer: M3Color? = nil,
+        scrim: M3Color = M3Color("#000000"),
+        shadow: M3Color = M3Color("#000000")
     ) {
         self.name = name
         self.isDark = isDark
@@ -180,12 +205,23 @@ public struct ThemePalette: Sendable, Codable, Equatable {
         self.errorContainer = errorContainer
         self.onErrorContainer = onErrorContainer
         self.warning = warning
+        self.onWarning = onWarning ?? (isDark ? M3Color("#462B00") : M3Color("#FFFFFF"))
+        self.warningContainer = warningContainer ?? (isDark ? M3Color("#643F00") : M3Color("#FFDEAD"))
+        self.onWarningContainer = onWarningContainer ?? (isDark ? M3Color("#FFDEAD") : M3Color("#281800"))
         self.info = info
+        self.onInfo = onInfo ?? (isDark ? M3Color("#003548") : M3Color("#FFFFFF"))
+        self.infoContainer = infoContainer ?? (isDark ? M3Color("#004D67") : M3Color("#BFE9FF"))
+        self.onInfoContainer = onInfoContainer ?? (isDark ? M3Color("#BFE9FF") : M3Color("#001F2B"))
         self.success = success
+        self.onSuccess = onSuccess ?? (isDark ? M3Color("#0A3912") : M3Color("#FFFFFF"))
+        self.successContainer = successContainer ?? (isDark ? M3Color("#215126") : M3Color("#B8F397"))
+        self.onSuccessContainer = onSuccessContainer ?? (isDark ? M3Color("#B8F397") : M3Color("#022106"))
+        self.scrim = scrim
+        self.shadow = shadow
     }
 }
 
-/// Pre-configured stock themes from DMS upstream.
+/// Pre-configured stock and community themes from DMS upstream.
 public enum StockThemes {
     public static func theme(named name: String, isDark: Bool = true) -> ThemePalette {
         let key = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -202,6 +238,18 @@ public enum StockThemes {
             return isDark ? yellowDark : yellowLight
         case "neutral":
             return isDark ? neutralDark : neutralLight
+        case "catppuccin", "catppuccin-mocha", "catppuccin mocha":
+            return isDark ? catppuccinMocha : catppuccinLatte
+        case "catppuccin-latte", "catppuccin latte":
+            return isDark ? catppuccinMocha : catppuccinLatte
+        case "nord":
+            return isDark ? nordDark : nordLight
+        case "gruvbox":
+            return isDark ? gruvboxDark : gruvboxLight
+        case "tokyo-night", "tokyonight", "tokyo night":
+            return isDark ? tokyoNightDark : tokyoNightLight
+        case "everforest":
+            return isDark ? everforestDark : everforestLight
         case "purple", "default":
             fallthrough
         default:
@@ -210,6 +258,8 @@ public enum StockThemes {
     }
 
     public static let allThemeNames = ["purple", "blue", "green", "orange", "red", "yellow", "neutral"]
+    public static let communityThemeNames = ["catppuccin-mocha", "catppuccin-latte", "nord", "gruvbox", "tokyo-night", "everforest"]
+    public static let allAvailableThemes = allThemeNames + communityThemeNames
 
     // MARK: - Purple (Default DMS theme)
     public static let purpleDark = ThemePalette(
@@ -664,5 +714,376 @@ public enum StockThemes {
         onBackground: M3Color("#1C1B1E"),
         outline: M3Color("#787680"),
         outlineVariant: M3Color("#C8C5D0")
+    )
+
+    // MARK: - Catppuccin (Mocha / Latte)
+    public static let catppuccinMocha = ThemePalette(
+        name: "Catppuccin-Mocha",
+        isDark: true,
+        primary: M3Color("#CBA6F7"),
+        onPrimary: M3Color("#1E1E2E"),
+        primaryContainer: M3Color("#45475A"),
+        onPrimaryContainer: M3Color("#F5E0DC"),
+        inversePrimary: M3Color("#8839EF"),
+        secondary: M3Color("#89B4FA"),
+        onSecondary: M3Color("#1E1E2E"),
+        secondaryContainer: M3Color("#313244"),
+        onSecondaryContainer: M3Color("#CDD6F4"),
+        tertiary: M3Color("#F5C2E7"),
+        onTertiary: M3Color("#1E1E2E"),
+        tertiaryContainer: M3Color("#45475A"),
+        onTertiaryContainer: M3Color("#F5E0DC"),
+        surface: M3Color("#1E1E2E"),
+        onSurface: M3Color("#CDD6F4"),
+        surfaceVariant: M3Color("#313244"),
+        onSurfaceVariant: M3Color("#BAC2DE"),
+        surfaceTint: M3Color("#CBA6F7"),
+        surfaceContainerLowest: M3Color("#11111B"),
+        surfaceContainerLow: M3Color("#181825"),
+        surfaceContainer: M3Color("#1E1E2E"),
+        surfaceContainerHigh: M3Color("#313244"),
+        surfaceContainerHighest: M3Color("#45475A"),
+        background: M3Color("#1E1E2E"),
+        onBackground: M3Color("#CDD6F4"),
+        outline: M3Color("#6C7086"),
+        outlineVariant: M3Color("#45475A"),
+        error: M3Color("#F38BA8"),
+        onError: M3Color("#1E1E2E"),
+        errorContainer: M3Color("#45475A"),
+        onErrorContainer: M3Color("#F38BA8"),
+        warning: M3Color("#FAB387"),
+        info: M3Color("#89DCEB"),
+        success: M3Color("#A6E3A1")
+    )
+
+    public static let catppuccinLatte = ThemePalette(
+        name: "Catppuccin-Latte",
+        isDark: false,
+        primary: M3Color("#8839EF"),
+        onPrimary: M3Color("#EFF1F5"),
+        primaryContainer: M3Color("#CCD0DA"),
+        onPrimaryContainer: M3Color("#4C4F69"),
+        inversePrimary: M3Color("#CBA6F7"),
+        secondary: M3Color("#1E66F5"),
+        onSecondary: M3Color("#EFF1F5"),
+        secondaryContainer: M3Color("#DCE0E8"),
+        onSecondaryContainer: M3Color("#4C4F69"),
+        tertiary: M3Color("#EA76CB"),
+        onTertiary: M3Color("#EFF1F5"),
+        tertiaryContainer: M3Color("#CCD0DA"),
+        onTertiaryContainer: M3Color("#4C4F69"),
+        surface: M3Color("#EFF1F5"),
+        onSurface: M3Color("#4C4F69"),
+        surfaceVariant: M3Color("#CCD0DA"),
+        onSurfaceVariant: M3Color("#5C5F77"),
+        surfaceTint: M3Color("#8839EF"),
+        surfaceContainerLowest: M3Color("#FFFFFF"),
+        surfaceContainerLow: M3Color("#E6E9EF"),
+        surfaceContainer: M3Color("#DCE0E8"),
+        surfaceContainerHigh: M3Color("#CCD0DA"),
+        surfaceContainerHighest: M3Color("#BCC0CC"),
+        background: M3Color("#EFF1F5"),
+        onBackground: M3Color("#4C4F69"),
+        outline: M3Color("#8C8FA1"),
+        outlineVariant: M3Color("#CCD0DA"),
+        error: M3Color("#D20F39"),
+        onError: M3Color("#EFF1F5"),
+        errorContainer: M3Color("#CCD0DA"),
+        onErrorContainer: M3Color("#D20F39"),
+        warning: M3Color("#FE640B"),
+        info: M3Color("#04A5E5"),
+        success: M3Color("#40A02B")
+    )
+
+    // MARK: - Nord
+    public static let nordDark = ThemePalette(
+        name: "Nord",
+        isDark: true,
+        primary: M3Color("#88C0D0"),
+        onPrimary: M3Color("#2E3440"),
+        primaryContainer: M3Color("#3B4252"),
+        onPrimaryContainer: M3Color("#ECEFF4"),
+        inversePrimary: M3Color("#5E81AC"),
+        secondary: M3Color("#81A1C1"),
+        onSecondary: M3Color("#2E3440"),
+        secondaryContainer: M3Color("#434C5E"),
+        onSecondaryContainer: M3Color("#E5E9F0"),
+        tertiary: M3Color("#B48EAD"),
+        onTertiary: M3Color("#2E3440"),
+        tertiaryContainer: M3Color("#4C566A"),
+        onTertiaryContainer: M3Color("#ECEFF4"),
+        surface: M3Color("#2E3440"),
+        onSurface: M3Color("#ECEFF4"),
+        surfaceVariant: M3Color("#3B4252"),
+        onSurfaceVariant: M3Color("#D8DEE9"),
+        surfaceTint: M3Color("#88C0D0"),
+        surfaceContainerLowest: M3Color("#242933"),
+        surfaceContainerLow: M3Color("#2E3440"),
+        surfaceContainer: M3Color("#3B4252"),
+        surfaceContainerHigh: M3Color("#434C5E"),
+        surfaceContainerHighest: M3Color("#4C566A"),
+        background: M3Color("#2E3440"),
+        onBackground: M3Color("#ECEFF4"),
+        outline: M3Color("#7B88A1"),
+        outlineVariant: M3Color("#4C566A"),
+        error: M3Color("#BF616A"),
+        warning: M3Color("#EBCB8B"),
+        info: M3Color("#81A1C1"),
+        success: M3Color("#A3BE8C")
+    )
+
+    public static let nordLight = ThemePalette(
+        name: "Nord",
+        isDark: false,
+        primary: M3Color("#5E81AC"),
+        onPrimary: M3Color("#ECEFF4"),
+        primaryContainer: M3Color("#D8DEE9"),
+        onPrimaryContainer: M3Color("#2E3440"),
+        inversePrimary: M3Color("#88C0D0"),
+        secondary: M3Color("#81A1C1"),
+        onSecondary: M3Color("#ECEFF4"),
+        secondaryContainer: M3Color("#E5E9F0"),
+        onSecondaryContainer: M3Color("#2E3440"),
+        tertiary: M3Color("#B48EAD"),
+        onTertiary: M3Color("#ECEFF4"),
+        tertiaryContainer: M3Color("#E5E9F0"),
+        onTertiaryContainer: M3Color("#2E3440"),
+        surface: M3Color("#ECEFF4"),
+        onSurface: M3Color("#2E3440"),
+        surfaceVariant: M3Color("#D8DEE9"),
+        onSurfaceVariant: M3Color("#4C566A"),
+        surfaceTint: M3Color("#5E81AC"),
+        surfaceContainerLowest: M3Color("#FFFFFF"),
+        surfaceContainerLow: M3Color("#ECEFF4"),
+        surfaceContainer: M3Color("#E5E9F0"),
+        surfaceContainerHigh: M3Color("#D8DEE9"),
+        surfaceContainerHighest: M3Color("#C8D0E0"),
+        background: M3Color("#ECEFF4"),
+        onBackground: M3Color("#2E3440"),
+        outline: M3Color("#7B88A1"),
+        outlineVariant: M3Color("#D8DEE9"),
+        error: M3Color("#BF616A"),
+        warning: M3Color("#D08770"),
+        info: M3Color("#5E81AC"),
+        success: M3Color("#A3BE8C")
+    )
+
+    // MARK: - Gruvbox
+    public static let gruvboxDark = ThemePalette(
+        name: "Gruvbox",
+        isDark: true,
+        primary: M3Color("#FABD2F"),
+        onPrimary: M3Color("#282828"),
+        primaryContainer: M3Color("#504945"),
+        onPrimaryContainer: M3Color("#EBDBB2"),
+        inversePrimary: M3Color("#D79921"),
+        secondary: M3Color("#83A598"),
+        onSecondary: M3Color("#282828"),
+        secondaryContainer: M3Color("#3C3836"),
+        onSecondaryContainer: M3Color("#EBDBB2"),
+        tertiary: M3Color("#D3869B"),
+        onTertiary: M3Color("#282828"),
+        tertiaryContainer: M3Color("#504945"),
+        onTertiaryContainer: M3Color("#FBF1C7"),
+        surface: M3Color("#282828"),
+        onSurface: M3Color("#EBDBB2"),
+        surfaceVariant: M3Color("#3C3836"),
+        onSurfaceVariant: M3Color("#D5C4A1"),
+        surfaceTint: M3Color("#FABD2F"),
+        surfaceContainerLowest: M3Color("#1D2021"),
+        surfaceContainerLow: M3Color("#282828"),
+        surfaceContainer: M3Color("#32302F"),
+        surfaceContainerHigh: M3Color("#3C3836"),
+        surfaceContainerHighest: M3Color("#504945"),
+        background: M3Color("#282828"),
+        onBackground: M3Color("#EBDBB2"),
+        outline: M3Color("#928374"),
+        outlineVariant: M3Color("#504945"),
+        error: M3Color("#FB4934"),
+        warning: M3Color("#FE8019"),
+        info: M3Color("#83A598"),
+        success: M3Color("#B8BB26")
+    )
+
+    public static let gruvboxLight = ThemePalette(
+        name: "Gruvbox",
+        isDark: false,
+        primary: M3Color("#B57614"),
+        onPrimary: M3Color("#FBF1C7"),
+        primaryContainer: M3Color("#EBDBB2"),
+        onPrimaryContainer: M3Color("#3C3836"),
+        inversePrimary: M3Color("#FABD2F"),
+        secondary: M3Color("#076678"),
+        onSecondary: M3Color("#FBF1C7"),
+        secondaryContainer: M3Color("#D5C4A1"),
+        onSecondaryContainer: M3Color("#3C3836"),
+        tertiary: M3Color("#8F3F71"),
+        onTertiary: M3Color("#FBF1C7"),
+        tertiaryContainer: M3Color("#EBDBB2"),
+        onTertiaryContainer: M3Color("#3C3836"),
+        surface: M3Color("#FBF1C7"),
+        onSurface: M3Color("#3C3836"),
+        surfaceVariant: M3Color("#EBDBB2"),
+        onSurfaceVariant: M3Color("#504945"),
+        surfaceTint: M3Color("#B57614"),
+        surfaceContainerLowest: M3Color("#FFFFFF"),
+        surfaceContainerLow: M3Color("#F9F5D7"),
+        surfaceContainer: M3Color("#F2E5BC"),
+        surfaceContainerHigh: M3Color("#EBDBB2"),
+        surfaceContainerHighest: M3Color("#D5C4A1"),
+        background: M3Color("#FBF1C7"),
+        onBackground: M3Color("#3C3836"),
+        outline: M3Color("#7C6F64"),
+        outlineVariant: M3Color("#D5C4A1"),
+        error: M3Color("#9D0006"),
+        warning: M3Color("#AF3A03"),
+        info: M3Color("#076678"),
+        success: M3Color("#79740E")
+    )
+
+    // MARK: - Tokyo Night
+    public static let tokyoNightDark = ThemePalette(
+        name: "Tokyo-Night",
+        isDark: true,
+        primary: M3Color("#7AA2F7"),
+        onPrimary: M3Color("#1A1B26"),
+        primaryContainer: M3Color("#292E42"),
+        onPrimaryContainer: M3Color("#C0CAF5"),
+        inversePrimary: M3Color("#3D59A1"),
+        secondary: M3Color("#BB9AF7"),
+        onSecondary: M3Color("#1A1B26"),
+        secondaryContainer: M3Color("#24283B"),
+        onSecondaryContainer: M3Color("#C0CAF5"),
+        tertiary: M3Color("#7DCFFF"),
+        onTertiary: M3Color("#1A1B26"),
+        tertiaryContainer: M3Color("#292E42"),
+        onTertiaryContainer: M3Color("#C0CAF5"),
+        surface: M3Color("#1A1B26"),
+        onSurface: M3Color("#C0CAF5"),
+        surfaceVariant: M3Color("#24283B"),
+        onSurfaceVariant: M3Color("#A9B1D6"),
+        surfaceTint: M3Color("#7AA2F7"),
+        surfaceContainerLowest: M3Color("#16161E"),
+        surfaceContainerLow: M3Color("#1A1B26"),
+        surfaceContainer: M3Color("#24283B"),
+        surfaceContainerHigh: M3Color("#292E42"),
+        surfaceContainerHighest: M3Color("#414868"),
+        background: M3Color("#1A1B26"),
+        onBackground: M3Color("#C0CAF5"),
+        outline: M3Color("#565F89"),
+        outlineVariant: M3Color("#414868"),
+        error: M3Color("#F7768E"),
+        warning: M3Color("#E0AF68"),
+        info: M3Color("#7DCFFF"),
+        success: M3Color("#9ECE6A")
+    )
+
+    public static let tokyoNightLight = ThemePalette(
+        name: "Tokyo-Night",
+        isDark: false,
+        primary: M3Color("#2E7DE9"),
+        onPrimary: M3Color("#E1E2E7"),
+        primaryContainer: M3Color("#C4C8DA"),
+        onPrimaryContainer: M3Color("#3760BF"),
+        inversePrimary: M3Color("#7AA2F7"),
+        secondary: M3Color("#9854F1"),
+        onSecondary: M3Color("#E1E2E7"),
+        secondaryContainer: M3Color("#D0D5E3"),
+        onSecondaryContainer: M3Color("#3760BF"),
+        tertiary: M3Color("#007197"),
+        onTertiary: M3Color("#E1E2E7"),
+        tertiaryContainer: M3Color("#C4C8DA"),
+        onTertiaryContainer: M3Color("#3760BF"),
+        surface: M3Color("#E1E2E7"),
+        onSurface: M3Color("#3760BF"),
+        surfaceVariant: M3Color("#D0D5E3"),
+        onSurfaceVariant: M3Color("#6172B0"),
+        surfaceTint: M3Color("#2E7DE9"),
+        surfaceContainerLowest: M3Color("#FFFFFF"),
+        surfaceContainerLow: M3Color("#E9E9ED"),
+        surfaceContainer: M3Color("#E1E2E7"),
+        surfaceContainerHigh: M3Color("#D0D5E3"),
+        surfaceContainerHighest: M3Color("#C4C8DA"),
+        background: M3Color("#E1E2E7"),
+        onBackground: M3Color("#3760BF"),
+        outline: M3Color("#848CB5"),
+        outlineVariant: M3Color("#C4C8DA"),
+        error: M3Color("#F52A65"),
+        warning: M3Color("#8C6C3E"),
+        info: M3Color("#007197"),
+        success: M3Color("#587539")
+    )
+
+    // MARK: - Everforest
+    public static let everforestDark = ThemePalette(
+        name: "Everforest",
+        isDark: true,
+        primary: M3Color("#A7C080"),
+        onPrimary: M3Color("#272E33"),
+        primaryContainer: M3Color("#374145"),
+        onPrimaryContainer: M3Color("#D3C6AA"),
+        inversePrimary: M3Color("#8DA101"),
+        secondary: M3Color("#7FBBB3"),
+        onSecondary: M3Color("#272E33"),
+        secondaryContainer: M3Color("#2E383C"),
+        onSecondaryContainer: M3Color("#D3C6AA"),
+        tertiary: M3Color("#D699B6"),
+        onTertiary: M3Color("#272E33"),
+        tertiaryContainer: M3Color("#374145"),
+        onTertiaryContainer: M3Color("#D3C6AA"),
+        surface: M3Color("#272E33"),
+        onSurface: M3Color("#D3C6AA"),
+        surfaceVariant: M3Color("#374145"),
+        onSurfaceVariant: M3Color("#9DA9A0"),
+        surfaceTint: M3Color("#A7C080"),
+        surfaceContainerLowest: M3Color("#1E2326"),
+        surfaceContainerLow: M3Color("#272E33"),
+        surfaceContainer: M3Color("#2E383C"),
+        surfaceContainerHigh: M3Color("#374145"),
+        surfaceContainerHighest: M3Color("#414B50"),
+        background: M3Color("#272E33"),
+        onBackground: M3Color("#D3C6AA"),
+        outline: M3Color("#859289"),
+        outlineVariant: M3Color("#414B50"),
+        error: M3Color("#E67E80"),
+        warning: M3Color("#DBBC7F"),
+        info: M3Color("#7FBBB3"),
+        success: M3Color("#A7C080")
+    )
+
+    public static let everforestLight = ThemePalette(
+        name: "Everforest",
+        isDark: false,
+        primary: M3Color("#8DA101"),
+        onPrimary: M3Color("#FDF6E3"),
+        primaryContainer: M3Color("#EFEBD4"),
+        onPrimaryContainer: M3Color("#5C6A72"),
+        inversePrimary: M3Color("#A7C080"),
+        secondary: M3Color("#35A77C"),
+        onSecondary: M3Color("#FDF6E3"),
+        secondaryContainer: M3Color("#F4F0D9"),
+        onSecondaryContainer: M3Color("#5C6A72"),
+        tertiary: M3Color("#DF69BA"),
+        onTertiary: M3Color("#FDF6E3"),
+        tertiaryContainer: M3Color("#EFEBD4"),
+        onTertiaryContainer: M3Color("#5C6A72"),
+        surface: M3Color("#FDF6E3"),
+        onSurface: M3Color("#5C6A72"),
+        surfaceVariant: M3Color("#EFEBD4"),
+        onSurfaceVariant: M3Color("#829181"),
+        surfaceTint: M3Color("#8DA101"),
+        surfaceContainerLowest: M3Color("#FFFFFF"),
+        surfaceContainerLow: M3Color("#FDF6E3"),
+        surfaceContainer: M3Color("#F4F0D9"),
+        surfaceContainerHigh: M3Color("#EFEBD4"),
+        surfaceContainerHighest: M3Color("#E6E2CC"),
+        background: M3Color("#FDF6E3"),
+        onBackground: M3Color("#5C6A72"),
+        outline: M3Color("#939F91"),
+        outlineVariant: M3Color("#E6E2CC"),
+        error: M3Color("#F85552"),
+        warning: M3Color("#DFA000"),
+        info: M3Color("#3A94C5"),
+        success: M3Color("#8DA101")
     )
 }

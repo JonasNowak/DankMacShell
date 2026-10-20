@@ -7,6 +7,7 @@ public final class ToastController {
     public static let shared = ToastController()
 
     public let panel: ShellPanel
+    public private(set) var isVisible: Bool = false
 
     private init() {
         panel = ShellPanel(
@@ -17,7 +18,19 @@ public final class ToastController {
         )
         panel.level = .floating
         panel.contentView = NSHostingView(rootView: ToastOverlayView())
+        panel.orderOut(nil)
+    }
+
+    public func show() {
         reposition()
+        panel.orderFront(nil)
+        isVisible = true
+    }
+
+    public func hide() {
+        guard isVisible else { return }
+        panel.orderOut(nil)
+        isVisible = false
     }
 
     public func reposition() {
@@ -28,6 +41,5 @@ public final class ToastController {
         let yPos = screen.frame.maxY - height - 20
 
         panel.setFrame(NSRect(x: xPos, y: yPos, width: width, height: height), display: true)
-        panel.orderFront(nil)
     }
 }

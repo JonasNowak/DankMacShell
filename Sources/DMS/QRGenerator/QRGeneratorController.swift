@@ -22,11 +22,12 @@ public final class QRGeneratorController: ObservableObject {
     public func show(text: String? = nil) {
         guard !isVisible else { return }
 
+        DashController.shared.hide()
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 
-        let width: CGFloat = 400
-        let height: CGFloat = 420
+        let width: CGFloat = 268
+        let height: CGFloat = 280
         let rect = NSRect(
             x: visibleFrame.minX + (visibleFrame.width - width) / 2,
             y: visibleFrame.minY + (visibleFrame.height - height) / 2,

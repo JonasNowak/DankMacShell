@@ -1,28 +1,115 @@
 import Foundation
 
 /// Application item represented in the launcher and taskbar.
-public struct AppItem: Sendable, Identifiable, Equatable, Hashable {
+public struct AppItem: Sendable, Identifiable, Equatable, Hashable, Codable {
     public let id: String // bundleID or path
     public let name: String
     public let bundleID: String
     public let path: String
+    public let subtitle: String
+    public let category: String
     public let isRunning: Bool
     public let isPinned: Bool
+    public let launchCount: Int
+    public let lastLaunchedAt: Date?
 
     public init(
         id: String? = nil,
         name: String,
         bundleID: String,
         path: String,
+        subtitle: String = "",
+        category: String = "",
         isRunning: Bool = false,
-        isPinned: Bool = false
+        isPinned: Bool = false,
+        launchCount: Int = 0,
+        lastLaunchedAt: Date? = nil
     ) {
         self.id = id ?? bundleID
         self.name = name
         self.bundleID = bundleID
         self.path = path
+        self.subtitle = subtitle.isEmpty ? AppItem.defaultSubtitle(name: name, bundleID: bundleID) : subtitle
+        self.category = category
         self.isRunning = isRunning
         self.isPinned = isPinned
+        self.launchCount = launchCount
+        self.lastLaunchedAt = lastLaunchedAt
+    }
+
+    /// Resolves high-fidelity application subtitles and comments matching `launcher_dark.png`
+    /// and standard desktop metadata.
+    public static func defaultSubtitle(name: String, bundleID: String) -> String {
+        let n = name.lowercased()
+        let b = bundleID.lowercased()
+
+        if n.contains("visual studio code") || n == "code" || b.contains("vscode") {
+            return "Code Editing. Redefined."
+        }
+        if n.contains("google chrome") || n == "chrome" || b.contains("chrome") {
+            return "Access the Internet"
+        }
+        if n.contains("vesktop") || n.contains("discord") || b.contains("discord") {
+            return "Vesktop is a custom Discord desktop app"
+        }
+        if n == "files" || n == "finder" || b.contains("finder") {
+            return "Access and organize files"
+        }
+        if n.contains("ghostty") || b.contains("ghostty") {
+            return "A terminal emulator"
+        }
+        if n.contains("kitty") || b.contains("kitty") {
+            return "Fast, feature-rich, GPU based terminal"
+        }
+        if n.contains("virtual machine manager") || n.contains("utm") || b.contains("utm") {
+            return "Manage virtual machines"
+        }
+        if n.contains("firefox") || b.contains("firefox") {
+            return "Browse the World Wide Web"
+        }
+        if n.contains("dolphin") {
+            return "Manage your files"
+        }
+        if n.contains("safari") || b.contains("safari") {
+            return "Browse the World Wide Web"
+        }
+        if n.contains("terminal") || n.contains("iterm") || b.contains("terminal") || b.contains("iterm") {
+            return "A terminal emulator"
+        }
+        if n.contains("settings") || n.contains("preferences") || b.contains("systempreferences") {
+            return "System Configuration & Preferences"
+        }
+        if n.contains("notes") || b.contains("notes") {
+            return "Notes and scratchpad"
+        }
+        if n.contains("music") || n.contains("spotify") || b.contains("spotify") || b.contains("music") {
+            return "Play and organize music"
+        }
+        if n.contains("mail") || b.contains("mail") {
+            return "Read, write, and organize emails"
+        }
+        if n.contains("calculator") || b.contains("calculator") {
+            return "Perform calculations"
+        }
+        if n.contains("activity monitor") || b.contains("activitymonitor") {
+            return "Monitor system resources and processes"
+        }
+        if n.contains("slack") || b.contains("slack") {
+            return "Team communication and collaboration"
+        }
+        if n.contains("docker") || b.contains("docker") {
+            return "Container runtime and management"
+        }
+        if n.contains("xcode") || b.contains("xcode") {
+            return "Apple developer tools and IDE"
+        }
+        if n.contains("sublime") || b.contains("sublime") {
+            return "Sophisticated text editor for code"
+        }
+        if n.contains("textedit") || b.contains("textedit") {
+            return "Simple text and document editor"
+        }
+        return "Application"
     }
 }
 
@@ -183,7 +270,8 @@ public enum AppSearch {
         return nil
     }
 
-    /// Evaluates mathematical expressions typed into the search bar.
+    /// Evaluates mathematical expressions typed into the search bar using a pure-Swift
+    /// recursive-descent parser that never throws Objective-C NSExceptions on malformed input.
     public static func evaluateMath(query: String) -> MathResult? {
         var clean = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if clean.isEmpty { return nil }
@@ -194,53 +282,415 @@ public enum AppSearch {
             let basePart = clean[percentRange.upperBound...].trimmingCharacters(in: .whitespaces)
             if let num = Double(numPart), let base = Double(basePart) {
                 let ans = (num / 100.0) * base
-                return MathResult(expression: query, result: formatNumber(ans))
+                if ans.isFinite {
+                    return MathResult(expression: query, result: formatNumber(ans))
+                }
             }
+            return nil
         }
 
-        // Normalize basic operators
+        // Normalize Unicode operators
         clean = clean.replacingOccurrences(of: "×", with: "*")
         clean = clean.replacingOccurrences(of: "÷", with: "/")
+        clean = clean.replacingOccurrences(of: "**", with: "^")
 
-        // Check if query contains any math operator
-        let mathChars = CharacterSet(charactersIn: "+-*/%^")
-        guard clean.unicodeScalars.contains(where: { mathChars.contains($0) }) else {
+        // Reject shell commands or paths like "rm -rf /" or "/usr/bin"
+        let lower = clean.lowercased()
+        if lower.hasPrefix("/") || lower.hasPrefix("~") {
             return nil
         }
 
-        // Must not contain letters except sqrt, sin, cos, tan, pi, e
-        let allowed = CharacterSet(charactersIn: "0123456789.+-*/^%() ")
-        let cleanFiltered = clean.components(separatedBy: allowed).joined()
-        if !cleanFiltered.isEmpty {
+        var parser = SafeMathParser(clean)
+        guard let value = parser.evaluate(),
+              parser.didUseOperatorOrFunction,
+              value.isFinite else {
             return nil
         }
+        return MathResult(expression: clean, result: formatNumber(value))
+    }
 
-        // Parse with NSExpression
-        let exprString = clean.replacingOccurrences(of: "^", with: "**")
+    private struct SafeMathParser {
+        private let chars: [Character]
+        private var index: Int = 0
+        var didUseOperatorOrFunction: Bool = false
 
-        let expr = NSExpression(format: exprString)
-        if let val = expr.expressionValue(with: nil, context: nil) as? NSNumber {
-            let doubleVal = val.doubleValue
-            if !doubleVal.isNaN && !doubleVal.isInfinite {
-                return MathResult(expression: clean, result: formatNumber(doubleVal))
+        init(_ input: String) {
+            self.chars = Array(input)
+        }
+
+        mutating func evaluate() -> Double? {
+            skipWhitespace()
+            guard index < chars.count else { return nil }
+            // Must not start with binary-only operators
+            if let first = current, "*/%^)".contains(first) {
+                return nil
+            }
+            guard let val = parseExpression(), val.isFinite else { return nil }
+            skipWhitespace()
+            guard index == chars.count else { return nil }
+            return val
+        }
+
+        private var current: Character? {
+            index < chars.count ? chars[index] : nil
+        }
+
+        private mutating func skipWhitespace() {
+            while let c = current, c.isWhitespace {
+                index += 1
             }
         }
 
-        return nil
+        // Expression := Term (( '+' | '-' ) Term)*
+        private mutating func parseExpression() -> Double? {
+            guard var lhs = parseTerm() else { return nil }
+            while true {
+                skipWhitespace()
+                guard let op = current, op == "+" || op == "-" else { break }
+                index += 1
+                skipWhitespace()
+                // Reject consecutive +/- or operator right after +/-
+                if let next = current, "+-*/%^)".contains(next) {
+                    return nil
+                }
+                guard let rhs = parseTerm() else { return nil }
+                didUseOperatorOrFunction = true
+                lhs = (op == "+") ? (lhs + rhs) : (lhs - rhs)
+                if !lhs.isFinite { return nil }
+            }
+            return lhs
+        }
+
+        // Term := Power (( '*' | '/' | '%' ) Power)*
+        private mutating func parseTerm() -> Double? {
+            guard var lhs = parsePower() else { return nil }
+            while true {
+                skipWhitespace()
+                guard let op = current, op == "*" || op == "/" || op == "%" else { break }
+                index += 1
+                skipWhitespace()
+                if let next = current, "*/%^)".contains(next) {
+                    return nil
+                }
+                guard let rhs = parsePower() else { return nil }
+                didUseOperatorOrFunction = true
+                if op == "*" {
+                    lhs *= rhs
+                } else if op == "/" {
+                    guard rhs != 0 else { return nil }
+                    lhs /= rhs
+                } else {
+                    guard rhs != 0 else { return nil }
+                    lhs = lhs.truncatingRemainder(dividingBy: rhs)
+                }
+                if !lhs.isFinite { return nil }
+            }
+            return lhs
+        }
+
+        // Power := Unary ( '^' Power )?
+        private mutating func parsePower() -> Double? {
+            guard let base = parseUnary() else { return nil }
+            skipWhitespace()
+            if current == "^" {
+                index += 1
+                skipWhitespace()
+                if let next = current, "*/%^)".contains(next) {
+                    return nil
+                }
+                guard let exp = parsePower() else { return nil }
+                didUseOperatorOrFunction = true
+                let res = Foundation.pow(base, exp)
+                return res.isFinite ? res : nil
+            }
+            return base
+        }
+
+        // Unary := ('+' | '-')? Primary
+        private mutating func parseUnary() -> Double? {
+            skipWhitespace()
+            if let c = current, c == "+" || c == "-" {
+                index += 1
+                skipWhitespace()
+                // Do not allow chained unary operators like "++5" or "--5"
+                if let next = current, "+-*/%^)".contains(next) {
+                    return nil
+                }
+                guard let val = parsePrimary() else { return nil }
+                return (c == "-") ? -val : val
+            }
+            return parsePrimary()
+        }
+
+        // Primary := '(' Expression ')' | FunctionOrConstant | Number
+        private mutating func parsePrimary() -> Double? {
+            skipWhitespace()
+            guard let c = current else { return nil }
+
+            if c == "(" {
+                index += 1
+                skipWhitespace()
+                if current == ")" { return nil } // reject empty "()"
+                guard let val = parseExpression() else { return nil }
+                skipWhitespace()
+                guard current == ")" else { return nil }
+                index += 1
+                return val
+            }
+
+            if c.isLetter {
+                return parseIdentifier()
+            }
+
+            if c.isNumber || c == "." {
+                return parseNumber()
+            }
+
+            return nil
+        }
+
+        private mutating func parseIdentifier() -> Double? {
+            let start = index
+            while let c = current, c.isLetter || c.isNumber {
+                index += 1
+            }
+            let ident = String(chars[start..<index]).lowercased()
+            skipWhitespace()
+
+            if ident == "pi" {
+                return Double.pi
+            } else if ident == "e" {
+                return M_E
+            }
+
+            // Functions require '(' argument ')'
+            guard current == "(" else { return nil }
+            index += 1
+            skipWhitespace()
+            if current == ")" { return nil }
+            guard let arg = parseExpression() else { return nil }
+            skipWhitespace()
+            guard current == ")" else { return nil }
+            index += 1
+
+            didUseOperatorOrFunction = true
+            let result: Double
+            switch ident {
+            case "sqrt":
+                guard arg >= 0 else { return nil }
+                result = Foundation.sqrt(arg)
+            case "sin":
+                result = Foundation.sin(arg)
+            case "cos":
+                result = Foundation.cos(arg)
+            case "tan":
+                result = Foundation.tan(arg)
+            case "abs":
+                result = Swift.abs(arg)
+            case "log", "log10":
+                guard arg > 0 else { return nil }
+                result = Foundation.log10(arg)
+            case "ln":
+                guard arg > 0 else { return nil }
+                result = Foundation.log(arg)
+            case "round":
+                result = Foundation.round(arg)
+            case "floor":
+                result = Foundation.floor(arg)
+            case "ceil":
+                result = Foundation.ceil(arg)
+            default:
+                return nil
+            }
+            return result.isFinite ? result : nil
+        }
+
+        private mutating func parseNumber() -> Double? {
+            // Check hex literal 0x...
+            if current == "0", index + 1 < chars.count, (chars[index + 1] == "x" || chars[index + 1] == "X") {
+                index += 2
+                let hexStart = index
+                while let c = current, c.isHexDigit {
+                    index += 1
+                }
+                guard index > hexStart else { return nil }
+                let hexStr = String(chars[hexStart..<index])
+                guard let intVal = UInt64(hexStr, radix: 16) else { return nil }
+                return Double(intVal)
+            }
+
+            let start = index
+            var hasDot = false
+            while let c = current {
+                if c.isNumber {
+                    index += 1
+                } else if c == "." {
+                    if hasDot { return nil }
+                    hasDot = true
+                    index += 1
+                } else {
+                    break
+                }
+            }
+            guard index > start else { return nil }
+            let numStr = String(chars[start..<index])
+            guard numStr != "." else { return nil }
+            return Double(numStr)
+        }
+    }
+
+    /// Determines whether the input query is requesting a file search.
+    /// Prefixes: "file:", "files:", "f:", or paths starting with "/" or "~".
+    public static func isFileSearchQuery(_ query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed.hasPrefix("file:") ||
+               trimmed.hasPrefix("files:") ||
+               trimmed.hasPrefix("f:") ||
+               trimmed.hasPrefix("/") ||
+               trimmed.hasPrefix("~")
+    }
+
+    /// Extracts the file query string from a prefixed or path query.
+    /// E.g. "file: document" -> "document", "f: notes" -> "notes", "~/docs" -> "~/docs".
+    public static func extractFileQuery(_ query: String) -> String {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("file:") {
+            return String(trimmed.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+        } else if lower.hasPrefix("files:") {
+            return String(trimmed.dropFirst(6)).trimmingCharacters(in: .whitespaces)
+        } else if lower.hasPrefix("f:") {
+            return String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+        }
+        return trimmed
+    }
+
+    /// Search for files in user common directories matching query with full fault tolerance and diagnostics.
+    public static func searchFilesWithDiagnostics(
+        query: String,
+        maxResults: Int = 12,
+        client: DankSearchClient = .shared
+    ) -> DankSearchResponse {
+        let clean = extractFileQuery(query).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clean.count >= 2 else {
+            return DankSearchResponse(
+                files: [],
+                usedFallback: false,
+                backendUsed: "none",
+                healthState: client.healthState
+            )
+        }
+
+        // Path direct search: if user entered a specific directory path starting with ~ or /
+        if clean.hasPrefix("~") || clean.hasPrefix("/") {
+            let expanded = (clean as NSString).expandingTildeInPath
+            var isDir: ObjCBool = false
+            let fm = FileManager.default
+            if fm.fileExists(atPath: expanded, isDirectory: &isDir) {
+                if isDir.boolValue {
+                    if let items = try? fm.contentsOfDirectory(atPath: expanded) {
+                        let files = items.prefix(maxResults).map { name in
+                            let fullPath = (expanded as NSString).appendingPathComponent(name)
+                            var subIsDir: ObjCBool = false
+                            fm.fileExists(atPath: fullPath, isDirectory: &subIsDir)
+                            return FileItem(name: name, path: fullPath, isDirectory: subIsDir.boolValue)
+                        }
+                        return DankSearchResponse(
+                            files: files,
+                            usedFallback: false,
+                            backendUsed: "filesystem",
+                            healthState: client.healthState
+                        )
+                    }
+                } else {
+                    let name = (expanded as NSString).lastPathComponent
+                    return DankSearchResponse(
+                        files: [FileItem(name: name, path: expanded, isDirectory: false)],
+                        usedFallback: false,
+                        backendUsed: "filesystem",
+                        healthState: client.healthState
+                    )
+                }
+            }
+        }
+
+        return client.searchFiles(query: clean, maxResults: maxResults) { cleanQuery, limit in
+            let mdfindResults = runSpotlightSearch(nameQuery: cleanQuery, maxResults: limit, timeout: client.timeout)
+            if !mdfindResults.isEmpty {
+                return mdfindResults
+            }
+            return safeShallowSearch(query: cleanQuery, maxResults: limit)
+        }
     }
 
     /// Search for files in user common directories matching query.
-    public static func searchFiles(query: String, maxResults: Int = 12) -> [FileItem] {
-        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard clean.count >= 2 else { return [] }
+    /// Uses `DankSearchClient`, timeout-protected Spotlight `mdfind`, and safe shallow fallback.
+    public static func searchFiles(
+        query: String,
+        maxResults: Int = 12,
+        client: DankSearchClient = .shared
+    ) -> [FileItem] {
+        searchFilesWithDiagnostics(query: query, maxResults: maxResults, client: client).files
+    }
 
+    /// Asynchronous non-blocking file search dispatched to a background thread with diagnostics and fallback.
+    public static func searchFilesAsync(
+        query: String,
+        maxResults: Int = 12,
+        client: DankSearchClient = .shared
+    ) async -> DankSearchResponse {
+        await Task.detached(priority: .userInitiated) {
+            searchFilesWithDiagnostics(query: query, maxResults: maxResults, client: client)
+        }.value
+    }
+
+    private static func runSpotlightSearch(nameQuery: String, maxResults: Int, timeout: TimeInterval = 1.5) -> [FileItem] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let args = [
+            "-name", nameQuery,
+            "-onlyin", (home as NSString).appendingPathComponent("Documents"),
+            "-onlyin", (home as NSString).appendingPathComponent("Downloads"),
+            "-onlyin", (home as NSString).appendingPathComponent("Desktop")
+        ]
+
+        guard case .success(let output) = SafeProcessRunner.run(
+            executablePath: "/usr/bin/mdfind",
+            arguments: args,
+            timeout: timeout
+        ) else {
+            return []
+        }
+
+        guard let text = String(data: output.stdout, encoding: .utf8) else { return [] }
+
+        let fm = FileManager.default
+        var items: [FileItem] = []
+        for line in text.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: trimmed, isDirectory: &isDir) {
+                let name = (trimmed as NSString).lastPathComponent
+                items.append(FileItem(name: name, path: trimmed, isDirectory: isDir.boolValue))
+                if items.count >= maxResults {
+                    break
+                }
+            }
+        }
+        return items
+    }
+
+    private static func safeShallowSearch(query: String, maxResults: Int) -> [FileItem] {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let searchDirs = [
-            home.appendingPathComponent("Documents"),
             home.appendingPathComponent("Downloads"),
-            home.appendingPathComponent("Desktop"),
-            home.appendingPathComponent("Projects"),
-            home.appendingPathComponent("repos")
+            home.appendingPathComponent("Documents"),
+            home.appendingPathComponent("Desktop")
+        ]
+
+        let skipNames: Set<String> = [
+            "node_modules", ".build", "build", "DerivedData", "Library", "Caches",
+            "Pods", ".git", ".svn", ".Trash", "target", "vendor", ".cache"
         ]
 
         var results: [FileItem] = []
@@ -248,10 +698,19 @@ public enum AppSearch {
 
         for dir in searchDirs {
             guard fm.fileExists(atPath: dir.path) else { continue }
-            if let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+            if let enumerator = fm.enumerator(
+                at: dir,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) {
                 for case let fileURL as URL in enumerator {
                     let name = fileURL.lastPathComponent
-                    if name.lowercased().contains(clean) {
+                    if skipNames.contains(name) || enumerator.level > 2 {
+                        enumerator.skipDescendants()
+                        continue
+                    }
+
+                    if name.localizedCaseInsensitiveContains(query) {
                         let isDir = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
                         results.append(FileItem(name: name, path: fileURL.path, isDirectory: isDir))
                         if results.count >= maxResults {
@@ -319,14 +778,22 @@ public enum AppSearch {
         }
     }
 
-    private static func formatNumber(_ num: Double) -> String {
-        if floor(num) == num && abs(num) < 1e12 {
-            return String(format: "%.0f", num)
-        }
+    private static let sharedDecimalFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 6
         formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: num)) ?? "\(num)"
+        return formatter
+    }()
+
+    private static let formatterLock = NSLock()
+
+    private static func formatNumber(_ num: Double) -> String {
+        if floor(num) == num && abs(num) < 1e12 {
+            return String(format: "%.0f", num)
+        }
+        formatterLock.lock()
+        defer { formatterLock.unlock() }
+        return sharedDecimalFormatter.string(from: NSNumber(value: num)) ?? "\(num)"
     }
 }

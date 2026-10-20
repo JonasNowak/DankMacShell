@@ -256,4 +256,299 @@ struct DMSCoreTests {
         #expect(ws.apps.count == 2)
         #expect(ws.apps.first?.name == "Kitty")
     }
+
+    @Test("Dock Magnification Physics and Spans")
+    func testDockMagnificationEngine() {
+        let baseSize = 42.0
+
+        // 1. Radius calculations
+        let rParabolic = DockMagnificationEngine.magnificationRadius(baseSize: baseSize, profile: "parabolic")
+        let rGaussian = DockMagnificationEngine.magnificationRadius(baseSize: baseSize, profile: "gaussian")
+        let rCosine = DockMagnificationEngine.magnificationRadius(baseSize: baseSize, profile: "cosine")
+
+        #expect(abs(rParabolic - (baseSize * 1.8)) < 0.001)
+        #expect(abs(rGaussian - (baseSize * 2.2)) < 0.001)
+        #expect(abs(rCosine - (baseSize * 2.5)) < 0.001)
+
+        // 2. Magnification factor at center (dist = 0) must be 1.0
+        #expect(abs(DockMagnificationEngine.magnificationFactor(dist: 0, radius: rParabolic, profile: "parabolic") - 1.0) < 0.001)
+        #expect(abs(DockMagnificationEngine.magnificationFactor(dist: 0, radius: rGaussian, profile: "gaussian") - 1.0) < 0.001)
+        #expect(abs(DockMagnificationEngine.magnificationFactor(dist: 0, radius: rCosine, profile: "cosine") - 1.0) < 0.001)
+
+        // 3. Magnification factor beyond radius must be 0.0
+        #expect(DockMagnificationEngine.magnificationFactor(dist: rParabolic + 10, radius: rParabolic, profile: "parabolic") == 0.0)
+        #expect(DockMagnificationEngine.magnificationFactor(dist: rGaussian + 10, radius: rGaussian, profile: "gaussian") == 0.0)
+        #expect(DockMagnificationEngine.magnificationFactor(dist: rCosine + 10, radius: rCosine, profile: "cosine") == 0.0)
+
+        // 4. Magnification scale with 130% zoom
+        let centerScale = DockMagnificationEngine.magnificationScale(
+            dist: 0,
+            baseSize: baseSize,
+            maxScalePercent: 130.0,
+            profile: "parabolic"
+        )
+        #expect(abs(centerScale - 1.30) < 0.001)
+
+        let farScale = DockMagnificationEngine.magnificationScale(
+            dist: rParabolic + 50,
+            baseSize: baseSize,
+            maxScalePercent: 130.0,
+            profile: "parabolic"
+        )
+        #expect(abs(farScale - 1.0) < 0.001)
+
+        // 5. Unit target midpoint hysteresis swapping
+        let spans: [(id: String, start: Double, end: Double)] = [
+            (id: "app_1", start: 0, end: 50),
+            (id: "app_2", start: 50, end: 100),
+            (id: "app_3", start: 100, end: 150)
+        ]
+        // app_1 dragging past midpoint of app_2 (75)
+        let swapForward = DockMagnificationEngine.unitTarget(spans: spans, id: "app_1", offset: 30) // end 50 + 30 = 80 > 75
+        #expect(swapForward == "app_2")
+
+        let stayPut = DockMagnificationEngine.unitTarget(spans: spans, id: "app_1", offset: 10) // end 50 + 10 = 60 < 75
+        #expect(stayPut == "app_1")
+
+        // 6. Geometry derivations
+        #expect(DockMagnificationEngine.effectiveThickness(iconSize: 42, spacing: 8) == 58)
+        #expect(DockMagnificationEngine.indicatorLane(iconSize: 42) >= 8)
+    }
+
+    @Test("Grid Packing 2D Solver with Gravity")
+    func testGridPackingSolver() {
+        let cards = [
+            GridPackingSolver.CardItem(id: "user", w: 5, h: 1),
+            GridPackingSolver.CardItem(id: "wifi", w: 4, h: 1),
+            GridPackingSolver.CardItem(id: "bluetooth", w: 4, h: 1),
+            GridPackingSolver.CardItem(id: "slider", w: 8, h: 1)
+        ]
+
+        let layout = GridPackingSolver.packCards(
+            cards: cards,
+            columns: 8,
+            width: 600,
+            gap: 8,
+            rowUnit: 64,
+            step: 0.5,
+            gravity: true
+        )
+
+        #expect(layout.columns == 8)
+        #expect(layout.slots.count == 4)
+        #expect(layout.rows > 0)
+        #expect(layout.totalHeight > 0)
+
+        // Test reverse coordinate resolution
+        let firstSlot = layout.slots[0]
+        let cell = GridPackingSolver.cellAt(layout: layout, x: firstSlot.x, y: firstSlot.y, cols: firstSlot.cols, rows: firstSlot.rows)
+        #expect(cell.col == firstSlot.col)
+        #expect(cell.row == firstSlot.row)
+    }
+
+    @Test("Bar Center Layout Solver")
+    func testBarCenterLayoutSolver() {
+        // Ideal start centering: bar width 1000, 1 center widget with size 300
+        let result = BarCenterLayoutSolver.resolve(
+            sizes: [300.0],
+            length: 1000.0,
+            spacing: 0.0,
+            mode: "geometric"
+        )
+
+        #expect(result.positions.count == 1)
+        #expect(result.totalSize == 300.0)
+        // Center element should be placed at 1000/2 - 300/2 = 350
+        if let centerPos = result.positions[0] {
+            #expect(abs(centerPos - 350.0) < 0.001)
+        } else {
+            Issue.record("Expected center position to be resolved")
+        }
+
+        // Test boundary confinement: left bounds encroaches up to 400
+        let confined = BarCenterLayoutSolver.resolve(
+            sizes: [300.0],
+            length: 1000.0,
+            spacing: 0.0,
+            mode: "geometric",
+            bounds: BarCenterLayoutSolver.Bounds(min: 400.0, max: nil)
+        )
+        if let confinedPos = confined.positions[0] {
+            #expect(confinedPos >= 400.0)
+        }
+    }
+
+    @Test("Bar Segment Role Solver")
+    func testBarSegmentRoleSolver() {
+        // Run of 1 element -> solo
+        let e1 = [BarWidgetEntry(id: "clock", widgetId: "clock")]
+        let solo = BarSegmentRoleSolver.resolve(entries: e1, participating: [true])
+        #expect(solo == [SegmentRole.solo])
+
+        // Run of 3 elements -> first, middle, last
+        let e3 = [
+            BarWidgetEntry(id: "w1", widgetId: "clock"),
+            BarWidgetEntry(id: "w2", widgetId: "weather"),
+            BarWidgetEntry(id: "w3", widgetId: "battery")
+        ]
+        let triple = BarSegmentRoleSolver.resolve(entries: e3, participating: [true, true, true])
+        #expect(triple == [SegmentRole.first, SegmentRole.middle, SegmentRole.last])
+
+        // Breaking run on index 1 separator
+        let e4 = [
+            BarWidgetEntry(id: "w1", widgetId: "clock"),
+            BarWidgetEntry(id: "sep", widgetId: "separator"),
+            BarWidgetEntry(id: "w2", widgetId: "weather"),
+            BarWidgetEntry(id: "w3", widgetId: "battery")
+        ]
+        let broken = BarSegmentRoleSolver.resolve(entries: e4, participating: [true, true, true, true])
+        #expect(broken[0] == SegmentRole.solo)
+        #expect(broken[1] == SegmentRole.solo) // separator
+        #expect(broken[2] == SegmentRole.first)
+        #expect(broken[3] == SegmentRole.last)
+    }
+
+    @Test("HCT Dynamic Color Math and Contrast Ratios")
+    func testHCTAndContrastMath() {
+        let blue = M3Color("#1976D2")
+        let hct = HCT.from(color: blue)
+        #expect(hct.hue >= 0.0 && hct.hue <= 360.0)
+        #expect(hct.chroma >= 0.0)
+        #expect(hct.tone >= 0.0 && hct.tone <= 100.0)
+
+        // Test contrast ratio between black and white
+        let black = M3Color("#000000")
+        let white = M3Color("#FFFFFF")
+        let ratio = HCTMath.contrastRatio(black, white)
+        #expect(ratio >= 20.0) // ~21:1
+
+        // Test readableOn contrast enforcement
+        let onDark = HCTMath.readableOn(background: M3Color("#121212"), candidates: [black, white])
+        #expect(onDark.hex.uppercased() == "#FFFFFF")
+
+        let onLight = HCTMath.readableOn(background: white, candidates: [white, black])
+        #expect(onLight.hex.uppercased() == "#000000")
+
+        // Test softContainer
+        let container = HCTMath.softContainer(accent: blue, card: M3Color("#1E1E1E"), tint: 0.5)
+        #expect(container.hex.hasPrefix("#"))
+    }
+
+    @Test("Arbitrary Root Key Decoding, Roundtrip, and getSetting/setSetting")
+    func testArbitraryKeyConfigRoundtrip() throws {
+        let json = """
+        {
+            "theme": "espresso",
+            "isLightMode": false,
+            "dockDeadZone": 18,
+            "customFloatOption": 42.5,
+            "customArrayOption": ["foo", "bar"],
+            "controlCenterColumns": 10
+        }
+        """
+
+        let config = DMSConfig.load(from: Data(json.utf8))
+        #expect(config.theme == "espresso")
+        #expect(config.isLightMode == false)
+        #expect(config.controlCenterColumns == 10)
+
+        // Verify arbitrary keys decoded into rawSettings
+        #expect(config.getSetting("dockDeadZone")?.intValue == 18)
+        #expect(config.getSetting("customFloatOption")?.doubleValue == 42.5)
+        #expect(config.getSetting("customArrayOption")?.arrayValue?.compactMap(\.stringValue) == ["foo", "bar"])
+
+        // Mutate both strongly-typed and arbitrary keys
+        var mutableConfig = config
+        mutableConfig.setSetting("theme", value: AnyCodable("nord"))
+        mutableConfig.setSetting("dockDeadZone", value: AnyCodable(24))
+        mutableConfig.setSetting("newDynamicKey", value: AnyCodable("dynamicValue"))
+
+        #expect(mutableConfig.theme == "nord")
+        #expect(mutableConfig.getSetting("theme")?.stringValue == "nord")
+        #expect(mutableConfig.getSetting("dockDeadZone")?.intValue == 24)
+        #expect(mutableConfig.getSetting("newDynamicKey")?.stringValue == "dynamicValue")
+
+        // Re-encode and verify roundtrip preserves dynamic keys
+        let encodedData = try mutableConfig.encodeJSON()
+        let reloadedConfig = DMSConfig.load(from: encodedData)
+
+        #expect(reloadedConfig.theme == "nord")
+        #expect(reloadedConfig.getSetting("dockDeadZone")?.intValue == 24)
+        #expect(reloadedConfig.getSetting("newDynamicKey")?.stringValue == "dynamicValue")
+        #expect(reloadedConfig.getSetting("customFloatOption")?.doubleValue == 42.5)
+    }
+
+    @Test("Grid Packing Oversized Cards and Gravity Stress")
+    func testGridPackingSolverOversizedAndStress() {
+        // Card with w=12 in 6-column grid (oversized card)
+        let oversized = [
+            GridPackingSolver.CardItem(id: "giant", w: 12, h: 2),
+            GridPackingSolver.CardItem(id: "small1", w: 2, h: 1),
+            GridPackingSolver.CardItem(id: "tall", w: 2, h: 8)
+        ]
+
+        let layout = GridPackingSolver.packCards(
+            cards: oversized,
+            columns: 6,
+            width: 480,
+            gap: 8,
+            rowUnit: 64,
+            step: 0.5,
+            gravity: true
+        )
+
+        #expect(layout.columns == 6)
+        #expect(layout.slots.count == 3)
+        // Ensure giant was placed without crash and fits within columns
+        let giantSlot = layout.slots.first(where: { $0.id == "giant" })
+        #expect(giantSlot != nil)
+        #expect(giantSlot!.cols <= 6.0)
+
+        // Multiple cards gravity settle stress
+        var manyCards: [GridPackingSolver.CardItem] = []
+        for i in 0..<16 {
+            manyCards.append(GridPackingSolver.CardItem(
+                id: "card_\(i)",
+                w: Double((i % 4) + 1),
+                h: Double((i % 3) + 1)
+            ))
+        }
+
+        let stressLayout = GridPackingSolver.packCards(
+            cards: manyCards,
+            columns: 8,
+            width: 600,
+            gap: 8,
+            rowUnit: 64,
+            gravity: true
+        )
+        #expect(stressLayout.slots.count == 16)
+        #expect(stressLayout.totalHeight > 0)
+    }
+
+    @Test("Dock Magnification Unit Target Edge Cases")
+    func testDockMagnificationEngineBoundaryAndEmpty() {
+        // 1. Empty spans - defaults back to original ID
+        let emptyResult = DockMagnificationEngine.unitTarget(spans: [], id: "test", offset: 20)
+        #expect(emptyResult == "test")
+
+        // 2. Single span - stays put on self
+        let singleSpan = [(id: "app_1", start: 0.0, end: 50.0)]
+        let singleResult = DockMagnificationEngine.unitTarget(spans: singleSpan, id: "app_1", offset: 100)
+        #expect(singleResult == "app_1")
+
+        // 3. Target not found in spans - defaults back to original ID
+        let notFound = DockMagnificationEngine.unitTarget(spans: singleSpan, id: "nonexistent", offset: 10)
+        #expect(notFound == "nonexistent")
+
+        // 4. Zero-width span boundary
+        let zeroSpans = [
+            (id: "app_1", start: 0.0, end: 50.0),
+            (id: "zero", start: 50.0, end: 50.0),
+            (id: "app_2", start: 50.0, end: 100.0)
+        ]
+        let zeroResult = DockMagnificationEngine.unitTarget(spans: zeroSpans, id: "app_1", offset: 30)
+        #expect(zeroResult == "app_2")
+    }
 }
+

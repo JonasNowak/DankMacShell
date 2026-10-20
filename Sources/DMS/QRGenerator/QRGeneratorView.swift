@@ -83,44 +83,44 @@ public struct QRGeneratorView: View {
                         .interpolation(.none)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 180, height: 180)
+                        .frame(width: 120, height: 120)
                 } else {
                     ProgressView()
                 }
             }
-            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 3)
 
             // Action Buttons
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Button(action: copyImage) {
-                    Label("Copy QR Image", systemImage: "doc.on.doc.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                    Label("Copy", systemImage: "doc.on.doc.fill")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: p.onPrimary.hex))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 7)
                         .background(Color(hex: p.primary.hex))
-                        .cornerRadius(12)
+                        .cornerRadius(10)
                 }
                 .buttonStyle(.plain)
 
                 Button(action: saveImage) {
-                    Label("Save PNG", systemImage: "square.and.arrow.down")
-                        .font(.system(size: 13, weight: .semibold))
+                    Label("Save", systemImage: "square.and.arrow.down")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 7)
                         .background(Color(hex: p.surfaceVariant.hex))
-                        .cornerRadius(12)
+                        .cornerRadius(10)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(24)
-        .frame(width: 380)
+        .padding(14)
+        .frame(width: 260)
         .background(Color(hex: p.surface.hex))
-        .cornerRadius(26)
+        .cornerRadius(18)
         .overlay(
-            RoundedRectangle(cornerRadius: 26)
+            RoundedRectangle(cornerRadius: 18)
                 .stroke(Color(hex: p.outlineVariant.hex).opacity(0.6), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.3), radius: 24, x: 0, y: 12)

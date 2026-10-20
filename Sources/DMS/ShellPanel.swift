@@ -25,12 +25,32 @@ public class ShellPanel: NSPanel {
         self.hidesOnDeactivate = false
     }
 
+    public var onEscape: (() -> Void)?
+
     public override var canBecomeKey: Bool {
-        // Overlay modals (Launcher, PowerMenu) can become key to receive typing/keyboard events.
+        // Overlay modals (Launcher, PowerMenu, Settings) can become key to receive typing/keyboard events.
         return true
     }
 
     public override var canBecomeMain: Bool {
         return false
+    }
+
+    public override func cancelOperation(_ sender: Any?) {
+        if let onEscape = onEscape {
+            onEscape()
+        } else {
+            super.cancelOperation(sender)
+        }
+    }
+
+    public override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { // ESC key
+            if let onEscape = onEscape {
+                onEscape()
+                return
+            }
+        }
+        super.keyDown(with: event)
     }
 }

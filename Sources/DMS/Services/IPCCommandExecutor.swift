@@ -17,7 +17,7 @@ public enum IPCCommandExecutor {
             return "Launcher opened"
 
         case .openLauncherQuery(let query):
-            LauncherController.shared.show()
+            LauncherController.shared.show(query: query)
             return "Launcher opened with query '\(query)'"
 
         case .closeLauncher:
@@ -43,6 +43,11 @@ public enum IPCCommandExecutor {
         case .openDash:
             DashController.shared.show()
             return "DankDash opened"
+
+        case .openDashTab(let tab):
+            let dashTab = DashTab(fromString: tab) ?? .overview
+            DashController.shared.show(tab: dashTab)
+            return "DankDash opened on \(dashTab.title)"
 
         case .closeDash:
             DashController.shared.hide()
@@ -191,32 +196,36 @@ public enum IPCCommandExecutor {
             return "Settings closed"
 
         case .getSetting(let key):
-            switch key.lowercased() {
-            case "theme": return ConfigStore.shared.config.theme
-            case "islightmode": return "\(ConfigStore.shared.config.isLightMode)"
-            case "barposition": return ConfigStore.shared.config.barPosition
-            case "barautohide": return "\(ConfigStore.shared.config.barAutoHide)"
-            default: return "Unknown key \(key)"
+            if let val = ConfigStore.shared.config.getSetting(key) {
+                return val.stringValue ?? "\(val.value)"
             }
+            return "Unknown key \(key)"
 
         case .setSetting(let key, let val):
+            let anyVal: AnyCodable
+            if let b = Bool(val) {
+                anyVal = AnyCodable(b)
+            } else if let i = Int(val) {
+                anyVal = AnyCodable(i)
+            } else if let d = Double(val) {
+                anyVal = AnyCodable(d)
+            } else {
+                anyVal = AnyCodable(val)
+            }
+
             ConfigStore.shared.update { cfg in
-                switch key.lowercased() {
-                case "theme":
-                    cfg.theme = val
-                    ThemeStore.shared.apply(theme: val, lightMode: cfg.isLightMode)
-                case "islightmode":
-                    let light = val.lowercased() == "true" || val == "1"
-                    cfg.isLightMode = light
-                    ThemeStore.shared.setLightMode(light)
-                case "barposition":
-                    cfg.barPosition = val
-                    DankBarController.shared.updateBarFrame()
-                case "barautohide":
-                    cfg.barAutoHide = val.lowercased() == "true" || val == "1"
-                default:
-                    break
-                }
+                cfg.setSetting(key, value: anyVal)
+            }
+
+            let lower = key.lowercased()
+            if lower == "theme" || lower == "islightmode" || lower.contains("font") || lower.contains("radius") || lower.contains("opacity") || lower.contains("shadow") || lower.contains("matugen") {
+                ThemeStore.shared.sync(with: ConfigStore.shared.config)
+            } else if lower.contains("bar") {
+                DankBarController.shared.updateBarFrame()
+            } else if lower.contains("dock") {
+                DockController.shared.updateDocks()
+            } else if lower.contains("island") {
+                DIslandController.shared.refreshSettings()
             }
             return "Setting \(key) set to \(val)"
 
@@ -259,13 +268,19 @@ public enum IPCCommandExecutor {
             switch act.lowercased() {
             case "toggle":
                 ConfigStore.shared.update { $0.showDock.toggle() }
+                DockController.shared.toggle()
                 return "Dock toggled: \(ConfigStore.shared.config.showDock)"
             case "hide":
                 ConfigStore.shared.update { $0.showDock = false }
+                DockController.shared.hide()
                 return "Dock hidden"
             case "reveal", "show":
                 ConfigStore.shared.update { $0.showDock = true }
+                DockController.shared.show()
                 return "Dock revealed"
+            case "reposition", "update":
+                DockController.shared.reposition()
+                return "Dock repositioned"
             case "status":
                 return "dock visible: \(ConfigStore.shared.config.showDock)"
             default:
@@ -299,6 +314,18 @@ public enum IPCCommandExecutor {
                 let step = (val.flatMap { Double($0) } ?? 5.0) / 100.0
                 AudioService.shared.setVolume(max(0.0, cur - step))
                 return "Volume: \(Int(AudioService.shared.volume * 100))%"
+            case "list-devices", "devices", "sinks":
+                let devices = AudioService.shared.outputs
+                if devices.isEmpty { return "No audio output devices found" }
+                return devices.map { "\($0.isDefault ? "* " : "  ")[\($0.id)] \($0.name)" }.joined(separator: "\n")
+            case "set-device", "switch-device", "select-device":
+                if let target = val {
+                    if AudioService.shared.setDefaultOutputByName(target) {
+                        return "Audio output set to \(target)"
+                    }
+                    return "Device not found: \(target)"
+                }
+                return "Missing device name or ID argument"
             default:
                 return "Volume: \(Int(AudioService.shared.volume * 100))%, Muted: \(AudioService.shared.isMuted)"
             }
@@ -379,7 +406,7 @@ public enum IPCCommandExecutor {
             return ThemeStore.shared.themeName
 
         case .listThemes:
-            return "dynamic, purple, blue, green, orange, red, yellow, neutral"
+            return (["dynamic"] + StockThemes.allAvailableThemes).joined(separator: ", ")
 
         case .toggleThemeMode:
             ThemeStore.shared.toggleLightMode()
@@ -416,16 +443,35 @@ public enum IPCCommandExecutor {
             return "Toast displayed"
 
         case .doctor:
-            return "DMS Daemon: Active\nCoreAudio: Active\nCoreWLAN: Active\nIOBluetooth: Active\nSocket: Active"
+            let dsStatus = DankSearchClient.shared.healthState
+            return "DMS Daemon: Active\nCoreAudio: Active\nCoreWLAN: Active\nIOBluetooth: Active\nDankSearch: \(dsStatus)\nSocket: Active"
 
         case .reloadConfig:
             ConfigStore.shared.loadConfig()
-            ThemeStore.shared.apply(theme: ConfigStore.shared.config.theme, lightMode: ConfigStore.shared.config.isLightMode)
+            ThemeStore.shared.sync(with: ConfigStore.shared.config)
+            DankBarController.shared.updateBarFrame()
+            DIslandController.shared.refreshSettings()
             ToastCenter.shared.show(icon: "arrow.clockwise", message: "Configuration reloaded")
             return "Configuration reloaded"
 
         case .status:
             return "active"
+
+        case .weatherRefresh:
+            WeatherService.shared.fetchWeather(force: true)
+            ToastCenter.shared.show(icon: "arrow.clockwise", message: "Weather Refreshed")
+            return "Weather refresh triggered"
+
+        case .weatherSetLocation(let loc):
+            WeatherService.shared.setManualLocation(loc)
+            ToastCenter.shared.show(icon: "mappin.and.ellipse", message: "Location: \(loc)")
+            return "Weather location set to: \(loc)"
+
+        case .weatherStatus:
+            let w = WeatherService.shared.currentWeather
+            let isCelsius = ConfigStore.shared.config.weatherUnits.lowercased() == "celsius"
+            let temp = isCelsius ? "\(Int(round(w.temperatureC)))°C" : "\(Int(round(w.temperatureF)))°F"
+            return "Location: \(WeatherService.shared.locationName) (\(WeatherService.shared.latitude), \(WeatherService.shared.longitude))\nTemperature: \(temp)\nCondition: \(w.conditionDescription)\nHumidity: \(w.humidity)%\nWind: \(Int(round(w.windSpeedKmh))) km/h"
 
         case .listPlugins:
             let installed = PluginService.shared.plugins.filter { $0.isInstalled }
@@ -488,6 +534,57 @@ public enum IPCCommandExecutor {
             PluginService.shared.toggleApplet(id: id)
             let cur = PluginService.shared.applets.first(where: { $0.id == id })?.isEnabled ?? false
             return "Applet '\(id)' is now \(cur ? "enabled" : "disabled")."
+
+        case .island(let act, let val):
+            switch act.lowercased() {
+            case "expand", "open", "show", "reveal":
+                if let val = val, let activity = IslandActivity(rawValue: val.lowercased()) {
+                    DIslandController.shared.expand(activity: activity)
+                } else {
+                    DIslandController.shared.expand()
+                }
+                return "Dynamic Island expanded"
+            case "collapse", "close", "hide":
+                DIslandController.shared.collapse()
+                return "Dynamic Island collapsed"
+            case "toggle":
+                DIslandController.shared.toggleExpanded()
+                return "Dynamic Island toggled"
+            case "media", "weather", "battery", "audio", "timers", "notifications":
+                if let activity = IslandActivity(rawValue: act.lowercased()) {
+                    DIslandController.shared.expand(activity: activity)
+                    return "Dynamic Island expanded (\(activity.rawValue))"
+                }
+                return "Unknown island activity \(act)"
+            case "status":
+                return "state: \(DIslandController.shared.presentationState.rawValue), activity: \(DIslandController.shared.activeActivity.rawValue)"
+            default:
+                return "Unknown island action \(act)"
+            }
+
+        case .danksearch(let act, let query):
+            switch act.lowercased() {
+            case "status":
+                let health = DankSearchClient.shared.healthState
+                let bin = DankSearchClient.shared.resolveExecutablePath() ?? "not installed (using Spotlight fallback)"
+                return "Health: \(health)\nBinary: \(bin)"
+            case "diagnostics", "logs":
+                let logs = DankSearchClient.shared.diagnostics
+                if logs.isEmpty { return "No danksearch diagnostics recorded." }
+                return logs.suffix(10).map { "[\($0.timestamp)] [\($0.backend)] query='\($0.query)' \($0.message)" }.joined(separator: "\n")
+            case "reset", "recover", "restart":
+                DankSearchClient.shared.resetAndRecover()
+                return "DankSearch health state reset; service will recover on next query."
+            case "search", "query":
+                let q = query ?? ""
+                let resp = AppSearch.searchFilesWithDiagnostics(query: q, maxResults: 15)
+                if resp.files.isEmpty {
+                    return "No results for '\(q)' (usedFallback: \(resp.usedFallback))"
+                }
+                return resp.files.map { "\($0.name) (\($0.path))" }.joined(separator: "\n")
+            default:
+                return "Unknown danksearch action \(act)"
+            }
 
         case .unknown(let raw):
             return "Unknown command: \(raw)"

@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import Darwin
+import IOKit
 import DMSCore
 
 /// Hardware telemetry metrics for CPU, RAM, and Battery.
@@ -38,6 +39,7 @@ public final class TelemetryService {
         let cpu = readCPUUsage()
         let ram = readRAMUsage()
         let battery = BatteryService.shared.status
+        let gpu = readGPUUsage()
 
         telemetry = SystemTelemetry(
             cpuPercent: cpu,
@@ -46,8 +48,39 @@ public final class TelemetryService {
             ramTotalGB: ram.totalGB,
             batteryPercent: battery?.capacity,
             isCharging: battery?.isCharging ?? false,
-            timeRemainingMinutes: nil
+            timeRemainingMinutes: nil,
+            gpuPercent: gpu
         )
+    }
+
+    private func readGPUUsage() -> Double? {
+        var iterator: io_iterator_t = 0
+        let matchDict = IOServiceMatching("IOAccelerator")
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matchDict, &iterator) == kIOReturnSuccess else {
+            return nil
+        }
+        defer { IOObjectRelease(iterator) }
+
+        var service = IOIteratorNext(iterator)
+        while service != 0 {
+            defer {
+                IOObjectRelease(service)
+                service = IOIteratorNext(iterator)
+            }
+            var props: Unmanaged<CFMutableDictionary>?
+            if IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0) == kIOReturnSuccess,
+               let dict = props?.takeRetainedValue() as? [String: Any],
+               let stats = dict["PerformanceStatistics"] as? [String: Any] {
+                if let util = stats["Device Utilization %"] as? Int {
+                    return Double(util)
+                } else if let util = stats["GPU Activity(%)"] as? Int {
+                    return Double(util)
+                } else if let util = stats["GPU Core Utilization"] as? Double {
+                    return util * 100.0
+                }
+            }
+        }
+        return nil
     }
 
     private func readCPUUsage() -> Double {

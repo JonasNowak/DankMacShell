@@ -41,6 +41,8 @@ public struct DMSPlugin: Identifiable, Sendable, Codable, Equatable {
     public var isEnabled: Bool
     public var icon: String
     public var repoURL: String?
+    public var tags: [String]
+    public var isOfficial: Bool
 
     public init(
         id: String,
@@ -52,7 +54,9 @@ public struct DMSPlugin: Identifiable, Sendable, Codable, Equatable {
         isInstalled: Bool = false,
         isEnabled: Bool = false,
         icon: String = "puzzlepiece.extension",
-        repoURL: String? = nil
+        repoURL: String? = nil,
+        tags: [String] = [],
+        isOfficial: Bool = true
     ) {
         self.id = id
         self.name = name
@@ -64,6 +68,8 @@ public struct DMSPlugin: Identifiable, Sendable, Codable, Equatable {
         self.isEnabled = isEnabled
         self.icon = icon
         self.repoURL = repoURL
+        self.tags = tags
+        self.isOfficial = isOfficial
     }
 }
 

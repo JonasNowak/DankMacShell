@@ -41,6 +41,7 @@ func printHelp() {
       dms screenshot [region|full|window]
       dms plugins [search|list|install|uninstall|enable|disable|lock|restore]
       dms applets [list|toggle <name>]  Customize DankBar widgets and applets
+      dms weather [status|refresh|location <city|lat,lon>] Live Open-Meteo weather controls
       dms version                      Show version info
     """)
 }
@@ -178,9 +179,11 @@ case "doctor":
     let socketExists = FileManager.default.fileExists(atPath: getSocketPath())
     print("[\(socketExists ? "✓" : "✗")] IPC Unix Socket: \(socketExists ? getSocketPath() : "Missing")")
 
+    let settingsPath = ("~/Library/Application Support/DMS/settings.json" as NSString).expandingTildeInPath
     let configPath = ("~/Library/Application Support/DMS/config.json" as NSString).expandingTildeInPath
-    let configExists = FileManager.default.fileExists(atPath: configPath)
-    print("[\(configExists ? "✓" : "✗")] User Config: \(configExists ? configPath : "Default fallback")")
+    let configExists = FileManager.default.fileExists(atPath: settingsPath) || FileManager.default.fileExists(atPath: configPath)
+    let activePath = FileManager.default.fileExists(atPath: settingsPath) ? settingsPath : configPath
+    print("[\(configExists ? "✓" : "✗")] User Config: \(configExists ? activePath : "Default fallback")")
 
     let notesPath = ("~/Library/Application Support/DMS/notes.json" as NSString).expandingTildeInPath
     print("[\(FileManager.default.fileExists(atPath: notesPath) ? "✓" : "i")] Notepad storage: \(notesPath)")
