@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import DMSCore
 
-/// Manages plugins and applets for DankMaterialShell.
+/// Manages plugins and applets for DankMacShell.
 @MainActor
 public final class PluginService: ObservableObject {
     public static let shared = PluginService()

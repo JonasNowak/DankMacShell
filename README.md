@@ -16,16 +16,11 @@ Right now no prebuilt binary is provided. You have to build this yourself.
 - Apple Command Line Tools or Xcode
 - OmniWM with IPC turned on!
 
-### Build, Assemble & Install
+### Build
 ```bash
 ./build.sh
 ```
-This builds both release binaries, packages `~/Applications/DankMaterialShell.app`, signs it, installs `dms` into `~/.local/bin/dms`, and launches the application.
-
-To build without launching:
-```bash
-./build.sh --no-launch
-```
+This builds both release binaries, packages `~/Applications/DankMacShell.app`, signs it, installs `dms` into `~/.local/bin/dms`, and launches the application.
 
 ### Run Unit Tests
 ```bash
@@ -130,9 +125,9 @@ A dedicated command-line utility is installed to `~/.local/bin/dms` for controll
 
 ```bash
 # General Management
-dms run                          # Start DankMaterialShell app
-dms stop                         # Stop running DankMaterialShell
-dms restart                      # Restart DankMaterialShell
+dms run                          # Start DankMacShell app
+dms stop                         # Stop running DankMacShell
+dms restart                      # Restart DankMacShell
 dms status                       # Show running status of DMS daemon and socket
 dms doctor                       # Run diagnostics check on permissions and subsystems
 
