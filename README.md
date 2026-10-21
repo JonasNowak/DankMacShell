@@ -1,6 +1,6 @@
 # DankMacShell (DMS) for macOS
 
-This is build as a adaption of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) for MacOS.
+This is build as a adaption of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) for MacOS. This project has not been endorsed nor is it related to DankMaterialShell or AvengeMedia.
 
 DankMacShell is an additional shell for MacOS with [OmniWM](https://github.com/OmniNull/OmniWM). It adds the features that make a mac feel more akin to the typical WM experience on Linux systems.
 
