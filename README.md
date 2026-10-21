@@ -4,7 +4,7 @@ This is build as a adaption of [DankMaterialShell](https://github.com/AvengeMedi
 
 DankMacShell is an additional shell for MacOS with [OmniWM](https://github.com/OmniNull/OmniWM). It adds the features that make a mac feel more akin to the typical WM experience on Linux systems.
 
->[!WARNING] Attention
+>[!WARNING]
 > Everything in this repository will change, some LLM-written parts will be stripped out. There are major bugs. 
 
 
