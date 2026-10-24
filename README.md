@@ -12,9 +12,13 @@ DankMacShell is an additional shell for MacOS with [OmniWM](https://github.com/O
 
 ## Installation
 
-Right now no prebuilt binary is provided. You have to build this yourself.
+### 1. Prebuilt Binary
 
-### Requirements
+Download the prebuild .dmg, you have to delete it to update.
+
+### 2. Build it.
+
+#### Requirements
 - macOS 14+ (macOS 26+ compatible)
 - Apple Command Line Tools or Xcode
 - OmniWM with IPC turned on!
