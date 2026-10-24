@@ -76,11 +76,33 @@ public struct DankBarView: View {
         (effectiveNotch.hasNotch || (island.settings.instance != .off && (island.settings.instance == .notch || island.settings.instance == .mainBar)))
     }
 
+    private var effectiveCornerStyle: BarCornerStyle {
+        if activeConfig.cornerStyle == .square || (activeConfig.autoSquareAttachedCorners && activeConfig.margin == 0 && activeConfig.cornerStyle != .gothic) {
+            return .square
+        }
+        return activeConfig.cornerStyle
+    }
+
     private var resolvedBarCornerRadius: CGFloat {
+        if effectiveCornerStyle == .square {
+            return 0
+        }
         if activeConfig.cornerRadius >= 0 {
             return CGFloat(activeConfig.cornerRadius)
         }
         return theme.scaledRadius(24)
+    }
+
+    private func barContainerShape(isLeftWing: Bool? = nil, isRightWing: Bool? = nil) -> BarGothCornerShape {
+        BarGothCornerShape(
+            position: activeConfig.position,
+            cornerStyle: effectiveCornerStyle,
+            cornerRadius: resolvedBarCornerRadius,
+            filletRadius: CGFloat(activeConfig.gothFilletRadius),
+            isVertical: isVertical,
+            isLeftWing: isLeftWing,
+            isRightWing: isRightWing
+        )
     }
 
     private var resolvedBorderColor: Color {
@@ -98,6 +120,7 @@ public struct DankBarView: View {
                 notchedHorizontalBarContent(totalLength: totalLength)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                let shape = barContainerShape()
                 ZStack {
                     if isVertical {
                         verticalBarContent(totalLength: totalLength)
@@ -107,11 +130,11 @@ public struct DankBarView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(barBackground)
-                .clipShape(barContainerShape)
+                .clipShape(shape)
                 .overlay(
                     Group {
                         if activeConfig.borderEnabled && activeConfig.backgroundStyle.lowercased() != "island" {
-                            barContainerShape.stroke(
+                            shape.stroke(
                                 resolvedBorderColor,
                                 lineWidth: CGFloat(max(0.0, activeConfig.borderWidth))
                             )
@@ -125,16 +148,6 @@ public struct DankBarView: View {
                     y: theme.shadowTokens.enabled ? CGFloat(theme.shadowTokens.offsetY) : 0
                 )
             }
-        }
-    }
-
-    private var barContainerShape: AnyShape {
-        if activeConfig.gothCorners && !isVertical && (activeConfig.position.lowercased() == "top" || activeConfig.position.lowercased() == "bottom") && activeConfig.cornerRadius < 0 {
-            return AnyShape(Capsule())
-        } else if activeConfig.cornerRadius >= 0 {
-            return AnyShape(RoundedRectangle(cornerRadius: resolvedBarCornerRadius, style: .continuous))
-        } else {
-            return AnyShape(Capsule())
         }
     }
 
@@ -196,6 +209,9 @@ public struct DankBarView: View {
         let hPad = CGFloat(activeConfig.horizontalPadding)
         let vPad = CGFloat(activeConfig.verticalPadding)
 
+        let leftShape = barContainerShape(isLeftWing: true)
+        let rightShape = barContainerShape(isRightWing: true)
+
         HStack(spacing: 0) {
             // Left Safe Zone Wing (Left of Notch / Dynamic Island)
             HStack(spacing: 4) {
@@ -211,11 +227,11 @@ public struct DankBarView: View {
             .frame(width: leftSafeWidth)
             .frame(maxHeight: .infinity)
             .background(barBackground)
-            .clipShape(barContainerShape)
+            .clipShape(leftShape)
             .overlay(
                 Group {
                     if activeConfig.borderEnabled && activeConfig.backgroundStyle.lowercased() != "island" {
-                        barContainerShape.stroke(resolvedBorderColor, lineWidth: CGFloat(max(0.0, activeConfig.borderWidth)))
+                        leftShape.stroke(resolvedBorderColor, lineWidth: CGFloat(max(0.0, activeConfig.borderWidth)))
                     }
                 }
             )
@@ -239,11 +255,11 @@ public struct DankBarView: View {
             .frame(width: rightSafeWidth)
             .frame(maxHeight: .infinity)
             .background(barBackground)
-            .clipShape(barContainerShape)
+            .clipShape(rightShape)
             .overlay(
                 Group {
                     if activeConfig.borderEnabled && activeConfig.backgroundStyle.lowercased() != "island" {
-                        barContainerShape.stroke(resolvedBorderColor, lineWidth: CGFloat(max(0.0, activeConfig.borderWidth)))
+                        rightShape.stroke(resolvedBorderColor, lineWidth: CGFloat(max(0.0, activeConfig.borderWidth)))
                     }
                 }
             )

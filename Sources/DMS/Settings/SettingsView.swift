@@ -402,18 +402,72 @@ public struct SettingsView: View {
 
             Divider().opacity(0.3)
 
-            SettingsSliderRow(
-                title: "Border Radius Strength",
-                valueFormatted: "\(Int(configStore.config.cornerRadiusStrength))%",
-                value: Binding(
-                    get: { configStore.config.cornerRadiusStrength },
-                    set: { val in configStore.update(immediate: false) { $0.cornerRadiusStrength = val } }
-                ),
-                range: 0.0...100.0,
-                step: 5.0,
-                helper: "0 = sharp rectangular edges, 50 = M3 standard (1.0x), 100 = extra-rounded (2.0x)",
-                palette: palette
-            )
+            HStack {
+                Text("Surface Corner Style")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                Spacer()
+                SettingsSegmentedControl(
+                    options: [
+                        ("Scaled M3", "scaled"),
+                        ("Square", "square"),
+                        ("Rounded", "rounded")
+                    ],
+                    selection: Binding(
+                        get: {
+                            if let fix = configStore.config.fixedCornerRadius {
+                                return fix == 0 ? "square" : "rounded"
+                            }
+                            return "scaled"
+                        },
+                        set: { mode in
+                            configStore.update {
+                                switch mode {
+                                case "square":
+                                    $0.fixedCornerRadius = 0.0
+                                case "rounded":
+                                    $0.fixedCornerRadius = 16.0
+                                default:
+                                    $0.fixedCornerRadius = nil
+                                }
+                            }
+                        }
+                    ),
+                    palette: palette
+                )
+            }
+
+            if let fixedRadius = configStore.config.fixedCornerRadius, fixedRadius > 0 {
+                SettingsSliderRow(
+                    title: "Fixed Surface Radius",
+                    valueFormatted: "\(Int(fixedRadius)) px",
+                    value: Binding(
+                        get: { fixedRadius },
+                        set: { val in configStore.update(immediate: false) { $0.fixedCornerRadius = val } }
+                    ),
+                    range: 4...32,
+                    step: 2,
+                    helper: "Fixed pixel radius overriding dynamic tokens (THEME-002)",
+                    palette: palette
+                )
+            } else if configStore.config.fixedCornerRadius == nil {
+                SettingsSliderRow(
+                    title: "Border Radius Strength",
+                    valueFormatted: "\(Int(configStore.config.cornerRadiusStrength))%",
+                    value: Binding(
+                        get: { configStore.config.cornerRadiusStrength },
+                        set: { val in configStore.update(immediate: false) { $0.cornerRadiusStrength = val } }
+                    ),
+                    range: 0.0...100.0,
+                    step: 5.0,
+                    helper: "0 = sharp rectangular edges, 50 = M3 standard (1.0x), 100 = extra-rounded (2.0x)",
+                    palette: palette
+                )
+            } else {
+                Text("Square 0 px corners applied to all shell surfaces and popouts.")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+            }
 
             SettingsSliderRow(
                 title: "Global Border Width",
@@ -839,15 +893,120 @@ public struct SettingsView: View {
                 )
             }
 
+        }
+
+        SettingsCard(icon: "rectangle.roundedtop", title: "Corner Styling & Geometry", subtitle: "Configure pill capsule, concave Gothic fillets, rounded, or square corners", palette: palette) {
+            HStack {
+                Text("Corner Style")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                Spacer()
+                SettingsSegmentedControl(
+                    options: [
+                        ("Capsule", BarCornerStyle.capsule),
+                        ("Gothic", BarCornerStyle.gothic),
+                        ("Rounded", BarCornerStyle.rounded),
+                        ("Square", BarCornerStyle.square)
+                    ],
+                    selection: Binding(
+                        get: { barCfg.cornerStyle },
+                        set: { style in
+                            configStore.update {
+                                if !$0.barConfigs.isEmpty {
+                                    $0.barConfigs[0].cornerStyle = style
+                                }
+                            }
+                            DankBarController.shared.reposition()
+                        }
+                    ),
+                    palette: palette
+                )
+            }
+
+            Text(barCfg.cornerStyle.subtitle)
+                .font(.system(size: 10))
+                .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+
+            if barCfg.cornerStyle == .gothic {
+                Divider().opacity(0.3)
+
+                SettingsSliderRow(
+                    title: "Gothic Fillet Radius",
+                    valueFormatted: "\(Int(barCfg.gothFilletRadius)) px",
+                    value: Binding(
+                        get: { barCfg.gothFilletRadius },
+                        set: { val in
+                            configStore.update(immediate: false) {
+                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].gothFilletRadius = val }
+                            }
+                        }
+                    ),
+                    range: 6...32,
+                    step: 2,
+                    helper: "Concave arc radius bridging the bar into the screen edge or Mac notch",
+                    palette: palette
+                )
+
+                SettingsSliderRow(
+                    title: "Desktop Edge Radius",
+                    valueFormatted: barCfg.cornerRadius < 0 ? "Capsule" : (barCfg.cornerRadius == 0 ? "Square" : "\(Int(barCfg.cornerRadius)) px"),
+                    value: Binding(
+                        get: { barCfg.cornerRadius < 0 ? 24.0 : barCfg.cornerRadius },
+                        set: { val in
+                            configStore.update(immediate: false) {
+                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].cornerRadius = val }
+                            }
+                        }
+                    ),
+                    range: 0...32,
+                    step: 2,
+                    helper: "Convex corner radius for the bar edges facing into the desktop (0 = square, 24 = capsule)",
+                    palette: palette
+                )
+            } else if barCfg.cornerStyle == .rounded {
+                Divider().opacity(0.3)
+
+                SettingsSliderRow(
+                    title: "Corner Radius",
+                    valueFormatted: "\(Int(barCfg.cornerRadius > 0 ? barCfg.cornerRadius : 16)) px",
+                    value: Binding(
+                        get: { barCfg.cornerRadius > 0 ? barCfg.cornerRadius : 16 },
+                        set: { val in
+                            configStore.update(immediate: false) {
+                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].cornerRadius = val }
+                            }
+                        }
+                    ),
+                    range: 4...36,
+                    step: 2,
+                    helper: "Continuous corner radius across all 4 bar boundaries (M3 tokens: 8, 12, 16, 24, 28)",
+                    palette: palette
+                )
+            }
+
+            Divider().opacity(0.3)
+
             SettingsToggleRow(
-                title: "Gothic Concave Corners",
-                subtitle: "Render organic concave bridge curves into screen boundaries",
+                title: "Auto-Square When Edge-Attached",
+                subtitle: "Automatically snap corners to 0 px square when margin is 0 (BAR-001)",
                 isOn: Binding(
-                    get: { barCfg.gothCorners },
+                    get: { barCfg.autoSquareAttachedCorners },
                     set: { val in
                         configStore.update {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].gothCorners = val }
+                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].autoSquareAttachedCorners = val }
                         }
+                    }
+                ),
+                palette: palette
+            )
+
+            SettingsToggleRow(
+                title: "Popout Connected Mode (\"Gothic Corners\")",
+                subtitle: "Bridge popout panels (Control Center, Audio, Dash) into bar body with concave fillets (SURF-001)",
+                isOn: Binding(
+                    get: { configStore.config.gothCornersEnabled },
+                    set: { val in
+                        configStore.update { $0.gothCornersEnabled = val }
                     }
                 ),
                 palette: palette
@@ -1509,6 +1668,25 @@ public struct SettingsView: View {
                 ),
                 palette: palette
             )
+
+            if island.gothCorners {
+                SettingsSliderRow(
+                    title: "Notch Fillet Radius",
+                    valueFormatted: "\(Int(island.gothFilletRadius)) px",
+                    value: Binding(
+                        get: { island.gothFilletRadius },
+                        set: { val in
+                            var updated = island
+                            updated.gothFilletRadius = val
+                            configStore.update(immediate: false) { $0.rawSettings.merge(updated.toDictionary()) { _, new in new } }
+                        }
+                    ),
+                    range: 6...28,
+                    step: 2,
+                    helper: "Concave bridge radius flaring into MacBook notch (Spec 24: 12 pt)",
+                    palette: palette
+                )
+            }
 
             SettingsSliderRow(
                 title: "Island Opacity",

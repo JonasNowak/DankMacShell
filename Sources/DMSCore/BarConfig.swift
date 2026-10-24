@@ -151,6 +151,43 @@ public struct BarLayout: Sendable, Codable, Equatable {
     )
 }
 
+/// Visual corner style for DankBar container surfaces per spec 19 (BAR-001) and spec 06 (Connected Mode).
+public enum BarCornerStyle: String, Sendable, Codable, CaseIterable, Identifiable {
+    case capsule = "capsule"
+    case gothic = "gothic"
+    case rounded = "rounded"
+    case square = "square"
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .capsule: return "Capsule"
+        case .gothic: return "Gothic"
+        case .rounded: return "Rounded"
+        case .square: return "Square"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .capsule: return "Full-radius pill capsule per M3 Expressive"
+        case .gothic: return "Concave fillet arcs bridging into screen bezel"
+        case .rounded: return "Continuous uniform rounded corners"
+        case .square: return "Sharp 90° right angles (edge-flush)"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .capsule: return "capsule"
+        case .gothic: return "arrow.up.and.line.horizontal.and.arrow.down"
+        case .rounded: return "square.dashed"
+        case .square: return "square"
+        }
+    }
+}
+
 /// Hierarchical configuration for an individual DankBar instance.
 public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
     public var id: String
@@ -169,8 +206,10 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
     public var borderEnabled: Bool
     public var borderWidth: Double
     public var borderColor: String?
-    public var cornerRadius: Double // -1 = auto/capsule, >= 0 = fixed radius
+    public var cornerRadius: Double // -1 = auto/capsule, 0 = square, > 0 = fixed radius
     public var gothCorners: Bool
+    public var gothFilletRadius: Double
+    public var autoSquareAttachedCorners: Bool
     public var hoverOpenDelayMs: Int
     public var hoverCloseDelayMs: Int
     public var adaptToNotch: Bool
@@ -184,6 +223,46 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
     public var isVertical: Bool {
         let p = position.lowercased()
         return p == "left" || p == "right"
+    }
+
+    /// Dynamic corner style accessor bridging `cornerRadius` and `gothCorners`.
+    public var cornerStyle: BarCornerStyle {
+        get {
+            if gothCorners {
+                return .gothic
+            } else if cornerRadius == 0 {
+                return .square
+            } else if cornerRadius > 0 {
+                return .rounded
+            } else {
+                return .capsule
+            }
+        }
+        set {
+            switch newValue {
+            case .capsule:
+                gothCorners = false
+                cornerRadius = -1.0
+            case .gothic:
+                gothCorners = true
+                if cornerRadius == 0 { cornerRadius = -1.0 }
+            case .rounded:
+                gothCorners = false
+                if cornerRadius <= 0 { cornerRadius = 16.0 }
+            case .square:
+                gothCorners = false
+                cornerRadius = 0.0
+            }
+        }
+    }
+
+    public enum CodingKeys: String, CodingKey {
+        case id, name, screenPreferences, position, autoHide, smartAutoHide
+        case thickness, margin, spacing, horizontalPadding, verticalPadding
+        case transparency, backgroundStyle, borderEnabled, borderWidth, borderColor
+        case cornerRadius, gothCorners, gothFilletRadius, autoSquareAttachedCorners, cornerStyle
+        case hoverOpenDelayMs, hoverCloseDelayMs, adaptToNotch, simulateNotch
+        case simulatedNotchWidth, simulatedNotchHeight, layout, widgetStyles, options
     }
 
     public init(
@@ -205,6 +284,9 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
         borderColor: String? = nil,
         cornerRadius: Double = -1.0,
         gothCorners: Bool = true,
+        gothFilletRadius: Double = 14.0,
+        autoSquareAttachedCorners: Bool = true,
+        cornerStyle: BarCornerStyle? = nil,
         hoverOpenDelayMs: Int = 80,
         hoverCloseDelayMs: Int = 350,
         adaptToNotch: Bool = true,
@@ -233,6 +315,8 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
         self.borderColor = borderColor
         self.cornerRadius = cornerRadius
         self.gothCorners = gothCorners
+        self.gothFilletRadius = gothFilletRadius
+        self.autoSquareAttachedCorners = autoSquareAttachedCorners
         self.hoverOpenDelayMs = hoverOpenDelayMs
         self.hoverCloseDelayMs = hoverCloseDelayMs
         self.adaptToNotch = adaptToNotch
@@ -242,6 +326,10 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
         self.layout = layout
         self.widgetStyles = widgetStyles
         self.options = options
+
+        if let explicitStyle = cornerStyle {
+            self.cornerStyle = explicitStyle
+        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -264,6 +352,8 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
         self.borderColor = try container.decodeIfPresent(String.self, forKey: .borderColor)
         self.cornerRadius = try container.decodeIfPresent(Double.self, forKey: .cornerRadius) ?? -1.0
         self.gothCorners = try container.decodeIfPresent(Bool.self, forKey: .gothCorners) ?? true
+        self.gothFilletRadius = try container.decodeIfPresent(Double.self, forKey: .gothFilletRadius) ?? 14.0
+        self.autoSquareAttachedCorners = try container.decodeIfPresent(Bool.self, forKey: .autoSquareAttachedCorners) ?? true
         self.hoverOpenDelayMs = try container.decodeIfPresent(Int.self, forKey: .hoverOpenDelayMs) ?? 80
         self.hoverCloseDelayMs = try container.decodeIfPresent(Int.self, forKey: .hoverCloseDelayMs) ?? 350
         self.adaptToNotch = try container.decodeIfPresent(Bool.self, forKey: .adaptToNotch) ?? true
@@ -273,6 +363,44 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
         self.layout = try container.decodeIfPresent(BarLayout.self, forKey: .layout) ?? .default
         self.widgetStyles = try container.decodeIfPresent([String: BarWidgetStyleOptions].self, forKey: .widgetStyles) ?? [:]
         self.options = try container.decodeIfPresent([String: AnyCodable].self, forKey: .options) ?? [:]
+
+        if let explicitStyle = try container.decodeIfPresent(BarCornerStyle.self, forKey: .cornerStyle) {
+            self.cornerStyle = explicitStyle
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(screenPreferences, forKey: .screenPreferences)
+        try container.encode(position, forKey: .position)
+        try container.encode(autoHide, forKey: .autoHide)
+        try container.encode(smartAutoHide, forKey: .smartAutoHide)
+        try container.encode(thickness, forKey: .thickness)
+        try container.encode(margin, forKey: .margin)
+        try container.encode(spacing, forKey: .spacing)
+        try container.encode(horizontalPadding, forKey: .horizontalPadding)
+        try container.encode(verticalPadding, forKey: .verticalPadding)
+        try container.encode(transparency, forKey: .transparency)
+        try container.encode(backgroundStyle, forKey: .backgroundStyle)
+        try container.encode(borderEnabled, forKey: .borderEnabled)
+        try container.encode(borderWidth, forKey: .borderWidth)
+        try container.encodeIfPresent(borderColor, forKey: .borderColor)
+        try container.encode(cornerRadius, forKey: .cornerRadius)
+        try container.encode(gothCorners, forKey: .gothCorners)
+        try container.encode(gothFilletRadius, forKey: .gothFilletRadius)
+        try container.encode(autoSquareAttachedCorners, forKey: .autoSquareAttachedCorners)
+        try container.encode(cornerStyle, forKey: .cornerStyle)
+        try container.encode(hoverOpenDelayMs, forKey: .hoverOpenDelayMs)
+        try container.encode(hoverCloseDelayMs, forKey: .hoverCloseDelayMs)
+        try container.encode(adaptToNotch, forKey: .adaptToNotch)
+        try container.encode(simulateNotch, forKey: .simulateNotch)
+        try container.encode(simulatedNotchWidth, forKey: .simulatedNotchWidth)
+        try container.encode(simulatedNotchHeight, forKey: .simulatedNotchHeight)
+        try container.encode(layout, forKey: .layout)
+        try container.encode(widgetStyles, forKey: .widgetStyles)
+        try container.encode(options, forKey: .options)
     }
 
     public static let `default` = BarConfig()

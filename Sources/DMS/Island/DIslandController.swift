@@ -323,9 +323,9 @@ public final class DIslandController: ObservableObject {
         notch: ScreenNotchGeometry
     ) {
         let screenFrame = screen.frame
-        let isNotchAttached = !settings.float && (settings.instance == .notch || (settings.instance == .mainBar && notch.hasNotch))
-        let isTopAnchored = isNotchAttached || settings.edge.lowercased() == "top"
-        let gothFlange: CGFloat = (settings.gothCorners && isTopAnchored) ? 14.0 : 0.0
+        let isNotchAttached = !settings.float && (settings.instance == .notch || (settings.instance == .mainBar && (notch.hasNotch || ConfigStore.shared.config.barPosition.lowercased() == "top")))
+        let isTopAnchored = isNotchAttached || settings.edge.lowercased() == "top" || settings.instance == .notch
+        let gothFlange: CGFloat = (settings.gothCorners && isTopAnchored) ? CGFloat(settings.gothFilletRadius) : 0.0
         let width = max(80.0, CGFloat(geometry.width) + gothFlange * 2)
         let height = max(24.0, CGFloat(geometry.height))
 

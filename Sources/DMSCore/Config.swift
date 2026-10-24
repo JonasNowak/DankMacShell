@@ -709,6 +709,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         set { rawSettings["popupTransparency"] = AnyCodable(min(1.0, max(0.1, newValue))) }
     }
 
+    /// Connected mode popout concave fillet corners per spec 06 (SURF-001).
+    public var gothCornersEnabled: Bool {
+        get { rawSettings["gothCornersEnabled"]?.boolValue ?? true }
+        set { rawSettings["gothCornersEnabled"] = AnyCodable(newValue) }
+    }
+
     /// Floating window transparency (`0.1` to `1.0`, default `0.90`).
     public var floatingWindowTransparency: Double {
         get { rawSettings["floatingWindowTransparency"]?.doubleValue ?? 0.90 }

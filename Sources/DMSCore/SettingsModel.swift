@@ -636,6 +636,24 @@ public struct IslandSettings: Sendable, Codable, Equatable {
         case float = "float"
     }
 
+    public enum IslandCornerStyle: String, Sendable, Codable, CaseIterable, Identifiable {
+        case capsule = "capsule"
+        case gothic = "gothic"
+        case square = "square"
+        case rounded = "rounded"
+
+        public var id: String { rawValue }
+
+        public var title: String {
+            switch self {
+            case .capsule: return "Capsule"
+            case .gothic: return "Gothic Fillets"
+            case .square: return "Square Notch"
+            case .rounded: return "Rounded"
+            }
+        }
+    }
+
     public enum ShortcutPosition: String, Sendable, Codable, CaseIterable {
         case left = "left"
         case right = "right"
@@ -667,10 +685,29 @@ public struct IslandSettings: Sendable, Codable, Equatable {
     public var borderEnabled: Bool
     public var shadowEnabled: Bool
     public var gothCorners: Bool
+    public var gothFilletRadius: Double
     public var edge: String // "top", "bottom"
     public var anchorX: Double
     public var anchorY: Double
     public var enabledActivities: [String]
+
+    public var cornerStyle: IslandCornerStyle {
+        get {
+            if gothCorners {
+                return .gothic
+            } else {
+                return .capsule
+            }
+        }
+        set {
+            switch newValue {
+            case .gothic:
+                gothCorners = true
+            case .capsule, .square, .rounded:
+                gothCorners = false
+            }
+        }
+    }
 
     public var isEnabled: Bool {
         instance != .off
@@ -751,6 +788,7 @@ public struct IslandSettings: Sendable, Codable, Equatable {
         borderEnabled: Bool = true,
         shadowEnabled: Bool = true,
         gothCorners: Bool = true,
+        gothFilletRadius: Double = 12.0,
         edge: String = "top",
         anchorX: Double = 0.5,
         anchorY: Double = 0.0,
@@ -781,6 +819,7 @@ public struct IslandSettings: Sendable, Codable, Equatable {
         self.borderEnabled = borderEnabled
         self.shadowEnabled = shadowEnabled
         self.gothCorners = gothCorners
+        self.gothFilletRadius = max(4.0, min(32.0, gothFilletRadius))
         self.edge = edge
         self.anchorX = max(0.0, min(1.0, anchorX))
         self.anchorY = max(0.0, min(1.0, anchorY))
@@ -816,6 +855,7 @@ public struct IslandSettings: Sendable, Codable, Equatable {
             "islandBorderEnabled": AnyCodable(borderEnabled),
             "islandShadowEnabled": AnyCodable(shadowEnabled),
             "islandGothCorners": AnyCodable(gothCorners),
+            "islandGothFilletRadius": AnyCodable(gothFilletRadius),
             "islandEdge": AnyCodable(edge),
             "islandAnchorX": AnyCodable(anchorX),
             "islandAnchorY": AnyCodable(anchorY),
@@ -878,6 +918,7 @@ public struct IslandSettings: Sendable, Codable, Equatable {
         self.borderEnabled = dictionary["islandBorderEnabled"]?.boolValue ?? true
         self.shadowEnabled = dictionary["islandShadowEnabled"]?.boolValue ?? true
         self.gothCorners = dictionary["islandGothCorners"]?.boolValue ?? true
+        self.gothFilletRadius = max(4.0, min(32.0, dictionary["islandGothFilletRadius"]?.doubleValue ?? 12.0))
         self.edge = dictionary["islandEdge"]?.stringValue ?? "top"
         self.anchorX = max(0.0, min(1.0, dictionary["islandAnchorX"]?.doubleValue ?? 0.5))
         self.anchorY = max(0.0, min(1.0, dictionary["islandAnchorY"]?.doubleValue ?? 0.0))

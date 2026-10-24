@@ -100,7 +100,7 @@ public final class DankBarController {
                 let frame: NSRect
                 switch barConfig.position.lowercased() {
                 case "top":
-                    let topMargin = isTopNotched ? 2.0 : margin
+                    let topMargin = (barConfig.gothCorners || isTopNotched) ? 0.0 : margin
                     let normalY = screenFrame.maxY - thickness - topMargin
                     let hiddenY = screenFrame.maxY - peekAmount
                     frame = NSRect(
@@ -110,7 +110,8 @@ public final class DankBarController {
                         height: thickness
                     )
                 case "left":
-                    let normalX = screenFrame.minX + margin
+                    let leftMargin = barConfig.gothCorners ? 0.0 : margin
+                    let normalX = screenFrame.minX + leftMargin
                     let hiddenX = screenFrame.minX - thickness + peekAmount
                     frame = NSRect(
                         x: isRevealed ? normalX : hiddenX,
@@ -119,7 +120,8 @@ public final class DankBarController {
                         height: max(100, screenFrame.height - (margin * 2))
                     )
                 case "right":
-                    let normalX = screenFrame.maxX - thickness - margin
+                    let rightMargin = barConfig.gothCorners ? 0.0 : margin
+                    let normalX = screenFrame.maxX - thickness - rightMargin
                     let hiddenX = screenFrame.maxX - peekAmount
                     frame = NSRect(
                         x: isRevealed ? normalX : hiddenX,
@@ -130,7 +132,8 @@ public final class DankBarController {
                 case "bottom":
                     fallthrough
                 default:
-                    let normalY = screenFrame.minY + margin
+                    let bottomMargin = barConfig.gothCorners ? 0.0 : margin
+                    let normalY = screenFrame.minY + bottomMargin
                     let hiddenY = screenFrame.minY - thickness + peekAmount
                     frame = NSRect(
                         x: screenFrame.minX + margin,

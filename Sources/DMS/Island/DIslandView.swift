@@ -142,11 +142,11 @@ public struct DIslandView: View {
     }
 
     private var isNotchAttached: Bool {
-        !settings.float && (settings.instance == .notch || (settings.instance == .mainBar && controller.currentNotch.hasNotch))
+        !settings.float && (settings.instance == .notch || (settings.instance == .mainBar && (controller.currentNotch.hasNotch || configStore.config.barPosition.lowercased() == "top")))
     }
 
     private var useGothFillets: Bool {
-        settings.gothCorners && (isNotchAttached || (settings.float && settings.edge.lowercased() == "top"))
+        settings.gothCorners && (isNotchAttached || (settings.float && settings.edge.lowercased() == "top") || settings.instance == .notch)
     }
 
     public var body: some View {
@@ -157,7 +157,7 @@ public struct DIslandView: View {
             rBR: CGFloat(geom.bottomRightRadius),
             rBL: CGFloat(geom.bottomLeftRadius),
             concaveTopFillets: useGothFillets,
-            filletRadius: 12
+            filletRadius: CGFloat(settings.gothFilletRadius)
         )
 
         ZStack {
