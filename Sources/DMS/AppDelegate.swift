@@ -19,6 +19,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        setupAppIcon()
         setupURLSchemeHandler()
         setupHotkeys()
         setupSignalHandlers()
@@ -67,6 +68,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         ConfigStore.shared.flushSave()
         IPCSocketServer.shared.stop()
         HotkeyService.shared.unregisterAll()
+    }
+
+    private func setupAppIcon() {
+        if NSApp.applicationIconImage == nil || NSApp.applicationIconImage.size == .zero {
+            let icon = Bundle.main.image(forResource: "AppIcon")
+                ?? Bundle.module.image(forResource: "AppIcon")
+                ?? Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap(NSImage.init(contentsOf:))
+                ?? Bundle.module.url(forResource: "AppIcon", withExtension: "icns").flatMap(NSImage.init(contentsOf:))
+            if let icon {
+                NSApp.applicationIconImage = icon
+            }
+        }
     }
 
     private func setupHotkeys() {

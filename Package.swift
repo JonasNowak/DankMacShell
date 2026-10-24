@@ -15,7 +15,13 @@ let package = Package(
         // Pure logic: M3 color tokens, dynamic theme generator, config, fuzzy app search, telemetry models, IPC, clipboard, notepad, weather.
         .target(name: "DMSCore"),
         // Native macOS application: AppKit NSPanels, SwiftUI views, system event services, Unix socket server.
-        .executableTarget(name: "DMS", dependencies: ["DMSCore"]),
+        .executableTarget(
+            name: "DMS",
+            dependencies: ["DMSCore"],
+            resources: [
+                .process("Resources")
+            ]
+        ),
         // Native dms CLI binary for terminal and keybind integration (dms run, dms ipc call ..., dms doctor, etc.).
         .executableTarget(name: "DMSCLI", dependencies: ["DMSCore"], path: "Sources/DMSCLI"),
         // Unit tests for core logic.

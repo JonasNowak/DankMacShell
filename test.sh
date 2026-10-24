@@ -19,6 +19,7 @@ FW=$CLT/Library/Developer/Frameworks
 LIB=$CLT/Library/Developer/usr/lib
 
 xattr -cr "$SCRATCH" 2>/dev/null || true
+xattr -cr Sources Support scripts 2>/dev/null || true
 
 if [ ! -d "$FW/Testing.framework" ]; then
     exec swift test --scratch-path "$SCRATCH" "$@"

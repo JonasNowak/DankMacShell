@@ -2,11 +2,11 @@ import Foundation
 import AppKit
 import DMSCore
 
-let version = "1.5.0-macos"
+let version = "0.1.0"
 
 func printHelp() {
     print("""
-    DankMaterialShell (DMS) macOS CLI (v\(version))
+    DankMacShell (DMS) macOS CLI (v\(version))
 
     Usage:
       dms run                          Start DankMaterialShell app
@@ -99,10 +99,20 @@ func sendSocketCommand(_ commandStr: String) -> String? {
     return ""
 }
 
+func resolveAppPath() -> String? {
+    let candidates = [
+        ("~/Applications/DankMacShell.app" as NSString).expandingTildeInPath,
+        ("~/Applications/DankMaterialShell.app" as NSString).expandingTildeInPath,
+        "/Applications/DankMacShell.app",
+        "/Applications/DankMaterialShell.app"
+    ]
+    return candidates.first { FileManager.default.fileExists(atPath: $0) }
+}
+
 func isDMSRunning() -> Bool {
     let task = Process()
     task.launchPath = "/usr/bin/pgrep"
-    task.arguments = ["-f", "DankMaterialShell"]
+    task.arguments = ["-E", "-f", "DankMacShell|DankMaterialShell"]
     let pipe = Pipe()
     task.standardOutput = pipe
     try? task.run()
@@ -124,15 +134,14 @@ case "version", "-v", "--version":
     print("DankMaterialShell (DMS) for macOS v\(version)")
 
 case "run":
-    let appPath = ("~/Applications/DankMaterialShell.app" as NSString).expandingTildeInPath
-    if FileManager.default.fileExists(atPath: appPath) {
+    if let appPath = resolveAppPath() {
         let task = Process()
         task.launchPath = "/usr/bin/open"
         task.arguments = [appPath]
         try? task.run()
-        print("DankMaterialShell launched from \(appPath)")
+        print("DankMacShell launched from \(appPath)")
     } else {
-        print("DankMaterialShell.app not found in ~/Applications. Run ./build.sh first.")
+        print("DankMacShell.app not found in ~/Applications. Run ./build.sh first.")
         exit(1)
     }
 
@@ -142,7 +151,7 @@ case "stop":
     task.arguments = ["-x", "DMS"]
     try? task.run()
     task.waitUntilExit()
-    print("DankMaterialShell stopped.")
+    print("DankMacShell stopped.")
 
 case "restart":
     let stopTask = Process()
@@ -152,12 +161,15 @@ case "restart":
     stopTask.waitUntilExit()
     Thread.sleep(forTimeInterval: 0.5)
 
-    let appPath = ("~/Applications/DankMaterialShell.app" as NSString).expandingTildeInPath
-    let openTask = Process()
-    openTask.launchPath = "/usr/bin/open"
-    openTask.arguments = [appPath]
-    try? openTask.run()
-    print("DankMaterialShell restarted.")
+    if let appPath = resolveAppPath() {
+        let openTask = Process()
+        openTask.launchPath = "/usr/bin/open"
+        openTask.arguments = [appPath]
+        try? openTask.run()
+        print("DankMacShell restarted.")
+    } else {
+        print("DankMacShell.app not found in ~/Applications.")
+    }
 
 case "status":
     let running = isDMSRunning()

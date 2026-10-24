@@ -53,12 +53,29 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY" "$APP/Contents/MacOS/DankMaterialShell"
 ln -sf "DankMaterialShell" "$APP/Contents/MacOS/DMS"
+ln -sf "DankMaterialShell" "$APP/Contents/MacOS/DankMacShell"
 cp "$PLIST" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
 
+# Copy SPM resource bundle if present
+BIN_DIR=$(dirname "$BINARY")
+if [ -d "$BIN_DIR/DMS_DMS.bundle" ]; then
+    cp -R "$BIN_DIR/DMS_DMS.bundle" "$APP/Contents/Resources/"
+fi
+
+# Ensure icon is up-to-date from repository assets
+if [ -x "$ROOT/scripts/generate-icon.sh" ]; then
+    "$ROOT/scripts/generate-icon.sh"
+fi
+
 if [ -f "$ROOT/Support/AppIcon.icns" ]; then
     cp "$ROOT/Support/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+elif [ -f "$ROOT/Sources/DMS/Resources/AppIcon.icns" ]; then
+    cp "$ROOT/Sources/DMS/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi
+
+/usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || true
 
 echo "==> Signing $APP with identity: $IDENTITY..."
 codesign --force --sign "$IDENTITY" "$APP"
