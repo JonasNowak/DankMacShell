@@ -99,7 +99,9 @@ public struct DockAppButton: View {
                 }
 
                 // App Icon with proximity scaling
+                let isHidden = isAppRunning && (app.isHidden || appsService.isHidden(bundleID: app.bundleID))
                 AppIconImage(path: app.path)
+                    .opacity(isHidden ? 0.6 : 1.0)
                     .frame(width: effectiveIconSize, height: effectiveIconSize)
                     .dockHoverBounce(isHovered: isHovered, position: config.position, enabled: true)
 
@@ -219,6 +221,20 @@ public struct DockAppButton: View {
 
         // Running actions
         if isAppRunning {
+            Divider()
+            let isHidden = app.isHidden || appsService.isHidden(bundleID: app.bundleID)
+            if isHidden {
+                Button("Unhide") {
+                    appsService.unhide(app: app, inBackground: false)
+                }
+                Button("Unhide in Background") {
+                    appsService.unhide(app: app, inBackground: true)
+                }
+            } else {
+                Button("Hide") {
+                    appsService.hide(app: app)
+                }
+            }
             Divider()
             Button("Quit") {
                 appsService.quit(app: app)

@@ -9,6 +9,7 @@ public struct AppItem: Sendable, Identifiable, Equatable, Hashable, Codable {
     public let subtitle: String
     public let category: String
     public let isRunning: Bool
+    public let isHidden: Bool
     public let isPinned: Bool
     public let launchCount: Int
     public let lastLaunchedAt: Date?
@@ -21,6 +22,7 @@ public struct AppItem: Sendable, Identifiable, Equatable, Hashable, Codable {
         subtitle: String = "",
         category: String = "",
         isRunning: Bool = false,
+        isHidden: Bool = false,
         isPinned: Bool = false,
         launchCount: Int = 0,
         lastLaunchedAt: Date? = nil
@@ -32,9 +34,29 @@ public struct AppItem: Sendable, Identifiable, Equatable, Hashable, Codable {
         self.subtitle = subtitle.isEmpty ? AppItem.defaultSubtitle(name: name, bundleID: bundleID) : subtitle
         self.category = category
         self.isRunning = isRunning
+        self.isHidden = isHidden
         self.isPinned = isPinned
         self.launchCount = launchCount
         self.lastLaunchedAt = lastLaunchedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, bundleID, path, subtitle, category, isRunning, isHidden, isPinned, launchCount, lastLaunchedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.bundleID = try container.decode(String.self, forKey: .bundleID)
+        self.path = try container.decode(String.self, forKey: .path)
+        self.subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
+        self.category = try container.decodeIfPresent(String.self, forKey: .category) ?? ""
+        self.isRunning = try container.decodeIfPresent(Bool.self, forKey: .isRunning) ?? false
+        self.isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
+        self.isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        self.launchCount = try container.decodeIfPresent(Int.self, forKey: .launchCount) ?? 0
+        self.lastLaunchedAt = try container.decodeIfPresent(Date.self, forKey: .lastLaunchedAt)
     }
 
     /// Resolves high-fidelity application subtitles and comments matching `launcher_dark.png`

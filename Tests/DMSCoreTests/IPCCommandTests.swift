@@ -45,11 +45,16 @@ struct IPCCommandTests {
         #expect(IPCCommand.parse(url: URL(string: "dms://clipboard/copy?text=CopiedText")!) == .copyClipboard(text: "CopiedText"))
         #expect(IPCCommand.parse(url: URL(string: "dms://clipboard")!) == .toggleClipboard)
 
-        // 7. Process List
+        // 7. Process List & Unhide/Hide
         #expect(IPCCommand.parse(url: URL(string: "dms://processlist/open")!) == .openProcessList)
         #expect(IPCCommand.parse(url: URL(string: "dms://processlist/list")!) == .listProcesses)
         #expect(IPCCommand.parse(url: URL(string: "dms://processlist/kill?pid=12345")!) == .killProcess(pid: 12345))
         #expect(IPCCommand.parse(url: URL(string: "dms://processlist")!) == .toggleProcessList)
+        #expect(IPCCommand.parse(url: URL(string: "dms://unhide?id=com.apple.Safari")!) == .unhideApp(bundleID: "com.apple.Safari", inBackground: false))
+        #expect(IPCCommand.parse(url: URL(string: "dms://unhide?id=com.apple.Safari&background=true")!) == .unhideApp(bundleID: "com.apple.Safari", inBackground: true))
+        #expect(IPCCommand.parse(url: URL(string: "dms://unhideall")!) == .unhideAllApps(inBackground: false))
+        #expect(IPCCommand.parse(url: URL(string: "dms://hide?id=com.apple.Safari")!) == .hideApp(bundleID: "com.apple.Safari"))
+        #expect(IPCCommand.parse(url: URL(string: "dms://activate?id=com.apple.Safari")!) == .activateApp(bundleID: "com.apple.Safari"))
 
         // 8. Color Picker & QR
         #expect(IPCCommand.parse(url: URL(string: "dms://colorpicker/pick")!) == .pickColor)
@@ -148,6 +153,12 @@ struct IPCCommandTests {
         #expect(IPCCommand.parseCLI(args: ["processlist", "list"]) == .listProcesses)
         #expect(IPCCommand.parseCLI(args: ["processlist", "kill", "9876"]) == .killProcess(pid: 9876))
         #expect(IPCCommand.parseCLI(args: ["processlist", "open"]) == .openProcessList)
+        #expect(IPCCommand.parseCLI(args: ["unhide", "com.apple.Safari"]) == .unhideApp(bundleID: "com.apple.Safari", inBackground: false))
+        #expect(IPCCommand.parseCLI(args: ["unhide", "com.apple.Safari", "--background"]) == .unhideApp(bundleID: "com.apple.Safari", inBackground: true))
+        #expect(IPCCommand.parseCLI(args: ["unhide-all"]) == .unhideAllApps(inBackground: false))
+        #expect(IPCCommand.parseCLI(args: ["unhide-all", "--background"]) == .unhideAllApps(inBackground: true))
+        #expect(IPCCommand.parseCLI(args: ["hide", "com.apple.Safari"]) == .hideApp(bundleID: "com.apple.Safari"))
+        #expect(IPCCommand.parseCLI(args: ["activate", "com.apple.Safari"]) == .activateApp(bundleID: "com.apple.Safari"))
 
         #expect(IPCCommand.parseCLI(args: ["colorpicker", "pick"]) == .pickColor)
         #expect(IPCCommand.parseCLI(args: ["qr", "https://apple.com"]) == .generateQR(text: "https://apple.com"))

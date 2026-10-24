@@ -46,6 +46,12 @@ public enum IPCCommand: Sendable, Equatable {
     case listProcesses
     case killProcess(pid: Int32)
 
+    // Application Visibility & Window Control (Unhide/Hide/Activate)
+    case unhideApp(bundleID: String, inBackground: Bool)
+    case unhideAllApps(inBackground: Bool)
+    case hideApp(bundleID: String)
+    case activateApp(bundleID: String)
+
     // Color Picker
     case openColorPicker
     case pickColor
@@ -200,6 +206,28 @@ public enum IPCCommand: Sendable, Equatable {
             if subPath == "open" || param("action") == "open" { return .openProcessList }
             return .toggleProcessList
 
+        case "unhide":
+            let id = param("id") ?? param("bundleid") ?? subPath
+            let inBackground = param("background")?.lowercased() == "true" || param("inbackground")?.lowercased() == "true"
+            if id.isEmpty || id == "all" {
+                return .unhideAllApps(inBackground: inBackground)
+            }
+            return .unhideApp(bundleID: id, inBackground: inBackground)
+
+        case "unhideall", "unhide-all":
+            let inBackground = param("background")?.lowercased() == "true" || param("inbackground")?.lowercased() == "true"
+            return .unhideAllApps(inBackground: inBackground)
+
+        case "hide":
+            let id = param("id") ?? param("bundleid") ?? subPath
+            if !id.isEmpty { return .hideApp(bundleID: id) }
+            return .unknown("hide requires bundle id")
+
+        case "activate":
+            let id = param("id") ?? param("bundleid") ?? subPath
+            if !id.isEmpty { return .activateApp(bundleID: id) }
+            return .unknown("activate requires bundle id")
+
         case "colorpicker":
             if subPath == "pick" || param("action") == "pick" { return .pickColor }
             return .openColorPicker
@@ -335,7 +363,8 @@ public enum IPCCommand: Sendable, Equatable {
         }
 
         guard let target = tokens.first?.lowercased() else { return .status }
-        let action = tokens.count > 1 ? tokens[1].lowercased() : ""
+        let rawAction = tokens.count > 1 ? tokens[1] : ""
+        let action = rawAction.lowercased()
         let extra = tokens.count > 2 ? Array(tokens.dropFirst(2)) : []
 
         switch target {
@@ -413,6 +442,30 @@ public enum IPCCommand: Sendable, Equatable {
             case "open": return .openProcessList
             default: return .toggleProcessList
             }
+
+        case "unhide":
+            let isBg = tokens.contains("--background") || tokens.contains("-b")
+            let targetID = rawAction.starts(with: "-") ? "" : rawAction
+            if targetID.isEmpty || targetID.lowercased() == "all" {
+                return .unhideAllApps(inBackground: isBg)
+            }
+            return .unhideApp(bundleID: targetID, inBackground: isBg)
+
+        case "unhide-all", "unhideall":
+            let isBg = tokens.contains("--background") || tokens.contains("-b")
+            return .unhideAllApps(inBackground: isBg)
+
+        case "hide":
+            guard !rawAction.isEmpty && !rawAction.starts(with: "-") else {
+                return .unknown("hide requires bundle identifier")
+            }
+            return .hideApp(bundleID: rawAction)
+
+        case "activate":
+            guard !rawAction.isEmpty && !rawAction.starts(with: "-") else {
+                return .unknown("activate requires bundle identifier")
+            }
+            return .activateApp(bundleID: rawAction)
 
         case "colorpicker":
             if action == "pick" { return .pickColor }

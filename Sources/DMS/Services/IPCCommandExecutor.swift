@@ -151,6 +151,22 @@ public enum IPCCommandExecutor {
             let ok = ProcessService.shared.killProcess(pid: pid)
             return ok ? "Process \(pid) terminated" : "Failed to terminate process \(pid)"
 
+        case .unhideApp(let bundleID, let inBackground):
+            RunningAppsService.shared.unhide(bundleID: bundleID, inBackground: inBackground)
+            return "Application '\(bundleID)' unhidden\(inBackground ? " in background" : "")"
+
+        case .unhideAllApps(let inBackground):
+            RunningAppsService.shared.unhideAll(inBackground: inBackground)
+            return "All applications unhidden\(inBackground ? " in background" : "")"
+
+        case .hideApp(let bundleID):
+            RunningAppsService.shared.hide(bundleID: bundleID)
+            return "Application '\(bundleID)' hidden"
+
+        case .activateApp(let bundleID):
+            RunningAppsService.shared.activate(bundleID: bundleID)
+            return "Application '\(bundleID)' activated"
+
         case .openColorPicker:
             ColorPickerController.shared.show()
             return "Color picker opened"

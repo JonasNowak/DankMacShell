@@ -1,8 +1,9 @@
 import AppKit
+import ApplicationServices
 import Observation
 import DMSCore
 
-/// Manages running applications, currently active focused app, and pinned dock applications.
+/// Manages running applications, currently active focused app, unhiding/hiding, and pinned dock applications.
 @MainActor
 @Observable
 public final class RunningAppsService {
@@ -11,6 +12,10 @@ public final class RunningAppsService {
     public private(set) var activeApp: AppItem?
     public private(set) var runningApps: [AppItem] = []
     public private(set) var dockApps: [AppItem] = []
+
+    public var hiddenApps: [AppItem] {
+        runningApps.filter(\.isHidden)
+    }
 
     private init() {
         refresh()
@@ -50,7 +55,8 @@ public final class RunningAppsService {
                 name: name,
                 bundleID: bid,
                 path: front.bundleURL?.path ?? "",
-                isRunning: true
+                isRunning: true,
+                isHidden: front.isHidden
             )
         }
 
@@ -64,6 +70,7 @@ public final class RunningAppsService {
                 bundleID: bid,
                 path: path,
                 isRunning: true,
+                isHidden: app.isHidden,
                 isPinned: isPinned
             ))
         }
@@ -84,6 +91,7 @@ public final class RunningAppsService {
                     bundleID: pid,
                     path: url.path,
                     isRunning: false,
+                    isHidden: false,
                     isPinned: true
                 ))
             }
@@ -97,23 +105,130 @@ public final class RunningAppsService {
         self.dockApps = dockList
     }
 
+    public func isRunning(bundleID: String) -> Bool {
+        runningApps.contains { $0.bundleID.caseInsensitiveCompare(bundleID) == .orderedSame }
+    }
+
+    public func isHidden(bundleID: String) -> Bool {
+        if let found = runningApps.first(where: { $0.bundleID.caseInsensitiveCompare(bundleID) == .orderedSame }) {
+            return found.isHidden
+        }
+        let live = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        return live.first?.isHidden ?? false
+    }
+
+    public func findRunning(bundleID: String, path: String? = nil) -> [NSRunningApplication] {
+        var apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        if apps.isEmpty {
+            apps = NSWorkspace.shared.runningApplications.filter {
+                $0.bundleIdentifier?.caseInsensitiveCompare(bundleID) == .orderedSame
+            }
+        }
+        if apps.isEmpty, let path, !path.isEmpty {
+            apps = NSWorkspace.shared.runningApplications.filter {
+                $0.bundleURL?.path == path
+            }
+        }
+        return apps
+    }
+
+    public func activate(bundleID: String, fallbackPath: String? = nil) {
+        let apps = findRunning(bundleID: bundleID, path: fallbackPath)
+
+        if apps.isEmpty {
+            let launchURL: URL? = {
+                if let path = fallbackPath, !path.isEmpty {
+                    return URL(fileURLWithPath: path)
+                }
+                return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+            }()
+            if let launchURL {
+                let config = NSWorkspace.OpenConfiguration()
+                config.activates = true
+                NSWorkspace.shared.openApplication(at: launchURL, configuration: config, completionHandler: nil)
+            }
+            return
+        }
+
+        // App is already running: unhide (if hidden) and activate to foreground.
+        unhide(bundleID: bundleID, fallbackPath: fallbackPath, inBackground: false)
+    }
+
     public func activate(app: AppItem) {
-        let running = NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == app.bundleID }
-        if let running {
-            running.activate()
-        } else if let url = URL(string: "file://" + app.path) {
-            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        activate(bundleID: app.bundleID, fallbackPath: app.path)
+    }
+
+    public func unhide(bundleID: String, fallbackPath: String? = nil, inBackground: Bool = false) {
+        let apps = findRunning(bundleID: bundleID, path: fallbackPath)
+        for app in apps {
+            let pid = app.processIdentifier
+            let axApp = AXUIElementCreateApplication(pid)
+            AXUIElementSetAttributeValue(axApp, kAXHiddenAttribute as CFString, kCFBooleanFalse)
+            _ = app.unhide()
+            runAppleScript("tell application \"System Events\" to set visible of (first process whose unix id is \(pid)) to true")
+        }
+        if !inBackground {
+            for app in apps {
+                app.activate()
+                if let bundleURL = app.bundleURL {
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.activates = true
+                    NSWorkspace.shared.openApplication(at: bundleURL, configuration: config, completionHandler: nil)
+                }
+                let pid = app.processIdentifier
+                runAppleScript("tell application \"System Events\" to set frontmost of (first process whose unix id is \(pid)) to true")
+            }
+        }
+        refresh()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.refresh()
         }
     }
 
-    public func quit(app: AppItem) {
-        let running = NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == app.bundleID }
-        running?.terminate()
+    public func unhide(app: AppItem, inBackground: Bool = false) {
+        unhide(bundleID: app.bundleID, fallbackPath: app.path, inBackground: inBackground)
+    }
+
+    public func hide(bundleID: String, fallbackPath: String? = nil) {
+        let apps = findRunning(bundleID: bundleID, path: fallbackPath)
+        for app in apps {
+            let pid = app.processIdentifier
+            let axApp = AXUIElementCreateApplication(pid)
+            AXUIElementSetAttributeValue(axApp, kAXHiddenAttribute as CFString, kCFBooleanTrue)
+            _ = app.hide()
+            runAppleScript("tell application \"System Events\" to set visible of (first process whose unix id is \(pid)) to false")
+        }
+        refresh()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.refresh()
+        }
     }
 
     public func hide(app: AppItem) {
-        let running = NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == app.bundleID }
-        running?.hide()
+        hide(bundleID: app.bundleID, fallbackPath: app.path)
+    }
+
+    public func unhideAll(inBackground: Bool = true) {
+        for item in runningApps where item.isHidden {
+            unhide(bundleID: item.bundleID, fallbackPath: item.path, inBackground: inBackground)
+        }
+        runAppleScript("tell application \"System Events\" to set visible of every process whose visible is false to true")
+        refresh()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.refresh()
+        }
+    }
+
+    public func quit(bundleID: String, fallbackPath: String? = nil) {
+        let apps = findRunning(bundleID: bundleID, path: fallbackPath)
+        for app in apps {
+            app.terminate()
+        }
+        refresh()
+    }
+
+    public func quit(app: AppItem) {
+        quit(bundleID: app.bundleID, fallbackPath: app.path)
     }
 
     public func togglePin(bundleID: String) {
@@ -129,5 +244,17 @@ public final class RunningAppsService {
 
     public func togglePinned(bundleID: String) {
         togglePin(bundleID: bundleID)
+    }
+
+    @discardableResult
+    private func runAppleScript(_ source: String) -> Bool {
+        var error: NSDictionary?
+        let script = NSAppleScript(source: source)
+        script?.executeAndReturnError(&error)
+        if let error {
+            NSLog("[RunningAppsService] AppleScript error: %@", error)
+            return false
+        }
+        return true
     }
 }

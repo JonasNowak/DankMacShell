@@ -37,6 +37,7 @@ public final class AppCatalogService {
                 subtitle: old.subtitle,
                 category: old.category,
                 isRunning: old.isRunning,
+                isHidden: old.isHidden,
                 isPinned: old.isPinned,
                 launchCount: count,
                 lastLaunchedAt: lastLaunch

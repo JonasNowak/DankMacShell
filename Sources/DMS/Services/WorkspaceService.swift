@@ -754,9 +754,10 @@ public final class WorkspaceService: ObservableObject {
         }
 
         if let running = NSWorkspace.shared.runningApplications.first(where: { $0.processIdentifier == app.pid && app.pid != 0 }) {
-            running.activate()
-        } else if let running = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == app.bundleID && !app.bundleID.isEmpty }) {
-            running.activate()
+            let bid = running.bundleIdentifier ?? app.bundleID
+            RunningAppsService.shared.activate(bundleID: bid, fallbackPath: app.path)
+        } else if !app.bundleID.isEmpty {
+            RunningAppsService.shared.activate(bundleID: app.bundleID, fallbackPath: app.path)
         }
 
         // Optimistically update active app pill

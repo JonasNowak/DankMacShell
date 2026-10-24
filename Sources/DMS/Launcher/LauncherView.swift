@@ -73,7 +73,28 @@ public struct LauncherView: View {
     }
 
     private var currentApps: [AppItem] {
-        appSearchResult.results.map(\.app)
+        let runningService = RunningAppsService.shared
+        return appSearchResult.results.map { res in
+            let app = res.app
+            let isRunning = runningService.isRunning(bundleID: app.bundleID)
+            let isHidden = isRunning ? runningService.isHidden(bundleID: app.bundleID) : false
+            if app.isRunning != isRunning || app.isHidden != isHidden {
+                return AppItem(
+                    id: app.id,
+                    name: app.name,
+                    bundleID: app.bundleID,
+                    path: app.path,
+                    subtitle: app.subtitle,
+                    category: app.category,
+                    isRunning: isRunning,
+                    isHidden: isHidden,
+                    isPinned: app.isPinned,
+                    launchCount: app.launchCount,
+                    lastLaunchedAt: app.lastLaunchedAt
+                )
+            }
+            return app
+        }
     }
 
     private var safeSelectedIndex: Int {
@@ -370,6 +391,9 @@ public struct LauncherView: View {
                                             onSelect: { launchApp(app) },
                                             onTogglePin: { togglePin(app) },
                                             onShowInFinder: { showInFinder(app) },
+                                            onUnhideInBackground: { RunningAppsService.shared.unhide(app: app, inBackground: true) },
+                                            onHide: { RunningAppsService.shared.hide(app: app) },
+                                            onQuit: { RunningAppsService.shared.quit(app: app) },
                                             onCopyID: { copyToClipboard(text: app.bundleID) },
                                             onCopyPath: { copyToClipboard(text: app.path) }
                                         )
@@ -391,6 +415,9 @@ public struct LauncherView: View {
                                             onSelect: { launchApp(app) },
                                             onTogglePin: { togglePin(app) },
                                             onShowInFinder: { showInFinder(app) },
+                                            onUnhideInBackground: { RunningAppsService.shared.unhide(app: app, inBackground: true) },
+                                            onHide: { RunningAppsService.shared.hide(app: app) },
+                                            onQuit: { RunningAppsService.shared.quit(app: app) },
                                             onCopyID: { copyToClipboard(text: app.bundleID) },
                                             onCopyPath: { copyToClipboard(text: app.path) }
                                         )
@@ -498,12 +525,53 @@ public struct LauncherView: View {
                         .background(theme.outlineVariant.opacity(0.3))
 
                     VStack(spacing: 8) {
-                        ActionPanelButton(
-                            title: "Open Application",
-                            icon: "arrow.forward.circle.fill",
-                            theme: theme
-                        ) {
-                            launchApp(app)
+                        let isRunning = RunningAppsService.shared.isRunning(bundleID: app.bundleID)
+                        let isHidden = RunningAppsService.shared.isHidden(bundleID: app.bundleID)
+
+                        if isRunning && isHidden {
+                            ActionPanelButton(
+                                title: "Unhide Application",
+                                icon: "eye.fill",
+                                theme: theme
+                            ) {
+                                launchApp(app)
+                            }
+
+                            ActionPanelButton(
+                                title: "Unhide in Background",
+                                icon: "eye.slash.fill",
+                                theme: theme
+                            ) {
+                                RunningAppsService.shared.unhide(app: app, inBackground: true)
+                            }
+                        } else {
+                            ActionPanelButton(
+                                title: isRunning ? "Focus Application" : "Open Application",
+                                icon: "arrow.forward.circle.fill",
+                                theme: theme
+                            ) {
+                                launchApp(app)
+                            }
+                        }
+
+                        if isRunning && !isHidden {
+                            ActionPanelButton(
+                                title: "Hide Application",
+                                icon: "eye.slash",
+                                theme: theme
+                            ) {
+                                RunningAppsService.shared.hide(app: app)
+                            }
+                        }
+
+                        if isRunning {
+                            ActionPanelButton(
+                                title: "Quit Application",
+                                icon: "xmark.circle.fill",
+                                theme: theme
+                            ) {
+                                RunningAppsService.shared.quit(app: app)
+                            }
                         }
 
                         let isPinned = ConfigStore.shared.config.pinnedApps.contains(app.bundleID)
@@ -766,6 +834,9 @@ public struct LauncherItemRow: View {
     public let onSelect: () -> Void
     public var onTogglePin: (() -> Void)? = nil
     public var onShowInFinder: (() -> Void)? = nil
+    public var onUnhideInBackground: (() -> Void)? = nil
+    public var onHide: (() -> Void)? = nil
+    public var onQuit: (() -> Void)? = nil
     public var onCopyID: (() -> Void)? = nil
     public var onCopyPath: (() -> Void)? = nil
 
@@ -773,16 +844,36 @@ public struct LauncherItemRow: View {
     @State private var isHovered = false
 
     public var body: some View {
+        let isRunning = RunningAppsService.shared.isRunning(bundleID: item.bundleID)
+        let isHidden = RunningAppsService.shared.isHidden(bundleID: item.bundleID)
+
         Button {
             onSelect()
         } label: {
             HStack(spacing: 14) {
                 AppIconImage(path: item.path, size: 36)
+                    .opacity(isRunning && isHidden ? 0.6 : 1.0)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.name)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.onSurface)
+                    HStack(spacing: 6) {
+                        Text(item.name)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(theme.onSurface)
+
+                        if isRunning && isHidden {
+                            Text("HIDDEN")
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(theme.surfaceContainerHighest)
+                                .foregroundColor(theme.onSurfaceVariant)
+                                .clipShape(Capsule())
+                        } else if isRunning {
+                            Circle()
+                                .fill(theme.primary.opacity(0.8))
+                                .frame(width: 5, height: 5)
+                        }
+                    }
 
                     Text(item.subtitle)
                         .font(.system(size: 12, weight: .regular, design: .rounded))
@@ -819,7 +910,19 @@ public struct LauncherItemRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .contextMenu {
-            Button("Open \(item.name)") { onSelect() }
+            if isRunning && isHidden {
+                Button("Unhide \(item.name)") { onSelect() }
+                Button("Unhide in Background") {
+                    if let unhideBg = onUnhideInBackground {
+                        unhideBg()
+                    } else {
+                        RunningAppsService.shared.unhide(bundleID: item.bundleID, fallbackPath: item.path, inBackground: true)
+                    }
+                }
+                Divider()
+            }
+
+            Button(isRunning && isHidden ? "Unhide and Focus" : "Open \(item.name)") { onSelect() }
             Divider()
             if let pin = onTogglePin {
                 let isPinned = ConfigStore.shared.config.pinnedApps.contains(item.bundleID)
@@ -827,6 +930,21 @@ public struct LauncherItemRow: View {
             }
             if let show = onShowInFinder {
                 Button("Show in Finder") { show() }
+            }
+            if isRunning {
+                Divider()
+                if !isHidden {
+                    Button("Hide") {
+                        if let hide = onHide { hide() } else {
+                            RunningAppsService.shared.hide(bundleID: item.bundleID, fallbackPath: item.path)
+                        }
+                    }
+                }
+                Button("Quit") {
+                    if let quit = onQuit { quit() } else {
+                        RunningAppsService.shared.quit(bundleID: item.bundleID, fallbackPath: item.path)
+                    }
+                }
             }
             Divider()
             if let copyID = onCopyID {
@@ -846,6 +964,9 @@ public struct LauncherTileItem: View {
     public let onSelect: () -> Void
     public var onTogglePin: (() -> Void)? = nil
     public var onShowInFinder: (() -> Void)? = nil
+    public var onUnhideInBackground: (() -> Void)? = nil
+    public var onHide: (() -> Void)? = nil
+    public var onQuit: (() -> Void)? = nil
     public var onCopyID: (() -> Void)? = nil
     public var onCopyPath: (() -> Void)? = nil
 
@@ -853,11 +974,31 @@ public struct LauncherTileItem: View {
     @State private var isHovered = false
 
     public var body: some View {
+        let isRunning = RunningAppsService.shared.isRunning(bundleID: item.bundleID)
+        let isHidden = RunningAppsService.shared.isHidden(bundleID: item.bundleID)
+
         Button {
             onSelect()
         } label: {
             VStack(spacing: 8) {
-                AppIconImage(path: item.path, size: 48)
+                ZStack(alignment: .bottomTrailing) {
+                    AppIconImage(path: item.path, size: 48)
+                        .opacity(isRunning && isHidden ? 0.6 : 1.0)
+
+                    if isRunning && isHidden {
+                        Image(systemName: "eye.slash.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(theme.onSurfaceVariant)
+                            .padding(2)
+                            .background(theme.surfaceContainerHighest)
+                            .clipShape(Circle())
+                    } else if isRunning {
+                        Circle()
+                            .fill(theme.primary)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 2, y: 2)
+                    }
+                }
 
                 Text(item.name)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -886,7 +1027,19 @@ public struct LauncherTileItem: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .contextMenu {
-            Button("Open \(item.name)") { onSelect() }
+            if isRunning && isHidden {
+                Button("Unhide \(item.name)") { onSelect() }
+                Button("Unhide in Background") {
+                    if let unhideBg = onUnhideInBackground {
+                        unhideBg()
+                    } else {
+                        RunningAppsService.shared.unhide(bundleID: item.bundleID, fallbackPath: item.path, inBackground: true)
+                    }
+                }
+                Divider()
+            }
+
+            Button(isRunning && isHidden ? "Unhide and Focus" : "Open \(item.name)") { onSelect() }
             Divider()
             if let pin = onTogglePin {
                 let isPinned = ConfigStore.shared.config.pinnedApps.contains(item.bundleID)
@@ -894,6 +1047,21 @@ public struct LauncherTileItem: View {
             }
             if let show = onShowInFinder {
                 Button("Show in Finder") { show() }
+            }
+            if isRunning {
+                Divider()
+                if !isHidden {
+                    Button("Hide") {
+                        if let hide = onHide { hide() } else {
+                            RunningAppsService.shared.hide(bundleID: item.bundleID, fallbackPath: item.path)
+                        }
+                    }
+                }
+                Button("Quit") {
+                    if let quit = onQuit { quit() } else {
+                        RunningAppsService.shared.quit(bundleID: item.bundleID, fallbackPath: item.path)
+                    }
+                }
             }
             Divider()
             if let copyID = onCopyID {

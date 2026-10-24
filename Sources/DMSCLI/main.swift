@@ -26,6 +26,10 @@ func printHelp() {
       dms notepad [open|toggle|get|set <text>]  Notepad scratchpad manager
       dms clipboard [open|list|clear]   Clipboard history manager
       dms processlist [open|list|kill <pid>]    Activity Monitor / Task manager
+      dms unhide <bundleID> [--background]      Unhide running application
+      dms unhide-all [--background]             Unhide all hidden applications
+      dms hide <bundleID>                       Hide running application
+      dms activate <bundleID>                   Unhide and focus application
       dms colorpicker [pick]            Screen eyedropper / color sampler
       dms qr <text>                     Generate QR code for text/URL
       dms keybinds [open]               Keyboard shortcuts cheatsheet

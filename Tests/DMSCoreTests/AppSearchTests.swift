@@ -234,4 +234,51 @@ struct AppSearchTests {
         #expect(AppSearch.extractFileQuery("~/Projects") == "~/Projects")
         #expect(AppSearch.extractFileQuery("/var/log") == "/var/log")
     }
+
+    @Test("AppItem isHidden Property and Codable Roundtrip")
+    func testAppItemHiddenAndCodable() throws {
+        let visibleApp = AppItem(
+            name: "Finder",
+            bundleID: "com.apple.finder",
+            path: "/System/Library/CoreServices/Finder.app",
+            isRunning: true,
+            isHidden: false
+        )
+        #expect(visibleApp.isRunning == true)
+        #expect(visibleApp.isHidden == false)
+
+        let hiddenApp = AppItem(
+            name: "Calculator",
+            bundleID: "com.apple.calculator",
+            path: "/System/Applications/Calculator.app",
+            isRunning: true,
+            isHidden: true
+        )
+        #expect(hiddenApp.isRunning == true)
+        #expect(hiddenApp.isHidden == true)
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(hiddenApp)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(AppItem.self, from: data)
+        #expect(decoded.name == "Calculator")
+        #expect(decoded.bundleID == "com.apple.calculator")
+        #expect(decoded.isRunning == true)
+        #expect(decoded.isHidden == true)
+
+        // Backwards compatibility test: JSON without isHidden key defaults to false
+        let legacyJSON = """
+        {
+            "id": "com.test.app",
+            "name": "Legacy App",
+            "bundleID": "com.test.app",
+            "path": "/Applications/Legacy.app",
+            "isRunning": true
+        }
+        """.data(using: .utf8)!
+        let legacyDecoded = try decoder.decode(AppItem.self, from: legacyJSON)
+        #expect(legacyDecoded.name == "Legacy App")
+        #expect(legacyDecoded.isRunning == true)
+        #expect(legacyDecoded.isHidden == false)
+    }
 }
