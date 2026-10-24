@@ -23,13 +23,13 @@ Download the prebuild .dmg, you have to delete it to update.
 - Apple Command Line Tools or Xcode
 - OmniWM with IPC turned on!
 
-### Build
+#### Build
 ```bash
 ./build.sh
 ```
 This builds both release binaries, packages `~/Applications/DankMacShell.app`, signs it, installs `dms` into `~/.local/bin/dms`, and launches the application.
 
-### Run Unit Tests
+#### Run Unit Tests
 ```bash
 ./test.sh
 ```
