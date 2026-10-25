@@ -5,7 +5,7 @@ set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-VERSION=${1:-"0.1"}
+VERSION=${1:-"0.1.1"}
 APP_PATH=${2:-"$HOME/Applications/DankMacShell.app"}
 OUTPUT_DMG="$ROOT/dist/DankMacShell-$VERSION.dmg"
 

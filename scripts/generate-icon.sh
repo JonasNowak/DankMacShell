@@ -3,7 +3,11 @@
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SVG="$ROOT/appicon.svg"
+if [ -f "$ROOT/Support/appicon.svg" ]; then
+    SVG="$ROOT/Support/appicon.svg"
+else
+    SVG="$ROOT/appicon.svg"
+fi
 SUPPORT_ICNS="$ROOT/Support/AppIcon.icns"
 RESOURCE_ICNS="$ROOT/Sources/DMS/Resources/AppIcon.icns"
 

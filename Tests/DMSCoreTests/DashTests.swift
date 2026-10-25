@@ -181,7 +181,7 @@ struct DashTests {
         #expect(CalendarEngine.dateKey(year: 2025, month: 10, day: 28) == "2025-10-28")
         #expect(CalendarEngine.dateKey(year: 2025, month: 2, day: 5) == "2025-02-05")
 
-        var cal = Calendar(identifier: .gregorian)
+        let cal = Calendar(identifier: .gregorian)
         var comp = DateComponents()
         comp.year = 2025
         comp.month = 11

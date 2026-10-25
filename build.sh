@@ -1,7 +1,44 @@
 #!/bin/sh
-# Build, assemble DankMaterialShell.app, install CLI to ~/.local/bin and start app.
+# Build, assemble DankMacShell.app, install CLI to ~/.local/bin and start app.
 set -eu
 cd "$(dirname "$0")"
+
+LAUNCH=1
+BUILD_CONFIG="release"
+
+for arg in "$@"; do
+    case "$arg" in
+        --no-launch)
+            LAUNCH=0
+            ;;
+        --clean)
+            ./scripts/clean.sh
+            exit 0
+            ;;
+        --debug)
+            BUILD_CONFIG="debug"
+            ;;
+        --release)
+            BUILD_CONFIG="release"
+            ;;
+        -h|--help)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --no-launch    Build and install without launching the application"
+            echo "  --debug        Build in debug configuration (default: release)"
+            echo "  --release      Build in release configuration"
+            echo "  --clean        Clean build artifacts and caches, then exit"
+            echo "  -h, --help     Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg" >&2
+            echo "Run '$0 --help' for usage." >&2
+            exit 1
+            ;;
+    esac
+done
 
 if [ -z "${SDKROOT:-}" ]; then
     if [ -d "/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk" ]; then
@@ -19,16 +56,16 @@ chmod +x scripts/generate-icon.sh
 scripts/generate-icon.sh
 xattr -cr Sources Support scripts "$SCRATCH" 2>/dev/null || true
 
-echo "==> Building DankMacShell and dms CLI in release mode..."
-if swift build -c release --product DankMacShell --scratch-path "$SCRATCH" 2>/dev/null; then
+echo "==> Building DankMacShell and dms CLI in $BUILD_CONFIG mode..."
+if swift build -c "$BUILD_CONFIG" --product DankMacShell --scratch-path "$SCRATCH" 2>/dev/null; then
     APP_PRODUCT="DankMacShell"
 else
-    swift build -c release --product DankMaterialShell --scratch-path "$SCRATCH"
+    swift build -c "$BUILD_CONFIG" --product DankMaterialShell --scratch-path "$SCRATCH"
     APP_PRODUCT="DankMaterialShell"
 fi
-swift build -c release --product dms --scratch-path "$SCRATCH"
+swift build -c "$BUILD_CONFIG" --product dms --scratch-path "$SCRATCH"
 
-BIN_PATH=$(swift build -c release --scratch-path "$SCRATCH" --show-bin-path)
+BIN_PATH=$(swift build -c "$BUILD_CONFIG" --scratch-path "$SCRATCH" --show-bin-path)
 APP_BINARY="$BIN_PATH/$APP_PRODUCT"
 CLI_BINARY="$BIN_PATH/dms"
 
@@ -68,7 +105,7 @@ if security find-identity -p codesigning -v 2>/dev/null | grep -q '"dms-cert"'; 
 fi
 echo "==> Installed dms CLI to: $HOME/.local/bin/dms"
 
-if [ "${1:-}" != "--no-launch" ]; then
+if [ "$LAUNCH" -eq 1 ]; then
     open "$APP"
     # Verify launch
     sleep 0.5

@@ -1,8 +1,8 @@
 # DankMacShell (DMS) for macOS
 
-This is build as a adaption of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) for MacOS. This project has not been endorsed nor is it related to DankMaterialShell or AvengeMedia.
+This is built as an adaptation of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) for macOS. This project has not been endorsed nor is it related to DankMaterialShell or AvengeMedia.
 
-DankMacShell is an additional shell for MacOS with [OmniWM](https://github.com/OmniNull/OmniWM). It adds the features that make a mac feel more akin to the typical WM experience on Linux systems.
+DankMacShell is an additional shell for macOS with [OmniWM](https://github.com/OmniNull/OmniWM). It adds the features that make macOS feel more akin to the typical WM experience on Linux systems.
 
 >[!WARNING]
 > Everything in this repository will change, some LLM-written parts will be stripped out. There are major bugs. 
@@ -10,28 +10,54 @@ DankMacShell is an additional shell for MacOS with [OmniWM](https://github.com/O
 
 ---
 
-## Installation
+## Installation & Development
 
 ### 1. Prebuilt Binary
 
-Download the prebuild .dmg, you have to delete it to update.
+Download the prebuilt `.dmg` from [Releases](https://github.com/JonasNowak/DankMacShell/releases).
 
-### 2. Build it.
+### 2. Build from Source
 
 #### Requirements
 - macOS 14+ (macOS 26+ compatible)
 - Apple Command Line Tools or Xcode
 - OmniWM with IPC turned on!
 
-#### Build
+#### Build & Run
 ```bash
 ./build.sh
+# Or using make:
+make build
 ```
 This builds both release binaries, packages `~/Applications/DankMacShell.app`, signs it, installs `dms` into `~/.local/bin/dms`, and launches the application.
+
+To build without launching:
+```bash
+./build.sh --no-launch
+# Or:
+make build-no-launch
+```
 
 #### Run Unit Tests
 ```bash
 ./test.sh
+# Or:
+make test
+```
+
+#### Package Distributable DMG
+```bash
+./scripts/create-dmg.sh [version]
+# Or:
+make dmg
+```
+Creates a signed, distributable `.dmg` in `dist/`.
+
+#### Clean Build Artifacts
+```bash
+./build.sh --clean
+# Or:
+make clean
 ```
 
 ## Complete Feature Matrix

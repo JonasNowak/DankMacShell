@@ -1,8 +1,31 @@
+# Build products & scratch directories
 .build/
 build/
 dist/
-.DS_Store
-.local.env
+DerivedData/
+
+# Swift Package Manager & Xcode
+*.xcodeproj
 *.xcworkspace
 *.xcuserdata
-16.png
+.swiftpm/
+
+# macOS detritus
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Environment and local configs
+.local.env
+*.local
+.env
+
+# Editor artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

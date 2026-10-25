@@ -90,14 +90,6 @@ struct LauncherScorerAndFrecencyTests {
         #expect(LauncherScorer.levenshteinDistance("code", "somethingelse") == 3)
         #expect(LauncherScorer.levenshteinDistance("code", "ab") == 3)
 
-        let candidate = LauncherCandidate(
-            id: "com.microsoft.VSCode",
-            name: "Visual Studio Code",
-            genericName: "Code Editing. Redefined.",
-            identifier: "com.microsoft.VSCode",
-            type: .app
-        )
-
         // Exact Levenshtein test for short typo
         let shortApp = LauncherCandidate(
             id: "test",
