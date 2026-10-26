@@ -31,6 +31,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if !barConfigs.isEmpty { barConfigs[0].autoHide = newValue }
         }
     }
+    public var barSmartAutoHide: Bool {
+        get { barConfigs.first?.smartAutoHide ?? false }
+        set {
+            if !barConfigs.isEmpty { barConfigs[0].smartAutoHide = newValue }
+        }
+    }
     public var barTransparent: Bool {
         get { (barConfigs.first?.transparency ?? 1.0) < 1.0 }
         set {
@@ -524,6 +530,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case "version": return AnyCodable(version)
         case "barPosition": return AnyCodable(barPosition)
         case "barAutoHide": return AnyCodable(barAutoHide)
+        case "barSmartAutoHide": return AnyCodable(barSmartAutoHide)
         case "barTransparent": return AnyCodable(barTransparent)
         case "barMarginX": return AnyCodable(barMarginX)
         case "showDock": return AnyCodable(showDock)
@@ -569,6 +576,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if let s = value.stringValue { self.barPosition = s }
         case "barAutoHide":
             if let b = value.boolValue { self.barAutoHide = b }
+        case "barSmartAutoHide":
+            if let b = value.boolValue { self.barSmartAutoHide = b }
         case "barTransparent":
             if let b = value.boolValue { self.barTransparent = b }
         case "barMarginX":

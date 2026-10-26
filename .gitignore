@@ -29,3 +29,6 @@ DerivedData/
 *.swp
 *.swo
 *~
+
+# Local roadmap notes
+ROADMAP.md

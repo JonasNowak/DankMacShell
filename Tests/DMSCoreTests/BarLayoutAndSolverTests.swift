@@ -196,4 +196,91 @@ struct BarLayoutAndSolverTests {
         #expect(decoded.layout.left.count == 1)
         #expect(decoded.layout.left.first?.options["format"]?.stringValue == "24h")
     }
+
+    @Test("SmartAutoHideSolver Fullscreen Detection and Geometry Edge Cases")
+    func testSmartAutoHideSolver() {
+        let screenW = 1512.0
+        let screenH = 982.0
+        let screenVisH = 950.0
+
+        // 1. Exact native fullscreen window
+        let fsExact = SmartAutoHideSolver.isWindowFullscreen(
+            windowX: 0,
+            windowY: 0,
+            windowWidth: screenW,
+            windowHeight: screenH,
+            screenWidth: screenW,
+            screenHeight: screenH,
+            screenVisibleHeight: screenVisH
+        )
+        #expect(fsExact == true)
+
+        // 2. Maximized window under menu bar (touches bottom, starts at Y=32, full width)
+        let fsMaximized = SmartAutoHideSolver.isWindowFullscreen(
+            windowX: 0,
+            windowY: 32,
+            windowWidth: screenW,
+            windowHeight: screenVisH,
+            screenWidth: screenW,
+            screenHeight: screenH,
+            screenVisibleHeight: screenVisH
+        )
+        #expect(fsMaximized == true)
+
+        // 3. Normal window in center (not full width/height)
+        let normalWin = SmartAutoHideSolver.isWindowFullscreen(
+            windowX: 100,
+            windowY: 100,
+            windowWidth: 800,
+            windowHeight: 600,
+            screenWidth: screenW,
+            screenHeight: screenH,
+            screenVisibleHeight: screenVisH
+        )
+        #expect(normalWin == false)
+
+        // 4. Multi-monitor offset: window on secondary screen (X=1512, Y=0) matching screen 1
+        let secondaryMatch = SmartAutoHideSolver.isWindowFullscreen(
+            windowX: 1512,
+            windowY: 0,
+            windowWidth: 1920,
+            windowHeight: 1080,
+            screenWidth: 1920,
+            screenHeight: 1080,
+            screenVisibleHeight: 1080,
+            screenCGX: 1512,
+            screenCGY: 0
+        )
+        #expect(secondaryMatch == true)
+
+        // 5. Multi-monitor mismatch: window on primary screen (X=0) checked against screen 1 (X=1512)
+        let secondaryMismatch = SmartAutoHideSolver.isWindowFullscreen(
+            windowX: 0,
+            windowY: 0,
+            windowWidth: screenW,
+            windowHeight: screenH,
+            screenWidth: 1920,
+            screenHeight: 1080,
+            screenVisibleHeight: 1080,
+            screenCGX: 1512,
+            screenCGY: 0
+        )
+        #expect(secondaryMismatch == false)
+    }
+
+    @Test("barSmartAutoHide Convenience and Dynamic Setting Getter/Setter")
+    func testBarSmartAutoHideSettings() {
+        var config = DMSConfig.default
+        #expect(config.barSmartAutoHide == false)
+
+        config.barSmartAutoHide = true
+        #expect(config.barSmartAutoHide == true)
+        #expect(config.barConfigs.first?.smartAutoHide == true)
+
+        #expect(config.getSetting("barSmartAutoHide")?.boolValue == true)
+
+        config.setSetting("barSmartAutoHide", value: AnyCodable(false))
+        #expect(config.barSmartAutoHide == false)
+        #expect(config.barConfigs.first?.smartAutoHide == false)
+    }
 }

@@ -149,8 +149,7 @@ public struct ControlCenterView: View {
                 }
 
                 HeaderActionButton(icon: "power") {
-                    ControlCenterController.shared.hide()
-                    PowerMenuController.shared.show()
+                    PowerPopoutController.shared.toggle(anchorToControlCenter: true)
                 }
 
                 HeaderActionButton(icon: "gearshape") {

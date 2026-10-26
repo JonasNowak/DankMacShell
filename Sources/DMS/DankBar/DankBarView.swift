@@ -512,16 +512,20 @@ public struct DankBarView: View {
             CpuMonitorWidget(isVertical: isVertical)
         case "ramMonitor", "ram", "memory":
             RamMonitorWidget(isVertical: isVertical)
+        case "cpuTemperature":
+            CpuTemperatureWidget(isVertical: isVertical, options: options, style: style)
         case "gpuTemperature":
+            GpuTemperatureWidget(isVertical: isVertical, options: options, style: style)
+        case "gpuMonitor", "gpu":
             GpuMonitorWidget(isVertical: isVertical)
         case "diskUsage":
             DiskGaugeWidget(isVertical: isVertical)
         case "networkMonitor":
-            networkMonitorPill(style: style)
+            NetworkMonitorWidget(isVertical: isVertical, options: options, style: style)
         case "capsLockIndicator":
             CapsLockIndicatorWidget(isVertical: isVertical)
         case "keyboardLayoutName":
-            keyboardLayoutPill(style: style)
+            KeyboardLayoutWidget(isVertical: isVertical, options: options, style: style)
         case "telemetry", "monitorPill":
             telemetryPill(style: style)
         case "weather":
@@ -898,14 +902,36 @@ public struct DankBarView: View {
     }
 
     private func inhibitPill(style: BarWidgetStyleOptions) -> some View {
-        Button(action: { inhibit.toggle() }) {
-            Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(inhibit.isInhibited ? theme.onPrimary : resolveWidgetTint(style, defaultColor: theme.onSurface))
-                .frame(width: 28, height: 28)
-                .background(inhibit.isInhibited ? theme.primary : resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+        Button(action: { DurationPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x) }) {
+            HStack(spacing: 3) {
+                Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(inhibit.isInhibited ? theme.onPrimary : resolveWidgetTint(style, defaultColor: theme.onSurface))
+
+                if !isVertical && style.showLabel && inhibit.isInhibited,
+                   let remaining = inhibit.formattedRemainingTimeShort {
+                    Text(remaining)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(theme.onPrimary)
+                }
+            }
+            .padding(.horizontal, isVertical ? 0 : (inhibit.isInhibited && !isVertical && style.showLabel ? 6 : 0))
+            .frame(width: isVertical ? 28 : (inhibit.isInhibited && !isVertical && style.showLabel ? nil : 28), height: 28)
+            .background(inhibit.isInhibited ? theme.primary : resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(inhibit.isInhibited ? "Disable Sleep Inhibit" : "Keep Awake (Indefinite)") {
+                inhibit.toggle()
+            }
+            Divider()
+            ForEach(IdleInhibitPreset.allCases) { preset in
+                Button(preset.label) {
+                    inhibit.enable(preset: preset)
+                }
+            }
+        }
+        .help(inhibit.isInhibited ? "Sleep Inhibit: Active (\(inhibit.formattedRemainingTime ?? "Indefinite"))" : "Sleep Inhibit: Disabled (Click for presets)")
     }
 
     private func micPill(style: BarWidgetStyleOptions) -> some View {
@@ -1010,7 +1036,7 @@ public struct DankBarView: View {
 
     private func powerMenuButton(style: BarWidgetStyleOptions) -> some View {
         Button {
-            PowerMenuController.shared.toggle()
+            PowerPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x)
         } label: {
             Image(systemName: "power")
                 .font(.system(size: 12, weight: .semibold))
@@ -1019,6 +1045,7 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
         }
         .buttonStyle(.plain)
+        .help("Power & Session")
     }
 
     private func notepadButton(style: BarWidgetStyleOptions) -> some View {
@@ -1044,7 +1071,7 @@ public struct DankBarView: View {
     }
 
     private func colorPickerButton(style: BarWidgetStyleOptions) -> some View {
-        Button(action: { ColorPickerController.shared.show() }) {
+        Button(action: { ColorPickerPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x) }) {
             Image(systemName: "eyedropper")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
@@ -1052,6 +1079,7 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
         }
         .buttonStyle(.plain)
+        .help("Color Picker")
     }
 }
 

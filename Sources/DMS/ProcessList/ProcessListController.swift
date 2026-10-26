@@ -38,6 +38,9 @@ public final class ProcessListController: ObservableObject {
         DashController.shared.hide()
         AudioPopoutController.shared.hide()
         BatteryPopoutController.shared.hide()
+        DurationPopoutController.shared.hide()
+        ColorPickerPopoutController.shared.hide()
+        PowerPopoutController.shared.hide()
         ControlCenterController.shared.hide()
 
         let mouseLoc = NSEvent.mouseLocation

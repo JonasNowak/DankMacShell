@@ -75,6 +75,9 @@ public final class DashController: ObservableObject {
         // Close peer popouts
         AudioPopoutController.shared.hide()
         BatteryPopoutController.shared.hide()
+        DurationPopoutController.shared.hide()
+        ColorPickerPopoutController.shared.hide()
+        PowerPopoutController.shared.hide()
         ProcessListController.shared.hide()
         ControlCenterController.shared.hide()
         LauncherController.shared.hide()

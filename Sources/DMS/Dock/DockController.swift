@@ -42,7 +42,13 @@ public final class DockController {
 
     public func show() {
         isVisible = true
-        for panel in panels.values {
+        let configs = ConfigStore.shared.config.dockConfigs
+        let hasSmartAutoHide = configs.contains { $0.smartAutoHide }
+        for (key, panel) in panels {
+            let screenIndex = Int(key.split(separator: "_").first ?? "") ?? 0
+            if hasSmartAutoHide && DankBarController.shared.isScreenFullscreen(index: screenIndex) {
+                continue
+            }
             panel.orderFront(nil)
         }
     }
@@ -206,6 +212,12 @@ public final class DockController {
                     panel.level = dockConfig.useOverlayLayer ? .screenSaver : .floating
                     panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
                     panels[key] = panel
+                }
+
+                let isScreenFS = DankBarController.shared.isScreenFullscreen(index: screenIndex)
+                if dockConfig.smartAutoHide && isScreenFS {
+                    panel.orderOut(nil)
+                    continue
                 }
 
                 panel.setFrame(frame, display: true)

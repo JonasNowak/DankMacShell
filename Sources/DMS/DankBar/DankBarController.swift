@@ -19,6 +19,10 @@ public final class DankBarController {
     private var mouseMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
 
+    // MARK: - Smart Auto-Hide State (Ported from Tralphium)
+    private var fullscreenScreens: Set<Int> = []
+    private var fullscreenTimer: Timer?
+
     public static let barHeight: CGFloat = 48
     public static let verticalBarWidth: CGFloat = 54
 
@@ -37,14 +41,22 @@ public final class DankBarController {
     }
 
     private init() {
-        reposition()
+        setupFullscreenObservers()
         setupScreenChangeObserver()
         setupConfigObserver()
+        reposition()
+        scheduleFullscreenChecks()
     }
 
     public func show() {
         isVisible = true
-        for panel in panels.values {
+        let configs = ConfigStore.shared.config.barConfigs
+        let hasSmartAutoHide = configs.contains { $0.smartAutoHide }
+        for (key, panel) in panels {
+            let screenIndex = Int(key.split(separator: "_").first ?? "") ?? 0
+            if hasSmartAutoHide && fullscreenScreens.contains(screenIndex) {
+                continue
+            }
             panel.orderFront(nil)
         }
     }
@@ -81,7 +93,7 @@ public final class DankBarController {
                 let key = "\(screenIndex)_\(barConfig.id)_\(barConfig.position)"
                 activeKeys.insert(key)
 
-                if barConfig.autoHide || barConfig.smartAutoHide {
+                if barConfig.autoHide {
                     anyAutoHide = true
                 }
 
@@ -94,7 +106,7 @@ public final class DankBarController {
                 let margin = isTopNotched ? max(4.0, CGFloat(barConfig.margin) * 0.5) : CGFloat(barConfig.margin)
                 let screenFrame = screen.frame
 
-                let isRevealed = !(barConfig.autoHide || barConfig.smartAutoHide) || (autoHideRevealed[key] ?? false)
+                let isRevealed = !barConfig.autoHide || (autoHideRevealed[key] ?? false)
                 let peekAmount: CGFloat = 2.0
 
                 let frame: NSRect
@@ -170,6 +182,12 @@ public final class DankBarController {
                     hostingViews[key] = host
                 }
 
+                let isScreenFS = fullscreenScreens.contains(screenIndex)
+                if barConfig.smartAutoHide && isScreenFS {
+                    panel.orderOut(nil)
+                    continue
+                }
+
                 panel.alphaValue = isRevealed ? 1.0 : 0.02
                 panel.setFrame(frame, display: true)
                 if isVisible {
@@ -189,6 +207,150 @@ public final class DankBarController {
         }
 
         updateAutoHideMonitor(enabled: anyAutoHide)
+    }
+
+    // MARK: - Smart Auto-Hide & Fullscreen Detection (Spec 19 / Ported from Tralphium)
+
+    public func isScreenFullscreen(index: Int) -> Bool {
+        fullscreenScreens.contains(index)
+    }
+
+    public var isAppFullscreen: Bool {
+        !fullscreenScreens.isEmpty
+    }
+
+    private func setupFullscreenObservers() {
+        let wsCenter = NSWorkspace.shared.notificationCenter
+        wsCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.scheduleFullscreenChecks()
+            }
+        }
+
+        wsCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.scheduleFullscreenChecks()
+            }
+        }
+
+        wsCenter.addObserver(
+            forName: NSWorkspace.didDeactivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.scheduleFullscreenChecks()
+            }
+        }
+
+        // Periodic heartbeat check to guarantee bar reappears when exiting fullscreen
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.checkFullscreenState()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        fullscreenTimer = timer
+    }
+
+    private func scheduleFullscreenChecks() {
+        checkFullscreenState()
+        for delay in [0.2, 0.4, 0.7, 1.0, 1.5] {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                self?.checkFullscreenState()
+            }
+        }
+    }
+
+    public func checkFullscreenState() {
+        let screens = NSScreen.screens
+        var newFullscreenScreens = Set<Int>()
+        for (index, screen) in screens.enumerated() {
+            if isFrontmostAppFullscreen(on: screen) {
+                newFullscreenScreens.insert(index)
+            }
+        }
+
+        let changed = (newFullscreenScreens != fullscreenScreens)
+        if changed {
+            fullscreenScreens = newFullscreenScreens
+            reposition()
+            DockController.shared.reposition()
+        } else {
+            // Even if state flag hasn't changed, ensure panel is front when not fullscreen
+            for (index, _) in screens.enumerated() {
+                if !fullscreenScreens.contains(index) {
+                    let hasHiddenPanel = panels.contains { key, panel in
+                        key.hasPrefix("\(index)_") && !panel.isVisible
+                    }
+                    if hasHiddenPanel {
+                        reposition()
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    private func isFrontmostAppFullscreen(on targetScreen: NSScreen? = nil) -> Bool {
+        if NSApp.currentSystemPresentationOptions.contains(.fullScreen) {
+            if let targetScreen, let main = NSScreen.main {
+                if targetScreen == main { return true }
+            } else {
+                return true
+            }
+        }
+        guard let frontApp = NSWorkspace.shared.frontmostApplication,
+              frontApp.bundleIdentifier != Bundle.main.bundleIdentifier,
+              frontApp.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            return false
+        }
+
+        let screen = targetScreen ?? NSScreen.main ?? NSScreen.screens.first
+        guard let screen else { return false }
+
+        let pid = frontApp.processIdentifier
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+
+        let primaryScreen = NSScreen.screens.first ?? screen
+        let primaryHeight = primaryScreen.frame.height
+        let screenCGY = primaryHeight - screen.frame.maxY
+        let screenCGX = screen.frame.minX
+
+        for win in windowList {
+            guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID == pid else { continue }
+            guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+            if let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
+               let w = bounds["Width"], let h = bounds["Height"],
+               let winX = bounds["X"], let winY = bounds["Y"] {
+                if SmartAutoHideSolver.isWindowFullscreen(
+                    windowX: Double(winX),
+                    windowY: Double(winY),
+                    windowWidth: Double(w),
+                    windowHeight: Double(h),
+                    screenWidth: Double(screen.frame.width),
+                    screenHeight: Double(screen.frame.height),
+                    screenVisibleHeight: Double(screen.visibleFrame.height),
+                    screenCGX: Double(screenCGX),
+                    screenCGY: Double(screenCGY)
+                ) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     // MARK: - Auto-Hide Hover State Machine (Spec 19 BARC-020..024)
@@ -221,7 +383,12 @@ public final class DankBarController {
             }
             let activeConfigs = matchingConfigs.isEmpty ? [configs.first ?? .default] : matchingConfigs
 
-            for barConfig in activeConfigs where (barConfig.autoHide || barConfig.smartAutoHide) {
+            for barConfig in activeConfigs where barConfig.autoHide {
+                let isScreenFS = fullscreenScreens.contains(screenIndex)
+                if barConfig.smartAutoHide && isScreenFS {
+                    continue
+                }
+
                 let key = "\(screenIndex)_\(barConfig.id)_\(barConfig.position)"
                 let thickness = CGFloat(barConfig.thickness > 0 ? barConfig.thickness : (barConfig.isVertical ? 54 : 48))
                 let triggerBand: CGFloat = (autoHideRevealed[key] ?? false) ? (thickness + 20) : 6.0
@@ -271,6 +438,7 @@ public final class DankBarController {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
+                self?.scheduleFullscreenChecks()
                 self?.reposition()
             }
         }
@@ -280,6 +448,7 @@ public final class DankBarController {
         ConfigStore.shared.$config
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
+                self?.scheduleFullscreenChecks()
                 self?.reposition()
             }
             .store(in: &cancellables)

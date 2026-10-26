@@ -137,9 +137,13 @@ public struct BarLayout: Sendable, Codable, Equatable {
         ],
         right: [
             BarWidgetEntry(id: "weather", widgetId: "weather"),
+            BarWidgetEntry(id: "networkMonitor", widgetId: "networkMonitor"),
             BarWidgetEntry(id: "cpuMonitor", widgetId: "cpuMonitor"),
+            BarWidgetEntry(id: "cpuTemperature", widgetId: "cpuTemperature"),
             BarWidgetEntry(id: "ramMonitor", widgetId: "ramMonitor"),
+            BarWidgetEntry(id: "gpuTemperature", widgetId: "gpuTemperature"),
             BarWidgetEntry(id: "diskUsage", widgetId: "diskUsage"),
+            BarWidgetEntry(id: "keyboardLayoutName", widgetId: "keyboardLayoutName"),
             BarWidgetEntry(id: "audioVisualization", widgetId: "audioVisualization"),
             BarWidgetEntry(id: "capsLockIndicator", widgetId: "capsLockIndicator"),
             BarWidgetEntry(id: "battery", widgetId: "battery"),

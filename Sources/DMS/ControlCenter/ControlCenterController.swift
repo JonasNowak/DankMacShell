@@ -37,6 +37,9 @@ public final class ControlCenterController {
         ProcessListController.shared.hide()
         AudioPopoutController.shared.hide()
         BatteryPopoutController.shared.hide()
+        DurationPopoutController.shared.hide()
+        ColorPickerPopoutController.shared.hide()
+        PowerPopoutController.shared.hide()
 
         reposition(on: screen)
         panel.orderFront(nil)
@@ -47,6 +50,7 @@ public final class ControlCenterController {
 
     public func hide() {
         guard isVisible else { return }
+        PowerPopoutController.shared.hide()
         panel.orderOut(nil)
         isVisible = false
         removeClickMonitor()
