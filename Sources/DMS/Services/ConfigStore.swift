@@ -72,24 +72,25 @@ public final class ConfigStore: ObservableObject {
         let legacyURL = configDirectory.appendingPathComponent("config.json")
         let baseDir = configDirectory
 
-        Task.detached(priority: .utility) { [weak self] in
-            let fileToLoad: URL
-            if FileManager.default.fileExists(atPath: primaryURL.path) {
-                fileToLoad = primaryURL
-            } else if FileManager.default.fileExists(atPath: legacyURL.path) {
-                fileToLoad = legacyURL
-            } else {
-                return
-            }
-            guard let data = try? Data(contentsOf: fileToLoad) else { return }
-            let loaded = DMSConfig.load(from: data, baseDirectory: baseDir)
-            await MainActor.run {
-                guard let self = self else { return }
-                if loaded != self.config {
-                    self.config = loaded
+        Task { @MainActor [weak self] in
+            let loaded = await Task.detached(priority: .utility) { () -> DMSConfig? in
+                let fileToLoad: URL
+                if FileManager.default.fileExists(atPath: primaryURL.path) {
+                    fileToLoad = primaryURL
+                } else if FileManager.default.fileExists(atPath: legacyURL.path) {
+                    fileToLoad = legacyURL
+                } else {
+                    return nil
                 }
-                ThemeStore.shared.sync(with: self.config)
+                guard let data = try? Data(contentsOf: fileToLoad) else { return nil }
+                return DMSConfig.load(from: data, baseDirectory: baseDir)
+            }.value
+
+            guard let self = self, let loaded = loaded else { return }
+            if loaded != self.config {
+                self.config = loaded
             }
+            ThemeStore.shared.sync(with: self.config)
         }
     }
 

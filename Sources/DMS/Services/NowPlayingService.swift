@@ -268,17 +268,16 @@ public final class NowPlayingService: ObservableObject {
     private func fetchSpotifyArtwork(urlStr: String, cacheKey: String) {
         guard let url = URL(string: urlStr) else { return }
         isFetchingArtwork = true
-        Task.detached { [weak self] in
+        Task { @MainActor [weak self] in
             guard let (data, _) = try? await URLSession.shared.data(from: url), !data.isEmpty else {
-                await MainActor.run { self?.isFetchingArtwork = false }
+                self?.isFetchingArtwork = false
                 return
             }
-            await MainActor.run {
-                self?.cachedArtwork[cacheKey] = data
-                self?.isFetchingArtwork = false
-                if self?.currentTrack.title.isEmpty == false {
-                    self?.currentTrack.artworkData = data
-                }
+            guard let self = self else { return }
+            self.cachedArtwork[cacheKey] = data
+            self.isFetchingArtwork = false
+            if !self.currentTrack.title.isEmpty {
+                self.currentTrack.artworkData = data
             }
         }
     }

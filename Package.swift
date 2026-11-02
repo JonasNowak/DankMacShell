@@ -26,5 +26,6 @@ let package = Package(
         .executableTarget(name: "DMSCLI", dependencies: ["DMSCore"], path: "Sources/DMSCLI"),
         // Unit tests for core logic.
         .testTarget(name: "DMSCoreTests", dependencies: ["DMSCore"]),
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )
