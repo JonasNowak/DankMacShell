@@ -210,7 +210,7 @@ public final class WeatherService: ObservableObject {
 
         self.isFetching = true
 
-        activeGeocodeTask = Task.detached { [weak self] in
+        activeGeocodeTask = Task { @MainActor [weak self] in
             struct GeocodingResponse: Codable {
                 struct Result: Codable {
                     let name: String
@@ -224,30 +224,24 @@ public final class WeatherService: ObservableObject {
             guard let (data, response) = try? await URLSession.shared.data(from: url),
                   let http = response as? HTTPURLResponse, http.statusCode == 200,
                   let decoded = try? JSONDecoder().decode(GeocodingResponse.self, from: data) else {
-                await MainActor.run {
-                    self?.isFetching = false
-                }
+                self?.isFetching = false
                 return
             }
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let self = self else { return }
 
             if let match = decoded.results?.first {
-                await MainActor.run {
-                    self?.latitude = match.latitude
-                    self?.longitude = match.longitude
-                    if let country = match.country, !country.isEmpty {
-                        self?.locationName = "\(match.name), \(country)"
-                    } else {
-                        self?.locationName = match.name
-                    }
-                    self?.fetchWeather(force: true)
+                self.latitude = match.latitude
+                self.longitude = match.longitude
+                if let country = match.country, !country.isEmpty {
+                    self.locationName = "\(match.name), \(country)"
+                } else {
+                    self.locationName = match.name
                 }
+                self.fetchWeather(force: true)
             } else {
-                await MainActor.run {
-                    self?.isFetching = false
-                    ToastCenter.shared.show(icon: "exclamationmark.triangle", message: "Location '\(query)' not found")
-                }
+                self.isFetching = false
+                ToastCenter.shared.show(icon: "exclamationmark.triangle", message: "Location '\(query)' not found")
             }
         }
     }

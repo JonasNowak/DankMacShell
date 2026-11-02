@@ -17,8 +17,8 @@ public final class WellbeingService: ObservableObject {
 
     private let storageURL: URL
     private var activeFocusSession: (bundleID: String, appName: String, startTime: Date)?
-    private var flushTimer: Timer?
-    private var statusCheckTimer: Timer?
+    nonisolated(unsafe) private var flushTimer: Timer?
+    nonisolated(unsafe) private var statusCheckTimer: Timer?
     private var alertedLimits: Set<String> = []
     private var cancellables = Set<AnyCancellable>()
 
@@ -304,7 +304,7 @@ public final class WellbeingService: ObservableObject {
         }
     }
 
-    isolated deinit {
+    deinit {
         flushTimer?.invalidate()
         statusCheckTimer?.invalidate()
     }

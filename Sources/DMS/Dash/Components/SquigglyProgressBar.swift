@@ -3,6 +3,7 @@ import Combine
 import DMSCore
 
 /// Material 3 expressive squiggly seek bar matching Android 13/14 and DankDash design.
+@MainActor
 public struct SquigglyProgressBar: View {
     public var progress: Double // 0.0 to 1.0
     public var isPlaying: Bool
@@ -17,13 +18,13 @@ public struct SquigglyProgressBar: View {
         progress: Double,
         isPlaying: Bool = true,
         color: Color,
-        trackColor: Color = ThemeStore.shared.subtleTrackColor,
+        trackColor: Color? = nil,
         onSeek: ((Double) -> Void)? = nil
     ) {
         self.progress = min(1.0, max(0.0, progress))
         self.isPlaying = isPlaying
         self.color = color
-        self.trackColor = trackColor
+        self.trackColor = trackColor ?? ThemeStore.shared.subtleTrackColor
         self.onSeek = onSeek
     }
 

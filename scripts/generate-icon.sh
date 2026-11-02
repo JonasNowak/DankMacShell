@@ -33,7 +33,7 @@ if [ "$NEEDS_GEN" -eq 1 ] && [ -f "$SVG" ]; then
     ICONSET="$TMPDIR/AppIcon.iconset"
     mkdir -p "$ICONSET"
 
-    swift - "$SVG" "$ICONSET" "$TMPDIR/AppIcon.icns" << 'SWIFT_EOF' 2>/dev/null
+    swift - "$SVG" "$ICONSET" "$TMPDIR/AppIcon.icns" << 'SWIFT_EOF' 2>/dev/null || true
 import AppKit
 import Foundation
 

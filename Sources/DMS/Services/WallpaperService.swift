@@ -44,46 +44,47 @@ public final class WallpaperService: ObservableObject {
             savedDesktop = desktopURL.path
         }
 
-        scanTask = Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self = self else { return }
+        let currentDesktopPath = savedDesktop
+        scanTask = Task { @MainActor [weak self] in
+            let allItems = await Task.detached(priority: .userInitiated) { () -> [WallpaperItem] in
+                var discovered: [WallpaperItem] = []
+                let fileManager = FileManager.default
 
-            var discovered: [WallpaperItem] = []
-            let fileManager = FileManager.default
+                // 1. Scan ~/Pictures
+                let picturesURL = fileManager.urls(for: .picturesDirectory, in: .userDomainMask).first!
+                Self.scanDirectory(url: picturesURL, source: .pictures, results: &discovered)
 
-            // 1. Scan ~/Pictures
-            let picturesURL = fileManager.urls(for: .picturesDirectory, in: .userDomainMask).first!
-            Self.scanDirectory(url: picturesURL, source: .pictures, results: &discovered)
-
-            // 2. Scan /System/Library/Desktop Pictures
-            let systemWallpapers = URL(fileURLWithPath: "/System/Library/Desktop Pictures")
-            if fileManager.fileExists(atPath: systemWallpapers.path) {
-                Self.scanDirectory(url: systemWallpapers, source: .system, results: &discovered)
-            }
-
-            // 3. Scan user-configured custom folders
-            for folderPath in userFolders {
-                let expanded = (folderPath as NSString).expandingTildeInPath
-                let folderURL = URL(fileURLWithPath: expanded)
-                if fileManager.fileExists(atPath: folderURL.path) {
-                    Self.scanDirectory(url: folderURL, source: .custom, results: &discovered)
+                // 2. Scan /System/Library/Desktop Pictures
+                let systemWallpapers = URL(fileURLWithPath: "/System/Library/Desktop Pictures")
+                if fileManager.fileExists(atPath: systemWallpapers.path) {
+                    Self.scanDirectory(url: systemWallpapers, source: .system, results: &discovered)
                 }
-            }
 
-            // Mark current desktop
-            for i in 0..<discovered.count {
-                if let p = discovered[i].path, !savedDesktop.isEmpty, p == savedDesktop {
-                    discovered[i].isCurrentDesktop = true
+                // 3. Scan user-configured custom folders
+                for folderPath in userFolders {
+                    let expanded = (folderPath as NSString).expandingTildeInPath
+                    let folderURL = URL(fileURLWithPath: expanded)
+                    if fileManager.fileExists(atPath: folderURL.path) {
+                        Self.scanDirectory(url: folderURL, source: .custom, results: &discovered)
+                    }
                 }
-            }
 
-            // 4. Combine discovered with built-in presets
-            var allItems = discovered
-            allItems.append(contentsOf: WallpaperItem.defaultPresets)
+                // Mark current desktop
+                for i in 0..<discovered.count {
+                    if let p = discovered[i].path, !currentDesktopPath.isEmpty, p == currentDesktopPath {
+                        discovered[i].isCurrentDesktop = true
+                    }
+                }
 
-            await MainActor.run {
-                self.wallpapers = allItems
-                self.isScanning = false
-            }
+                // 4. Combine discovered with built-in presets
+                var combined = discovered
+                combined.append(contentsOf: WallpaperItem.defaultPresets)
+                return combined
+            }.value
+
+            guard let self = self, !Task.isCancelled else { return }
+            self.wallpapers = allItems
+            self.isScanning = false
         }
     }
 
@@ -159,17 +160,17 @@ public final class WallpaperService: ObservableObject {
 
         // 3. Generate thumbnail off main thread via ImageIO
         let targetURL = thumbURL
-        let generated = await Task.detached(priority: .utility) { () -> NSImage? in
+        let cgThumb = await Task.detached(priority: .utility) { () -> CGImage? in
             Self.generateThumbnail(at: path, targetURL: targetURL)
         }.value
 
-        if let generated {
-            memoryThumbCache.setObject(generated, forKey: path as NSString)
-        }
+        guard let cgThumb else { return nil }
+        let generated = NSImage(cgImage: cgThumb, size: NSSize(width: 160, height: 100))
+        memoryThumbCache.setObject(generated, forKey: path as NSString)
         return generated
     }
 
-    private nonisolated static func generateThumbnail(at path: String, targetURL: URL) -> NSImage? {
+    private nonisolated static func generateThumbnail(at path: String, targetURL: URL) -> CGImage? {
         let srcURL = URL(fileURLWithPath: path)
         guard let src = CGImageSourceCreateWithURL(srcURL as CFURL, nil) else { return nil }
 
@@ -184,16 +185,13 @@ public final class WallpaperService: ObservableObject {
             return nil
         }
 
-        let nsImg = NSImage(cgImage: cgThumb, size: NSSize(width: 160, height: 100))
-
         // Save to disk cache
-        if let tiff = nsImg.tiffRepresentation,
-           let rep = NSBitmapImageRep(data: tiff),
-           let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) {
+        let rep = NSBitmapImageRep(cgImage: cgThumb)
+        if let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) {
             try? jpegData.write(to: targetURL)
         }
 
-        return nsImg
+        return cgThumb
     }
 
     /// Applies the wallpaper to the user's desktop across connected screens and syncs dynamic M3 theme.

@@ -231,43 +231,45 @@ public final class WorkspaceService: ObservableObject {
         let ctl = self.omniWMCtlPath
         let fallbackActive = self.activeSpaceIndex
 
-        Task.detached(priority: .userInitiated) { [weak self] in
-            var activeNum = fallbackActive
-            var wsDetails: [OmniWMWorkspaceDetail] = []
-            var winItems: [OmniWMWindowItem] = []
+        Task { @MainActor [weak self] in
+            let (activeNum, wsDetails, winItems) = await Task.detached(priority: .userInitiated) { () -> (Int, [OmniWMWorkspaceDetail], [OmniWMWindowItem]) in
+                var active = fallbackActive
+                var details: [OmniWMWorkspaceDetail] = []
+                var items: [OmniWMWindowItem] = []
 
-            if let actData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "active-workspace"),
-               let actMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: actData),
-               let num = actMsg.result?.payload?.workspace?.number {
-                activeNum = num
-            }
-
-            if let wsData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "workspaces"),
-               let wsMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: wsData),
-               let wsList = wsMsg.result?.payload?.workspaces {
-                wsDetails = wsList
-            }
-
-            if let winData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "windows"),
-               let winMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: winData),
-               let winList = winMsg.result?.payload?.windows {
-                winItems = winList
-            }
-
-            await MainActor.run { [weak self] in
-                guard let self = self else { return }
-                if !wsDetails.isEmpty {
-                    self.cachedWorkspaceDetails = wsDetails
+                if let actData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "active-workspace"),
+                   let actMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: actData),
+                   let num = actMsg.result?.payload?.workspace?.number {
+                    active = num
                 }
-                if !winItems.isEmpty {
-                    self.cachedWindows = winItems
+
+                if let wsData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "workspaces"),
+                   let wsMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: wsData),
+                   let wsList = wsMsg.result?.payload?.workspaces {
+                    details = wsList
                 }
-                self.updateWorkspacesWithWindows(
-                    workspaceDetails: self.cachedWorkspaceDetails,
-                    windows: self.cachedWindows,
-                    activeNumber: activeNum
-                )
+
+                if let winData = Self.runOmniWMQueryRaw(ctlPath: ctl, argument: "windows"),
+                   let winMsg = try? JSONDecoder().decode(OmniWMAnyMessage.self, from: winData),
+                   let winList = winMsg.result?.payload?.windows {
+                    items = winList
+                }
+
+                return (active, details, items)
+            }.value
+
+            guard let self = self else { return }
+            if !wsDetails.isEmpty {
+                self.cachedWorkspaceDetails = wsDetails
             }
+            if !winItems.isEmpty {
+                self.cachedWindows = winItems
+            }
+            self.updateWorkspacesWithWindows(
+                workspaceDetails: self.cachedWorkspaceDetails,
+                windows: self.cachedWindows,
+                activeNumber: activeNum
+            )
         }
     }
 

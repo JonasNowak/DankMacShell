@@ -236,16 +236,16 @@ public final class ThemeStore: ObservableObject {
         ConfigStore.shared.update { $0.theme = "dynamic" }
         self.lastWallpaperURL = url
 
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let seeds = Self.extractPaletteSeedsOffMainThread(from: url)
-            let primarySeed = seeds?.primary ?? Self.extractDominantColorOffMainThread(from: url)
-            guard let seedColor = primarySeed else { return }
-            await MainActor.run {
-                guard let self = self else { return }
-                self.dynamicSeedColor = seedColor
-                self.dynamicSecondarySeedColor = seeds?.secondary
-                self.refreshTheme()
-            }
+        Task { @MainActor [weak self] in
+            let (seedColor, secondarySeed) = await Task.detached(priority: .userInitiated) { () -> (M3Color?, M3Color?) in
+                let seeds = Self.extractPaletteSeedsOffMainThread(from: url)
+                let primarySeed = seeds?.primary ?? Self.extractDominantColorOffMainThread(from: url)
+                return (primarySeed, seeds?.secondary)
+            }.value
+            guard let self = self, let seedColor = seedColor else { return }
+            self.dynamicSeedColor = seedColor
+            self.dynamicSecondarySeedColor = secondarySeed
+            self.refreshTheme()
         }
     }
 
@@ -450,14 +450,14 @@ public final class ThemeStore: ObservableObject {
         }
         lastWallpaperURL = url
 
-        Task.detached(priority: .utility) { [weak self] in
-            guard let seedColor = Self.extractDominantColorOffMainThread(from: url) else { return }
-            await MainActor.run {
-                guard let self = self else { return }
-                self.dynamicSeedColor = seedColor
-                if self.themeName.lowercased() == "dynamic" {
-                    self.refreshTheme()
-                }
+        Task { @MainActor [weak self] in
+            let seedColor = await Task.detached(priority: .utility) { () -> M3Color? in
+                Self.extractDominantColorOffMainThread(from: url)
+            }.value
+            guard let self = self, let seedColor = seedColor else { return }
+            self.dynamicSeedColor = seedColor
+            if self.themeName.lowercased() == "dynamic" {
+                self.refreshTheme()
             }
         }
     }

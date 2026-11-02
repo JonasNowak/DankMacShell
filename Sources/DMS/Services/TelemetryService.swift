@@ -12,8 +12,8 @@ public final class TelemetryService {
 
     public private(set) var telemetry = SystemTelemetry()
 
-    @ObservationIgnored private var previousCpuInfo: processor_info_array_t?
-    @ObservationIgnored private var previousCpuInfoCount: mach_msg_type_number_t = 0
+    @ObservationIgnored nonisolated(unsafe) private var previousCpuInfo: processor_info_array_t?
+    @ObservationIgnored nonisolated(unsafe) private var previousCpuInfoCount: mach_msg_type_number_t = 0
     @ObservationIgnored private var previousNetworkSample: (inBytes: UInt64, outBytes: UInt64, timestamp: Date)?
     @ObservationIgnored private var timer: Timer?
 
@@ -25,7 +25,7 @@ public final class TelemetryService {
     private typealias GetFloatFunc = @convention(c) (UnsafeMutableRawPointer, UInt32) -> Double
     private typealias CopyPropFunc = @convention(c) (UnsafeMutableRawPointer, CFString) -> Unmanaged<CFTypeRef>?
 
-    @ObservationIgnored private var hidClient: UnsafeMutableRawPointer?
+    @ObservationIgnored nonisolated(unsafe) private var hidClient: UnsafeMutableRawPointer?
     @ObservationIgnored private var hidFunctionsResolved: Bool = false
     @ObservationIgnored private var clientCreateFn: ClientCreateFunc?
     @ObservationIgnored private var setMatchingFn: SetMatchingFunc?
@@ -379,7 +379,7 @@ public final class TelemetryService {
         return (percent, usedGB, totalGB)
     }
 
-    isolated deinit {
+    deinit {
         if let prev = previousCpuInfo {
             let prevSize = vm_size_t(previousCpuInfoCount) * vm_size_t(MemoryLayout<integer_t>.size)
             vm_deallocate(mach_task_self_, vm_address_t(UInt(bitPattern: prev)), prevSize)
