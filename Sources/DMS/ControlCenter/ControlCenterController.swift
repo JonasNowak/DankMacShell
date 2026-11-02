@@ -20,7 +20,6 @@ public final class ControlCenterController {
             backing: .buffered,
             defer: false
         )
-        panel.contentView = NSHostingView(rootView: ControlCenterView())
     }
 
     public func toggle(fromBar: Bool = false) {

@@ -1170,9 +1170,9 @@ public struct DankBarView: View {
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(ControlCenterController.shared.isVisible ? theme.onPrimary : resolveWidgetTint(style, defaultColor: theme.onSurface))
+                .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
-                .background(ControlCenterController.shared.isVisible ? theme.primary : resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
