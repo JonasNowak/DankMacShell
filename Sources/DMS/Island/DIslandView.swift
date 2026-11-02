@@ -35,7 +35,7 @@ public struct GothCornerShape: Shape {
         guard rect.width > 0 && rect.height > 0 else { return path }
 
         if concaveTopFillets {
-            let f = min(filletRadius, rect.width * 0.15, rect.height * 0.45)
+            let f = min(filletRadius, rect.width * 0.25, rect.height * 0.5)
             let br = min(rBR, (rect.width - 2 * f) * 0.5, rect.height * 0.5)
             let bl = min(rBL, (rect.width - 2 * f) * 0.5, rect.height * 0.5)
 
@@ -43,10 +43,13 @@ public struct GothCornerShape: Shape {
             path.move(to: CGPoint(x: rect.minX, y: rect.minY))
             // Top edge across to top-right outer flange
             path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-            // Concave fillet curving inward-downward on right
-            path.addQuadCurve(
-                to: CGPoint(x: rect.maxX - f, y: rect.minY + f),
-                control: CGPoint(x: rect.maxX - f, y: rect.minY)
+            // Concave circular fillet curving inward-downward on right
+            path.addArc(
+                center: CGPoint(x: rect.maxX, y: rect.minY + f),
+                radius: f,
+                startAngle: .degrees(270),
+                endAngle: .degrees(180),
+                clockwise: true
             )
             // Right vertical edge down to bottom-right corner
             path.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY - br))
@@ -68,9 +71,12 @@ public struct GothCornerShape: Shape {
             )
             // Left vertical edge up to top-left concave fillet
             path.addLine(to: CGPoint(x: rect.minX + f, y: rect.minY + f))
-            path.addQuadCurve(
-                to: CGPoint(x: rect.minX, y: rect.minY),
-                control: CGPoint(x: rect.minX + f, y: rect.minY)
+            path.addArc(
+                center: CGPoint(x: rect.minX, y: rect.minY + f),
+                radius: f,
+                startAngle: .degrees(0),
+                endAngle: .degrees(270),
+                clockwise: true
             )
             path.closeSubpath()
             return path
@@ -146,7 +152,7 @@ public struct DIslandView: View {
     }
 
     private var useGothFillets: Bool {
-        settings.gothCorners && (isNotchAttached || (settings.float && settings.edge.lowercased() == "top") || settings.instance == .notch)
+        settings.gothCorners && (isNotchAttached || (settings.float && settings.edge.lowercased() == "top") || (settings.instance == .mainBar && configStore.config.barPosition.lowercased() == "top") || settings.instance == .notch)
     }
 
     public var body: some View {
@@ -176,10 +182,16 @@ public struct DIslandView: View {
 
             Group {
                 if controller.presentationState.isExpanded {
-                    expandedContent(activity: controller.presentationState.activity)
-                        .padding(.horizontal, useGothFillets ? 18 : 12)
-                        .padding(.vertical, 10)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    if controller.presentationState == .expandedControlCenter {
+                        ControlCenterView()
+                    } else if controller.presentationState == .expandedDash {
+                        DashView(initialTab: DashController.shared.activeTab, onClose: { controller.close() })
+                    } else {
+                        expandedContent(activity: controller.presentationState.activity)
+                            .padding(.horizontal, useGothFillets ? 18 : 12)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
                 } else {
                     compactContent(activity: controller.presentationState.activity)
                         .padding(.vertical, 4)
@@ -200,16 +212,17 @@ public struct DIslandView: View {
 
     @ViewBuilder
     private var islandBackground: some View {
-        if isNotchAttached && !controller.presentationState.isExpanded {
-            Color.black.opacity(max(0.95, settings.opacity))
-        } else if settings.opacity < 1.0 {
-            VisualEffectBlur(material: .hudWindow, blendingMode: .withinWindow)
-                .background(
-                    (isNotchAttached ? Color.black : theme.surfaceContainerHighest)
-                        .opacity(settings.opacity)
-                )
+        if settings.opacity <= 0.005 {
+            Color.clear
+        } else if isNotchAttached && !controller.presentationState.isExpanded {
+            Color.black.opacity(max(0.92, settings.opacity))
         } else {
-            isNotchAttached ? Color.black : theme.surfaceContainerHighest
+            GlassSurfaceBackground(
+                baseColor: theme.isLightMode ? theme.surfaceContainerLowest : theme.surfaceContainerHighest,
+                opacity: min(settings.opacity, theme.surfaceTokens.surfaceOpacity),
+                forceGlass: settings.opacity < 1.0 || configStore.config.barTransparent,
+                material: .popover
+            )
         }
     }
 
@@ -218,14 +231,24 @@ public struct DIslandView: View {
     @ViewBuilder
     private func compactContent(activity: IslandActivity) -> some View {
         let notchWidth = isNotchAttached ? CGFloat(controller.currentNotch.notchWidth) : 0
-        let gothFlange: CGFloat = useGothFillets ? 14.0 : 0.0
+        let gothFlange: CGFloat = useGothFillets ? CGFloat(settings.gothFilletRadius) : 0.0
         let totalW = CGFloat(controller.currentGeometry.width) + gothFlange * 2
         let wingWidth = isNotchAttached ? max(84.0, (totalW - notchWidth) / 2.0) : (totalW / 2.0 - 6.0)
+        let payload = controller.osdPayload ?? (icon: audio.currentOutputIcon, label: "Volume", progress: audio.volume)
 
         HStack(spacing: 0) {
             // Left Wing (Left of hardware notch)
             HStack(spacing: 5) {
-                if activity == .media || nowPlaying.currentTrack.isPlaying {
+                if activity == .osd {
+                    Image(systemName: payload.icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(theme.primary)
+                    Text(payload.label)
+                        .font(theme.font(size: 11, weight: .semibold))
+                        .foregroundColor(isNotchAttached ? .white : theme.onSurface)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                } else if activity == .media || nowPlaying.currentTrack.isPlaying {
                     Image(systemName: "waveform")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(theme.primary)
@@ -259,16 +282,42 @@ public struct DIslandView: View {
 
             // Right Wing (Right of hardware notch)
             HStack(spacing: 5) {
-                let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
-                let temp = isCelsius ? weather.currentWeather.temperatureC : weather.currentWeather.temperatureF
-                Image(systemName: weather.currentWeather.sfSymbol)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.primary)
-                Text("\(Int(round(temp)))°")
-                    .font(theme.font(size: 11, weight: .semibold, mono: true))
-                    .foregroundColor(isNotchAttached ? .white : theme.onSurface)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                if activity == .osd {
+                    if let prog = payload.progress {
+                        Capsule()
+                            .fill(theme.surfaceContainerHighest.opacity(0.8))
+                            .frame(width: 44, height: 4)
+                            .overlay(
+                                GeometryReader { geo in
+                                    Capsule()
+                                        .fill(theme.primary)
+                                        .frame(width: max(4, geo.size.width * CGFloat(min(1, max(0, prog)))), height: 4)
+                                },
+                                alignment: .leading
+                            )
+
+                        Text("\(Int(round(prog * 100)))%")
+                            .font(theme.font(size: 10, weight: .bold, mono: true))
+                            .foregroundColor(isNotchAttached ? .white : theme.onSurface)
+                            .lineLimit(1)
+                    } else {
+                        Text(payload.label)
+                            .font(theme.font(size: 10, weight: .bold))
+                            .foregroundColor(theme.primary)
+                            .lineLimit(1)
+                    }
+                } else {
+                    let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
+                    let temp = isCelsius ? weather.currentWeather.temperatureC : weather.currentWeather.temperatureF
+                    Image(systemName: weather.currentWeather.sfSymbol)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.primary)
+                    Text("\(Int(round(temp)))°")
+                        .font(theme.font(size: 11, weight: .semibold, mono: true))
+                        .foregroundColor(isNotchAttached ? .white : theme.onSurface)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
             }
             .padding(.leading, 10)
             .padding(.trailing, useGothFillets ? 18 : 12)
@@ -284,7 +333,7 @@ public struct DIslandView: View {
         VStack(spacing: 8) {
             // Top Activity Switcher Header
             HStack(spacing: 6) {
-                ForEach([IslandActivity.home, .media, .controlCenter, .clipboard, .weather], id: \.rawValue) { act in
+                ForEach([IslandActivity.home, .media, .controlCenter, .dash, .clipboard, .weather], id: \.rawValue) { act in
                     if settings.enabledActivities.contains(act.rawValue) || act == .home {
                         Button {
                             controller.open(activity: act)
@@ -323,7 +372,9 @@ public struct DIslandView: View {
                 case .notification:
                     expandedNotificationView
                 case .controlCenter:
-                    expandedControlCenterView
+                    ControlCenterView()
+                case .dash:
+                    DashView(initialTab: DashController.shared.activeTab, onClose: { controller.close() })
                 case .clipboard:
                     expandedClipboardView
                 case .weather:
@@ -346,6 +397,7 @@ public struct DIslandView: View {
         case .notification: return "bell.fill"
         case .osd: return "speaker.wave.2.fill"
         case .controlCenter: return "switch.2"
+        case .dash: return "square.stack.3d.up.fill"
         case .launcher: return "magnifyingglass"
         case .clipboard: return "doc.on.clipboard"
         case .powerMenu: return "power"
@@ -487,9 +539,9 @@ public struct DIslandView: View {
 
     private var expandedOSDView: some View {
         let payload = controller.osdPayload ?? (icon: audio.currentOutputIcon, label: "Volume", progress: audio.volume)
-        return HStack(spacing: 10) {
+        return HStack(spacing: 12) {
             Image(systemName: payload.icon)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 16, weight: .bold))
                 .foregroundColor(theme.primary)
                 .frame(width: 24)
 
@@ -515,6 +567,15 @@ public struct DIslandView: View {
                     .font(theme.font(size: 11, weight: .bold, mono: true))
                     .foregroundColor(theme.onSurfaceVariant)
                     .frame(width: 36, alignment: .trailing)
+            } else {
+                Spacer()
+                Text(payload.label)
+                    .font(theme.font(size: 11, weight: .bold))
+                    .foregroundColor(theme.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(theme.surfaceContainerHigh)
+                    .clipShape(Capsule())
             }
         }
     }
@@ -741,7 +802,7 @@ private struct IslandMetricPill: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .frame(maxWidth: .infinity)
-        .background(theme.surfaceContainerHigh.opacity(0.65))
+        .background(theme.cardBackground)
         .cornerRadius(8)
     }
 }
@@ -766,7 +827,7 @@ private struct IslandActionButton: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .frame(maxWidth: .infinity)
-            .background(theme.surfaceContainerHigh.opacity(0.75))
+            .background(theme.cardBackground)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)

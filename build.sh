@@ -57,12 +57,8 @@ scripts/generate-icon.sh
 xattr -cr Sources Support scripts "$SCRATCH" 2>/dev/null || true
 
 echo "==> Building DankMacShell and dms CLI in $BUILD_CONFIG mode..."
-if swift build -c "$BUILD_CONFIG" --product DankMacShell --scratch-path "$SCRATCH" 2>/dev/null; then
-    APP_PRODUCT="DankMacShell"
-else
-    swift build -c "$BUILD_CONFIG" --product DankMaterialShell --scratch-path "$SCRATCH"
-    APP_PRODUCT="DankMaterialShell"
-fi
+APP_PRODUCT="DankMacShell"
+swift build -c "$BUILD_CONFIG" --product DankMacShell --scratch-path "$SCRATCH"
 swift build -c "$BUILD_CONFIG" --product dms --scratch-path "$SCRATCH"
 
 BIN_PATH=$(swift build -c "$BUILD_CONFIG" --scratch-path "$SCRATCH" --show-bin-path)
@@ -106,14 +102,21 @@ fi
 echo "==> Installed dms CLI to: $HOME/.local/bin/dms"
 
 if [ "$LAUNCH" -eq 1 ]; then
-    open "$APP"
+    # Terminate any running instance before launching newly built app
+    pkill -x DankMaterialShell 2>/dev/null || true
+    pkill -x DankMacShell 2>/dev/null || true
+    killall -CONT OSDUIHelper 2>/dev/null || true
+    while pgrep -x DankMaterialShell >/dev/null 2>&1 || pgrep -x DankMacShell >/dev/null 2>&1; do
+        sleep 0.1
+    done
+    sleep 0.2
+    nohup "$APP/Contents/MacOS/DankMaterialShell" >/dev/null 2>&1 &
     # Verify launch
     sleep 0.5
     if pgrep -x DankMacShell >/dev/null 2>&1 || pgrep -x DankMaterialShell >/dev/null 2>&1; then
         echo "==> Installed and started: $APP (PID $(pgrep -x DankMacShell || pgrep -x DankMaterialShell))"
     else
-        echo "==> Direct launching $APP..."
-        "$APP/Contents/MacOS/DankMaterialShell" >/dev/null 2>&1 &
+        open "$APP"
         sleep 0.5
         echo "==> Installed and started: $APP (PID $(pgrep -x DankMacShell || pgrep -x DankMaterialShell || echo 'running'))"
     fi

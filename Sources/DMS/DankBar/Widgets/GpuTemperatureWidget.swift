@@ -57,7 +57,7 @@ public struct GpuTemperatureWidget: View {
         if let hex = style.customBackgroundHex, !hex.isEmpty {
             return Color(hex: hex)
         }
-        return theme.surfaceContainerHigh
+        return theme.barWidgetBackground
     }
 
     private var formattedTemperature: String {

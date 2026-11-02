@@ -214,6 +214,7 @@ public enum IslandActivity: String, Sendable, Codable, CaseIterable {
     case notification = "notification"
     case osd = "osd"
     case controlCenter = "controlCenter"
+    case dash = "dash"
     case launcher = "launcher"
     case clipboard = "clipboard"
     case powerMenu = "powerMenu"
@@ -228,6 +229,7 @@ public enum IslandActivity: String, Sendable, Codable, CaseIterable {
         case "notification", "notifications", "notif": return .notification
         case "osd", "volume", "brightness", "systemlevel": return .osd
         case "cc", "controlcenter", "control-center": return .controlCenter
+        case "dash", "dankdash", "dashboard", "overview": return .dash
         case "launcher", "search", "apps": return .launcher
         case "clipboard", "clip": return .clipboard
         case "power", "powermenu", "power-menu": return .powerMenu
@@ -248,6 +250,7 @@ public enum IslandPresentationState: String, Sendable, Codable, Equatable {
     case expandedNotification
     case expandedOSD
     case expandedControlCenter
+    case expandedDash
     case expandedLauncher
     case expandedClipboard
     case expandedPowerMenu
@@ -269,6 +272,7 @@ public enum IslandPresentationState: String, Sendable, Codable, Equatable {
         case .compactNotification, .expandedNotification: return .notification
         case .compactOSD, .expandedOSD: return .osd
         case .expandedControlCenter: return .controlCenter
+        case .expandedDash: return .dash
         case .expandedLauncher: return .launcher
         case .expandedClipboard: return .clipboard
         case .expandedPowerMenu: return .powerMenu
@@ -311,6 +315,7 @@ public struct IslandStateMachine: Sendable, Equatable {
             case .notification: return .expandedNotification
             case .osd: return .expandedOSD
             case .controlCenter: return .expandedControlCenter
+            case .dash: return .expandedDash
             case .launcher: return .expandedLauncher
             case .clipboard: return .expandedClipboard
             case .powerMenu: return .expandedPowerMenu
@@ -372,7 +377,8 @@ public struct IslandStateMachine: Sendable, Equatable {
     public static func targetGeometry(
         for state: IslandPresentationState,
         settings: IslandSettings,
-        notch: ScreenNotchGeometry = .standardMonitor()
+        notch: ScreenNotchGeometry = .standardMonitor(),
+        controlCenterColumns: Int = CcMetrics.defaultColumns
     ) -> IslandGeometryVector {
         let isNotchAttached = !settings.float && (settings.instance == .notch || (settings.instance == .mainBar && notch.hasNotch))
 
@@ -396,11 +402,17 @@ public struct IslandStateMachine: Sendable, Equatable {
         case .compactOSD:
             width = max(baseCompactWidth + 64.0, isNotchAttached ? notch.notchWidth + 240.0 : 240.0)
             height = max(baseCompactHeight, 42.0)
+        case .expandedControlCenter:
+            let cols = CcMetrics.clampColumns(controlCenterColumns)
+            width = Double(cols == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: cols))
+            height = Double(CcMetrics.defaultSheetHeight)
+        case .expandedDash:
+            width = 580.0
+            height = 414.0
         case .expandedHome,
              .expandedMedia,
              .expandedNotification,
              .expandedOSD,
-             .expandedControlCenter,
              .expandedLauncher,
              .expandedClipboard,
              .expandedPowerMenu,

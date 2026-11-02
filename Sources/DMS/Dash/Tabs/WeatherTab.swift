@@ -173,7 +173,7 @@ public struct WeatherTab: View {
                                 path.move(to: CGPoint(x: 0, y: h - 6))
                                 path.addLine(to: CGPoint(x: w, y: h - 6))
                             }
-                            .stroke(Color.white.opacity(0.1), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                            .stroke(themeStore.subtleTrackColor, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
 
                             // Parabolic Arc
                             Path { path in

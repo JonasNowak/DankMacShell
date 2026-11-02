@@ -13,6 +13,7 @@ public struct BarGothCornerShape: Shape {
     public var isVertical: Bool
     public var isLeftWing: Bool?
     public var isRightWing: Bool?
+    public var closedSeam: Bool
 
     public init(
         position: String = "bottom",
@@ -21,7 +22,8 @@ public struct BarGothCornerShape: Shape {
         filletRadius: CGFloat = 14,
         isVertical: Bool = false,
         isLeftWing: Bool? = nil,
-        isRightWing: Bool? = nil
+        isRightWing: Bool? = nil,
+        closedSeam: Bool = true
     ) {
         self.position = position
         self.cornerStyle = cornerStyle
@@ -30,6 +32,7 @@ public struct BarGothCornerShape: Shape {
         self.isVertical = isVertical
         self.isLeftWing = isLeftWing
         self.isRightWing = isRightWing
+        self.closedSeam = closedSeam
     }
 
     public func path(in rect: CGRect) -> Path {
@@ -55,7 +58,7 @@ public struct BarGothCornerShape: Shape {
 
         // 4. Gothic Concave Fillet Corners (Connected Mode / Bezel Bridging)
         let pos = position.lowercased()
-        let f = min(filletRadius, isVertical ? rect.height * 0.25 : rect.width * 0.25, isVertical ? rect.width * 0.45 : rect.height * 0.45)
+        let f = min(filletRadius, isVertical ? rect.width * 0.45 : rect.height * 0.45, isVertical ? rect.height * 0.25 : rect.width * 0.25)
 
         let outerR: CGFloat
         if cornerRadius < 0 {
@@ -68,157 +71,241 @@ public struct BarGothCornerShape: Shape {
 
         switch pos {
         case "top":
-            // Anchored to top screen bezel (minY). Concave fillets curve inward-downward at top-left and top-right.
-            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-            // Top edge across to top-right outer flange
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-            // Right concave fillet curving inward-downward
-            path.addQuadCurve(
-                to: CGPoint(x: rect.maxX - f, y: rect.minY + f),
-                control: CGPoint(x: rect.maxX - f, y: rect.minY)
+            // Anchored to top screen bezel / bar edge (minY). Concave fillets curve inward-downward at top-left and top-right.
+            if closedSeam {
+                path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            } else {
+                path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+            }
+            // Right concave circular fillet curving inward-downward into bar body
+            path.addArc(
+                center: CGPoint(x: rect.maxX, y: rect.minY + f),
+                radius: f,
+                startAngle: .degrees(270),
+                endAngle: .degrees(180),
+                clockwise: true
             )
             // Down right vertical edge to bottom-right corner
             path.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY - outerR))
             // Bottom-right convex corner
             if outerR > 0 {
-                path.addQuadCurve(
-                    to: CGPoint(x: rect.maxX - f - outerR, y: rect.maxY),
-                    control: CGPoint(x: rect.maxX - f, y: rect.maxY)
+                path.addArc(
+                    center: CGPoint(x: rect.maxX - f - outerR, y: rect.maxY - outerR),
+                    radius: outerR,
+                    startAngle: .degrees(0),
+                    endAngle: .degrees(90),
+                    clockwise: false
                 )
+            } else {
+                path.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY))
             }
             // Across bottom edge to bottom-left corner
             path.addLine(to: CGPoint(x: rect.minX + f + outerR, y: rect.maxY))
             // Bottom-left convex corner
             if outerR > 0 {
-                path.addQuadCurve(
-                    to: CGPoint(x: rect.minX + f, y: rect.maxY - outerR),
-                    control: CGPoint(x: rect.minX + f, y: rect.maxY)
+                path.addArc(
+                    center: CGPoint(x: rect.minX + f + outerR, y: rect.maxY - outerR),
+                    radius: outerR,
+                    startAngle: .degrees(90),
+                    endAngle: .degrees(180),
+                    clockwise: false
                 )
+            } else {
+                path.addLine(to: CGPoint(x: rect.minX + f, y: rect.maxY))
             }
             // Up left vertical edge to top-left concave fillet
             path.addLine(to: CGPoint(x: rect.minX + f, y: rect.minY + f))
-            // Top-left concave fillet curving outward-upward
-            path.addQuadCurve(
-                to: CGPoint(x: rect.minX, y: rect.minY),
-                control: CGPoint(x: rect.minX + f, y: rect.minY)
+            // Top-left concave circular fillet curving outward-upward to screen bezel
+            path.addArc(
+                center: CGPoint(x: rect.minX, y: rect.minY + f),
+                radius: f,
+                startAngle: .degrees(0),
+                endAngle: .degrees(270),
+                clockwise: true
             )
-            path.closeSubpath()
+            if closedSeam {
+                path.closeSubpath()
+            }
             return path
 
         case "left":
-            // Anchored to left screen bezel (minX). Concave fillets curve inward-rightward at top-left and bottom-left.
-            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-            // Top-left concave fillet curving inward-rightward
-            path.addQuadCurve(
-                to: CGPoint(x: rect.minX + f, y: rect.minY + f),
-                control: CGPoint(x: rect.minX, y: rect.minY + f)
+            // Anchored to left screen bezel / bar edge (minX). Concave fillets curve inward-rightward at top-left and bottom-left.
+            if closedSeam {
+                path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+                path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+            } else {
+                path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            }
+            // Top-left concave circular fillet
+            path.addArc(
+                center: CGPoint(x: rect.minX, y: rect.minY + f),
+                radius: f,
+                startAngle: .degrees(-90),
+                endAngle: .degrees(0),
+                clockwise: false
             )
             // Across top horizontal edge to top-right corner
             path.addLine(to: CGPoint(x: rect.maxX - outerR, y: rect.minY + f))
             // Top-right convex corner
             if outerR > 0 {
-                path.addQuadCurve(
-                    to: CGPoint(x: rect.maxX, y: rect.minY + f + outerR),
-                    control: CGPoint(x: rect.maxX, y: rect.minY + f)
+                path.addArc(
+                    center: CGPoint(x: rect.maxX - outerR, y: rect.minY + f + outerR),
+                    radius: outerR,
+                    startAngle: .degrees(-90),
+                    endAngle: .degrees(0),
+                    clockwise: false
                 )
+            } else {
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + f))
             }
             // Down right vertical edge to bottom-right corner
             path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - f - outerR))
             // Bottom-right convex corner
             if outerR > 0 {
-                path.addQuadCurve(
-                    to: CGPoint(x: rect.maxX - outerR, y: rect.maxY - f),
-                    control: CGPoint(x: rect.maxX, y: rect.maxY - f)
+                path.addArc(
+                    center: CGPoint(x: rect.maxX - outerR, y: rect.maxY - f - outerR),
+                    radius: outerR,
+                    startAngle: .degrees(0),
+                    endAngle: .degrees(90),
+                    clockwise: false
                 )
+            } else {
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - f))
             }
             // Leftward along bottom horizontal edge
             path.addLine(to: CGPoint(x: rect.minX + f, y: rect.maxY - f))
-            // Bottom-left concave fillet curving downward-outward to left screen bezel
-            path.addQuadCurve(
-                to: CGPoint(x: rect.minX, y: rect.maxY),
-                control: CGPoint(x: rect.minX, y: rect.maxY - f)
+            // Bottom-left concave fillet
+            path.addArc(
+                center: CGPoint(x: rect.minX, y: rect.maxY - f),
+                radius: f,
+                startAngle: .degrees(0),
+                endAngle: .degrees(90),
+                clockwise: false
             )
-            // Up along left screen bezel back to top
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-            path.closeSubpath()
+            if closedSeam {
+                path.closeSubpath()
+            }
             return path
 
         case "right":
-            // Anchored to right screen bezel (maxX). Concave fillets curve inward-leftward at top-right and bottom-right.
-            path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
-            // Top-right concave fillet curving inward-leftward
-            path.addQuadCurve(
-                to: CGPoint(x: rect.maxX - f, y: rect.minY + f),
-                control: CGPoint(x: rect.maxX, y: rect.minY + f)
-            )
-            // Across top horizontal edge to top-left corner
-            path.addLine(to: CGPoint(x: rect.minX + outerR, y: rect.minY + f))
-            // Top-left convex corner
-            if outerR > 0 {
-                path.addQuadCurve(
-                    to: CGPoint(x: rect.minX, y: rect.minY + f + outerR),
-                    control: CGPoint(x: rect.minX, y: rect.minY + f)
-                )
+            // Anchored to right screen bezel / bar edge (maxX). Concave fillets curve inward-leftward at top-right and bottom-right.
+            if closedSeam {
+                path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            } else {
+                path.move(to: CGPoint(x: rect.maxX, y: rect.maxY))
             }
-            // Down left vertical edge to bottom-left corner
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - f - outerR))
+            // Bottom-right concave fillet
+            path.addArc(
+                center: CGPoint(x: rect.maxX, y: rect.maxY - f),
+                radius: f,
+                startAngle: .degrees(90),
+                endAngle: .degrees(180),
+                clockwise: false
+            )
+            // Across bottom horizontal edge to bottom-left corner
+            path.addLine(to: CGPoint(x: rect.minX + outerR, y: rect.maxY - f))
             // Bottom-left convex corner
             if outerR > 0 {
-                path.addQuadCurve(
-                    to: CGPoint(x: rect.minX + outerR, y: rect.maxY - f),
-                    control: CGPoint(x: rect.minX, y: rect.maxY - f)
+                path.addArc(
+                    center: CGPoint(x: rect.minX + outerR, y: rect.maxY - f - outerR),
+                    radius: outerR,
+                    startAngle: .degrees(90),
+                    endAngle: .degrees(180),
+                    clockwise: false
                 )
+            } else {
+                path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - f))
             }
-            // Rightward along bottom horizontal edge
-            path.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY - f))
-            // Bottom-right concave fillet curving downward-outward to right screen bezel
-            path.addQuadCurve(
-                to: CGPoint(x: rect.maxX, y: rect.maxY),
-                control: CGPoint(x: rect.maxX, y: rect.maxY - f)
+            // Up left vertical edge to top-left corner
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + f + outerR))
+            // Top-left convex corner
+            if outerR > 0 {
+                path.addArc(
+                    center: CGPoint(x: rect.minX + outerR, y: rect.minY + f + outerR),
+                    radius: outerR,
+                    startAngle: .degrees(180),
+                    endAngle: .degrees(270),
+                    clockwise: false
+                )
+            } else {
+                path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + f))
+            }
+            // Across top horizontal edge
+            path.addLine(to: CGPoint(x: rect.maxX - f, y: rect.minY + f))
+            // Top-right concave fillet
+            path.addArc(
+                center: CGPoint(x: rect.maxX, y: rect.minY + f),
+                radius: f,
+                startAngle: .degrees(180),
+                endAngle: .degrees(270),
+                clockwise: false
             )
-            // Up along right screen bezel back to top
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-            path.closeSubpath()
+            if closedSeam {
+                path.closeSubpath()
+            }
             return path
 
         case "bottom":
             fallthrough
         default:
-            // Anchored to bottom screen bezel (maxY). Concave fillets curve inward-upward at bottom-left and bottom-right.
-            path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-            // Bottom edge across to bottom-right outer flange
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-            // Right concave fillet curving inward-upward
-            path.addQuadCurve(
-                to: CGPoint(x: rect.maxX - f, y: rect.maxY - f),
-                control: CGPoint(x: rect.maxX - f, y: rect.maxY)
+            // Anchored to bottom screen bezel / bar edge (maxY). Concave fillets curve inward-upward at bottom-left and bottom-right.
+            if closedSeam {
+                path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            } else {
+                path.move(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            }
+            // Right concave circular fillet curving inward-upward
+            path.addArc(
+                center: CGPoint(x: rect.maxX, y: rect.maxY - f),
+                radius: f,
+                startAngle: .degrees(90),
+                endAngle: .degrees(180),
+                clockwise: false
             )
             // Up right vertical edge to top-right corner
             path.addLine(to: CGPoint(x: rect.maxX - f, y: rect.minY + outerR))
             // Top-right convex corner
             if outerR > 0 {
-                path.addQuadCurve(
-                    to: CGPoint(x: rect.maxX - f - outerR, y: rect.minY),
-                    control: CGPoint(x: rect.maxX - f, y: rect.minY)
+                path.addArc(
+                    center: CGPoint(x: rect.maxX - f - outerR, y: rect.minY + outerR),
+                    radius: outerR,
+                    startAngle: .degrees(0),
+                    endAngle: .degrees(-90),
+                    clockwise: true
                 )
+            } else {
+                path.addLine(to: CGPoint(x: rect.maxX - f, y: rect.minY))
             }
             // Across top edge to top-left corner
             path.addLine(to: CGPoint(x: rect.minX + f + outerR, y: rect.minY))
             // Top-left convex corner
             if outerR > 0 {
-                path.addQuadCurve(
-                    to: CGPoint(x: rect.minX + f, y: rect.minY + outerR),
-                    control: CGPoint(x: rect.minX + f, y: rect.minY)
+                path.addArc(
+                    center: CGPoint(x: rect.minX + f + outerR, y: rect.minY + outerR),
+                    radius: outerR,
+                    startAngle: .degrees(-90),
+                    endAngle: .degrees(180),
+                    clockwise: true
                 )
+            } else {
+                path.addLine(to: CGPoint(x: rect.minX + f, y: rect.minY))
             }
             // Down left vertical edge to bottom-left concave fillet
             path.addLine(to: CGPoint(x: rect.minX + f, y: rect.maxY - f))
-            // Bottom-left concave fillet curving outward-downward
-            path.addQuadCurve(
-                to: CGPoint(x: rect.minX, y: rect.maxY),
-                control: CGPoint(x: rect.minX + f, y: rect.maxY)
+            // Bottom-left concave circular fillet curving outward-downward to bezel
+            path.addArc(
+                center: CGPoint(x: rect.minX, y: rect.maxY - f),
+                radius: f,
+                startAngle: .degrees(0),
+                endAngle: .degrees(90),
+                clockwise: false
             )
-            path.closeSubpath()
+            if closedSeam {
+                path.closeSubpath()
+            }
             return path
         }
     }

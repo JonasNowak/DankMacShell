@@ -88,7 +88,7 @@ public struct KeybindsView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
-            .background(Color(hex: p.surfaceContainerHigh.hex))
+            .background(themeStore.panelHeaderBackground)
 
             Divider().background(Color(hex: p.outlineVariant.hex).opacity(0.5))
 
@@ -161,15 +161,15 @@ public struct KeybindsView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 8)
-            .background(Color(hex: p.surfaceContainerHigh.hex))
+            .background(themeStore.panelHeaderBackground)
         }
         .frame(width: 480, height: 460)
-        .background(Color(hex: p.surface.hex))
+        .background(GlassSurfaceBackground())
         .cornerRadius(24)
         .overlay(
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color(hex: p.outlineVariant.hex).opacity(0.6), lineWidth: 1)
+                .stroke(themeStore.panelBorderColor, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.35), radius: 26, x: 0, y: 12)
+        .shadow(color: themeStore.adaptiveShadowColor(baseOpacity: 0.35), radius: 26, x: 0, y: 12)
     }
 }

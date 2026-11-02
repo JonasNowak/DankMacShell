@@ -486,7 +486,7 @@ public struct LauncherView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(theme.surfaceContainerLow)
+                .background(theme.panelHeaderBackground)
             }
             .frame(width: 680)
 
@@ -624,13 +624,13 @@ public struct LauncherView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .background(theme.surfaceContainer)
+        .background(GlassSurfaceBackground())
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
+                .stroke(theme.panelBorderColor, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.45), radius: 30, x: 0, y: 12)
+        .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.42), radius: 30, x: 0, y: 12)
         .onAppear {
             isFieldFocused = true
             selectedIndex = 0

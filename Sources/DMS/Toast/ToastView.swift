@@ -24,12 +24,12 @@ public struct ToastOverlayView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(theme.surfaceContainer)
+                .background(GlassSurfaceBackground(forceGlass: true))
                 .clipShape(Capsule())
                 .overlay(
-                    Capsule().stroke(theme.outlineVariant.opacity(0.4), lineWidth: 1)
+                    Capsule().stroke(theme.panelBorderColor, lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.3), radius: 15, x: 0, y: 6)
+                .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.28), radius: 15, x: 0, y: 6)
                 .transition(.move(edge: .top).combined(with: .opacity))
             } else {
                 Color.clear

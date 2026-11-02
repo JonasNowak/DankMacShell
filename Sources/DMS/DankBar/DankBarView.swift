@@ -76,8 +76,15 @@ public struct DankBarView: View {
         (effectiveNotch.hasNotch || (island.settings.instance != .off && (island.settings.instance == .notch || island.settings.instance == .mainBar)))
     }
 
+    private var isIslandMode: Bool {
+        activeConfig.backgroundStyle.lowercased() == "island" || island.settings.instance == .mainBar
+    }
+
     private var effectiveCornerStyle: BarCornerStyle {
-        if activeConfig.cornerStyle == .square || (activeConfig.autoSquareAttachedCorners && activeConfig.margin == 0 && activeConfig.cornerStyle != .gothic) {
+        if configStore.config.gothCornersEnabled || activeConfig.gothCorners || activeConfig.cornerStyle == .gothic {
+            return .gothic
+        }
+        if activeConfig.cornerStyle == .square || (activeConfig.autoSquareAttachedCorners && activeConfig.margin == 0) {
             return .square
         }
         return activeConfig.cornerStyle
@@ -109,16 +116,28 @@ public struct DankBarView: View {
         if let customHex = activeConfig.borderColor, !customHex.isEmpty {
             return Color(hex: customHex)
         }
-        return theme.outlineVariant.opacity(max(0.2, theme.surfaceTokens.outlineOpacity * 2.2))
+        let mult = theme.isLightMode ? 3.2 : 2.2
+        return theme.outlineVariant.opacity(max(theme.isLightMode ? 0.38 : 0.2, theme.surfaceTokens.outlineOpacity * mult))
     }
 
     public var body: some View {
         GeometryReader { proxy in
             let totalLength = isVertical ? proxy.size.height : proxy.size.width
+            let isIsland = isIslandMode
 
             if isTopNotchedMode {
-                notchedHorizontalBarContent(totalLength: totalLength)
+                splitNotchBarContent(totalLength: totalLength)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isIsland {
+                ZStack {
+                    if isVertical {
+                        verticalBarContent(totalLength: totalLength)
+                    } else {
+                        horizontalBarContent(totalLength: totalLength)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.clear)
             } else {
                 let shape = barContainerShape()
                 ZStack {
@@ -133,16 +152,18 @@ public struct DankBarView: View {
                 .clipShape(shape)
                 .overlay(
                     Group {
-                        if activeConfig.borderEnabled && activeConfig.backgroundStyle.lowercased() != "island" {
+                        if activeConfig.borderEnabled && activeConfig.transparency > 0.005 {
                             shape.stroke(
-                                resolvedBorderColor,
+                                resolvedBorderColor.opacity(activeConfig.transparency),
                                 lineWidth: CGFloat(max(0.0, activeConfig.borderWidth))
                             )
                         }
                     }
                 )
                 .shadow(
-                    color: theme.shadowTokens.enabled ? theme.shadow.opacity(theme.shadowTokens.opacity * 0.7) : .clear,
+                    color: (theme.shadowTokens.enabled && activeConfig.transparency > 0.01)
+                        ? theme.shadow.opacity(theme.shadowTokens.opacity * (theme.isLightMode ? 0.42 : 0.7) * activeConfig.transparency)
+                        : .clear,
                     radius: theme.shadowTokens.enabled ? CGFloat(theme.shadowTokens.blurRadius) : 0,
                     x: 0,
                     y: theme.shadowTokens.enabled ? CGFloat(theme.shadowTokens.offsetY) : 0
@@ -155,14 +176,36 @@ public struct DankBarView: View {
     @ViewBuilder
     private var barBackground: some View {
         let style = activeConfig.backgroundStyle.lowercased()
-        if style == "transparent" || style == "island" {
+        if style == "transparent" || style == "island" || activeConfig.transparency <= 0.005 {
             Color.clear
-        } else if style == "glass" || activeConfig.transparency < 1.0 || configStore.config.barTransparent {
-            let effectiveOpacity = min(activeConfig.transparency, theme.surfaceTokens.surfaceOpacity)
-            VisualEffectBlur(material: .headerView, blendingMode: .withinWindow)
-                .background(theme.surfaceContainerLow.opacity(effectiveOpacity))
         } else {
-            theme.surfaceContainerLow
+            let isGlass = style == "glass" || configStore.config.barTransparent
+            let effectiveOpacity = min(activeConfig.transparency, theme.surfaceTokens.surfaceOpacity)
+            if effectiveOpacity <= 0.005 {
+                Color.clear
+            } else {
+                GlassSurfaceBackground(
+                    baseColor: theme.isLightMode ? theme.surfaceContainerLowest : theme.surfaceContainerLow,
+                    opacity: effectiveOpacity,
+                    forceGlass: isGlass,
+                    material: .popover
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var islandSatelliteBackground: some View {
+        let effectiveOpacity = min(activeConfig.transparency, theme.surfaceTokens.surfaceOpacity)
+        if effectiveOpacity <= 0.005 {
+            Color.clear
+        } else {
+            GlassSurfaceBackground(
+                baseColor: theme.isLightMode ? theme.surfaceContainerLowest : theme.surfaceContainerLow,
+                opacity: effectiveOpacity,
+                forceGlass: true,
+                material: .popover
+            )
         }
     }
 
@@ -190,7 +233,7 @@ public struct DankBarView: View {
     }
 
     @ViewBuilder
-    private func notchedHorizontalBarContent(totalLength: CGFloat) -> some View {
+    private func splitNotchBarContent(totalLength: CGFloat) -> some View {
         let screen = (screenIndex < NSScreen.screens.count) ? NSScreen.screens[screenIndex] : (NSScreen.main ?? NSScreen.screens.first)
         let islandExclusion: Double = screen.map { Double(island.exclusionWidth(for: $0, barPosition: activeConfig.position)) } ?? 0.0
         let notchForSolver = computeNotchForSolver(totalLength: totalLength, islandExclusion: islandExclusion)
@@ -208,92 +251,188 @@ public struct DankBarView: View {
         let centerHoleWidth = max(0, CGFloat(solved.rightSafeStartX - solved.leftSafeEndX))
         let hPad = CGFloat(activeConfig.horizontalPadding)
         let vPad = CGFloat(activeConfig.verticalPadding)
+        let isIsland = isIslandMode
+        let pillHeight = CGFloat(island.settings.compactIslandHeight)
 
         let leftShape = barContainerShape(isLeftWing: true)
         let rightShape = barContainerShape(isRightWing: true)
 
         HStack(spacing: 0) {
             // Left Safe Zone Wing (Left of Notch / Dynamic Island)
-            HStack(spacing: 4) {
-                let leftRoles = BarSegmentRoleSolver.resolve(
-                    entries: solved.leftSafeWidgets,
-                    participating: solved.leftSafeWidgets.map { $0.enabled }
-                )
-                renderWidgets(entries: solved.leftSafeWidgets, roles: leftRoles)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, hPad)
-            .padding(.vertical, vPad)
-            .frame(width: leftSafeWidth)
-            .frame(maxHeight: .infinity)
-            .background(barBackground)
-            .clipShape(leftShape)
-            .overlay(
-                Group {
-                    if activeConfig.borderEnabled && activeConfig.backgroundStyle.lowercased() != "island" {
-                        leftShape.stroke(resolvedBorderColor, lineWidth: CGFloat(max(0.0, activeConfig.borderWidth)))
+            if isIsland {
+                HStack(spacing: 0) {
+                    HStack(spacing: 4) {
+                        let leftRoles = BarSegmentRoleSolver.resolve(
+                            entries: solved.leftSafeWidgets,
+                            participating: solved.leftSafeWidgets.map { $0.enabled }
+                        )
+                        renderWidgets(entries: solved.leftSafeWidgets, roles: leftRoles)
                     }
+                    .padding(.horizontal, hPad)
+                    .padding(.vertical, vPad)
+                    .frame(height: pillHeight)
+                    .background(islandSatelliteBackground)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(resolvedBorderColor, lineWidth: 1.0)
+                    )
+                    .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.25), radius: 8, x: 0, y: 3)
+
+                    Spacer(minLength: 0)
                 }
-            )
-            .clipped()
+                .frame(width: leftSafeWidth)
+                .frame(maxHeight: .infinity)
+            } else {
+                HStack(spacing: 4) {
+                    let leftRoles = BarSegmentRoleSolver.resolve(
+                        entries: solved.leftSafeWidgets,
+                        participating: solved.leftSafeWidgets.map { $0.enabled }
+                    )
+                    renderWidgets(entries: solved.leftSafeWidgets, roles: leftRoles)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, hPad)
+                .padding(.vertical, vPad)
+                .frame(width: leftSafeWidth)
+                .frame(maxHeight: .infinity)
+                .background(barBackground)
+                .clipShape(leftShape)
+                .overlay(
+                    Group {
+                        if activeConfig.borderEnabled && activeConfig.transparency > 0.005 {
+                            leftShape.stroke(resolvedBorderColor.opacity(activeConfig.transparency), lineWidth: CGFloat(max(0.0, activeConfig.borderWidth)))
+                        }
+                    }
+                )
+                .clipped()
+            }
 
             // Central Exclusion Zone for Hardware Notch & Dynamic Island
             Spacer(minLength: centerHoleWidth)
                 .frame(width: centerHoleWidth)
 
             // Right Safe Zone Wing (Right of Notch / Dynamic Island)
-            HStack(spacing: 4) {
-                Spacer(minLength: 0)
-                let rightRoles = BarSegmentRoleSolver.resolve(
-                    entries: solved.rightSafeWidgets,
-                    participating: solved.rightSafeWidgets.map { $0.enabled }
-                )
-                renderWidgets(entries: solved.rightSafeWidgets, roles: rightRoles)
-            }
-            .padding(.horizontal, hPad)
-            .padding(.vertical, vPad)
-            .frame(width: rightSafeWidth)
-            .frame(maxHeight: .infinity)
-            .background(barBackground)
-            .clipShape(rightShape)
-            .overlay(
-                Group {
-                    if activeConfig.borderEnabled && activeConfig.backgroundStyle.lowercased() != "island" {
-                        rightShape.stroke(resolvedBorderColor, lineWidth: CGFloat(max(0.0, activeConfig.borderWidth)))
+            if isIsland {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+
+                    HStack(spacing: 4) {
+                        let rightRoles = BarSegmentRoleSolver.resolve(
+                            entries: solved.rightSafeWidgets,
+                            participating: solved.rightSafeWidgets.map { $0.enabled }
+                        )
+                        renderWidgets(entries: solved.rightSafeWidgets, roles: rightRoles)
                     }
+                    .padding(.horizontal, hPad)
+                    .padding(.vertical, vPad)
+                    .frame(height: pillHeight)
+                    .background(islandSatelliteBackground)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(resolvedBorderColor, lineWidth: 1.0)
+                    )
+                    .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.25), radius: 8, x: 0, y: 3)
                 }
-            )
-            .clipped()
+                .frame(width: rightSafeWidth)
+                .frame(maxHeight: .infinity)
+            } else {
+                HStack(spacing: 4) {
+                    Spacer(minLength: 0)
+                    let rightRoles = BarSegmentRoleSolver.resolve(
+                        entries: solved.rightSafeWidgets,
+                        participating: solved.rightSafeWidgets.map { $0.enabled }
+                    )
+                    renderWidgets(entries: solved.rightSafeWidgets, roles: rightRoles)
+                }
+                .padding(.horizontal, hPad)
+                .padding(.vertical, vPad)
+                .frame(width: rightSafeWidth)
+                .frame(maxHeight: .infinity)
+                .background(barBackground)
+                .clipShape(rightShape)
+                .overlay(
+                    Group {
+                        if activeConfig.borderEnabled && activeConfig.transparency > 0.005 {
+                            rightShape.stroke(resolvedBorderColor.opacity(activeConfig.transparency), lineWidth: CGFloat(max(0.0, activeConfig.borderWidth)))
+                        }
+                    }
+                )
+                .clipped()
+            }
         }
+    }
+
+    @ViewBuilder
+    private func notchedHorizontalBarContent(totalLength: CGFloat) -> some View {
+        splitNotchBarContent(totalLength: totalLength)
     }
 
     // MARK: - Standard Horizontal Layout
     @ViewBuilder
     private func horizontalBarContent(totalLength: CGFloat) -> some View {
+        let isIsland = isIslandMode
         let hPad = CGFloat(activeConfig.horizontalPadding)
         let vPad = CGFloat(activeConfig.verticalPadding)
+        let pillHeight = CGFloat(island.settings.compactIslandHeight)
+
+        let screen = (screenIndex < NSScreen.screens.count) ? NSScreen.screens[screenIndex] : (NSScreen.main ?? NSScreen.screens.first)
+        let islandExclusion: CGFloat = screen.map { island.exclusionWidth(for: $0, barPosition: activeConfig.position) } ?? 0.0
 
         HStack(spacing: CGFloat(activeConfig.spacing)) {
-            // Left Section
-            leftWidgetsRow
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: LeftSizePreferenceKey.self, value: geo.size.width)
-                    }
-                )
+            // Left Section (Floating satellite pill in Island mode)
+            Group {
+                if isIsland {
+                    leftWidgetsRow
+                        .padding(.horizontal, hPad)
+                        .padding(.vertical, vPad)
+                        .frame(height: pillHeight)
+                        .background(islandSatelliteBackground)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(resolvedBorderColor, lineWidth: 1.0)
+                        )
+                        .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.25), radius: 8, x: 0, y: 3)
+                } else {
+                    leftWidgetsRow
+                }
+            }
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: LeftSizePreferenceKey.self, value: geo.size.width)
+                }
+            )
 
-            Spacer(minLength: 16)
+            Spacer(minLength: isIsland ? max(32, islandExclusion) : 16)
 
-            // Right Section
-            rightWidgetsRow
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: RightSizePreferenceKey.self, value: geo.size.width)
-                    }
-                )
+            // Right Section (Floating satellite pill in Island mode)
+            Group {
+                if isIsland {
+                    rightWidgetsRow
+                        .padding(.horizontal, hPad)
+                        .padding(.vertical, vPad)
+                        .frame(height: pillHeight)
+                        .background(islandSatelliteBackground)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(resolvedBorderColor, lineWidth: 1.0)
+                        )
+                        .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.25), radius: 8, x: 0, y: 3)
+                } else {
+                    rightWidgetsRow
+                }
+            }
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: RightSizePreferenceKey.self, value: geo.size.width)
+                }
+            )
         }
-        .padding(.horizontal, hPad)
-        .padding(.vertical, vPad)
+        .padding(.horizontal, isIsland ? 0 : (effectiveCornerStyle == .gothic ? (hPad + CGFloat(activeConfig.gothFilletRadius * 0.75)) : hPad))
+        .padding(.vertical, isIsland ? 0 : vPad)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onPreferenceChange(LeftSizePreferenceKey.self) { newValue in
             if abs(leftSectionSize - newValue) > 0.5 {
@@ -306,28 +445,32 @@ public struct DankBarView: View {
             }
         }
         .overlay(
-            // True Geometric Center Layout with Collision Confinement
-            GeometryReader { overlayGeo in
-                let bounds = BarCenterLayoutSolver.Bounds(
-                    min: Double(leftSectionSize + hPad + 8),
-                    max: Double(totalLength - rightSectionSize - hPad - 8)
-                )
-                let solverResult = BarCenterLayoutSolver.resolve(
-                    sizes: [Double(centerSectionSize)],
-                    length: Double(totalLength),
-                    spacing: Double(activeConfig.spacing),
-                    mode: "geometric",
-                    bounds: bounds
-                )
-                let solvedStart = CGFloat(solverResult.positions.first.flatMap { $0 } ?? 0)
+            Group {
+                if !isIsland {
+                    // True Geometric Center Layout with Collision Confinement (only when NOT in Island mode)
+                    GeometryReader { overlayGeo in
+                        let bounds = BarCenterLayoutSolver.Bounds(
+                            min: Double(leftSectionSize + hPad + 8),
+                            max: Double(totalLength - rightSectionSize - hPad - 8)
+                        )
+                        let solverResult = BarCenterLayoutSolver.resolve(
+                            sizes: [Double(centerSectionSize)],
+                            length: Double(totalLength),
+                            spacing: Double(activeConfig.spacing),
+                            mode: "geometric",
+                            bounds: bounds
+                        )
+                        let solvedStart = CGFloat(solverResult.positions.first.flatMap { $0 } ?? 0)
 
-                centerWidgetsRow
-                    .background(
-                        GeometryReader { sizeGeo in
-                            Color.clear.preference(key: CenterSizePreferenceKey.self, value: sizeGeo.size.width)
-                        }
-                    )
-                    .position(x: solvedStart + centerSectionSize / 2.0, y: overlayGeo.size.height / 2.0)
+                        centerWidgetsRow
+                            .background(
+                                GeometryReader { sizeGeo in
+                                    Color.clear.preference(key: CenterSizePreferenceKey.self, value: sizeGeo.size.width)
+                                }
+                            )
+                            .position(x: solvedStart + centerSectionSize / 2.0, y: overlayGeo.size.height / 2.0)
+                    }
+                }
             }
         )
         .onPreferenceChange(CenterSizePreferenceKey.self) { newValue in
@@ -361,7 +504,7 @@ public struct DankBarView: View {
                     }
                 )
         }
-        .padding(.vertical, vPad)
+        .padding(.vertical, effectiveCornerStyle == .gothic ? (vPad + CGFloat(activeConfig.gothFilletRadius * 0.75)) : vPad)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onPreferenceChange(LeftSizePreferenceKey.self) { newValue in
             if abs(leftSectionSize - newValue) > 0.5 {
@@ -630,7 +773,7 @@ public struct DankBarView: View {
                 }
                 .padding(.vertical, 4)
                 .frame(width: 28)
-                .background(theme.surfaceContainerHigh)
+                .background(theme.barWidgetBackground)
             } else {
                 HStack(spacing: 3) {
                     ForEach(workspaceItems) { ws in
@@ -639,7 +782,7 @@ public struct DankBarView: View {
                 }
                 .padding(.horizontal, 5)
                 .frame(height: 28)
-                .background(theme.surfaceContainerHigh)
+                .background(theme.barWidgetBackground)
             }
         }
     }
@@ -673,7 +816,7 @@ public struct DankBarView: View {
                 }
                 .padding(.vertical, 4)
                 .frame(width: 28)
-                .background(theme.surfaceContainerHigh.opacity(0.8))
+                .background(theme.barWidgetBackground)
             } else {
                 HStack(spacing: 4) {
                     ForEach(workspace.currentWorkspaceApps) { app in
@@ -682,7 +825,7 @@ public struct DankBarView: View {
                 }
                 .padding(.horizontal, 4)
                 .frame(height: 28)
-                .background(theme.surfaceContainerHigh.opacity(0.8))
+                .background(theme.barWidgetBackground)
             }
         }
     }
@@ -706,7 +849,7 @@ public struct DankBarView: View {
                 }
                 .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 7))
                 .frame(width: isVertical ? 28 : nil, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh.opacity(0.8)))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
             }
         }
     }
@@ -733,7 +876,7 @@ public struct DankBarView: View {
                     }
                     .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
                     .frame(width: isVertical ? 28 : nil, height: 28)
-                    .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                    .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
                 }
                 .buttonStyle(.plain)
                 .background(
@@ -776,7 +919,7 @@ public struct DankBarView: View {
                 }
                 .padding(.horizontal, isVertical ? 0 : 8)
                 .frame(width: isVertical ? 28 : nil, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
             }
         }
     }
@@ -794,7 +937,7 @@ public struct DankBarView: View {
         }
         .padding(.horizontal, isVertical ? 0 : 8)
         .frame(width: isVertical ? 28 : nil, height: 28)
-        .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+        .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
     }
 
     private func keyboardLayoutPill(style: BarWidgetStyleOptions) -> some View {
@@ -813,7 +956,7 @@ public struct DankBarView: View {
         }
         .padding(.horizontal, isVertical ? 0 : 7)
         .frame(width: isVertical ? 28 : nil, height: 28)
-        .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+        .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
     }
 
     private static func currentKeyboardLayoutCode() -> String {
@@ -827,7 +970,7 @@ public struct DankBarView: View {
 
     private func weatherPill(style: BarWidgetStyleOptions) -> some View {
         let hPad = style.paddingOverride.map { CGFloat($0) } ?? (style.compactMode ? 8 : 11)
-        return Button(action: { DashController.shared.toggle(tab: .weather) }) {
+        return Button(action: { DashController.shared.toggle(tab: .weather, fromBar: true) }) {
             HStack(spacing: 5) {
                 if style.showIcon {
                     Image(systemName: weather.currentWeather.sfSymbol)
@@ -846,7 +989,7 @@ public struct DankBarView: View {
             }
             .padding(.horizontal, isVertical ? 0 : hPad)
             .frame(width: isVertical ? 28 : nil, height: 28)
-            .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
@@ -869,7 +1012,7 @@ public struct DankBarView: View {
             }
             .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
             .frame(width: isVertical ? 28 : nil, height: 28)
-            .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
@@ -894,7 +1037,7 @@ public struct DankBarView: View {
                     }
                     .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
                     .frame(width: isVertical ? 28 : nil, height: 28)
-                    .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                    .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
                 }
                 .buttonStyle(.plain)
             }
@@ -917,7 +1060,7 @@ public struct DankBarView: View {
             }
             .padding(.horizontal, isVertical ? 0 : (inhibit.isInhibited && !isVertical && style.showLabel ? 6 : 0))
             .frame(width: isVertical ? 28 : (inhibit.isInhibited && !isVertical && style.showLabel ? nil : 28), height: 28)
-            .background(inhibit.isInhibited ? theme.primary : resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+            .background(inhibit.isInhibited ? theme.primary : resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -940,7 +1083,7 @@ public struct DankBarView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(audio.isMicMuted ? theme.error : resolveWidgetTint(style, defaultColor: theme.primary))
                 .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
@@ -952,7 +1095,7 @@ public struct DankBarView: View {
                 .foregroundColor(wifi.isConnected ? resolveWidgetTint(style, defaultColor: theme.primary) : theme.outline)
         }
         .frame(width: 28, height: 28)
-        .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+        .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
     }
 
     private func vpnPill(style: BarWidgetStyleOptions) -> some View {
@@ -962,7 +1105,7 @@ public struct DankBarView: View {
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
         }
         .frame(width: 28, height: 28)
-        .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+        .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
     }
 
     private func systemUpdatePill(style: BarWidgetStyleOptions) -> some View {
@@ -973,7 +1116,7 @@ public struct DankBarView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
@@ -987,7 +1130,7 @@ public struct DankBarView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
                 .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
@@ -1002,7 +1145,7 @@ public struct DankBarView: View {
                     .foregroundColor(audio.isMuted ? theme.outline : resolveWidgetTint(style, defaultColor: theme.primary))
             }
             .frame(width: 28, height: 28)
-            .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
         .help("Audio Output: \(audio.currentOutputName) (\(Int(audio.volume * 100))%)")
@@ -1016,20 +1159,20 @@ public struct DankBarView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
 
     private func controlCenterButton(style: BarWidgetStyleOptions) -> some View {
         Button {
-            ControlCenterController.shared.toggle()
+            ControlCenterController.shared.toggle(fromBar: true)
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(ControlCenterController.shared.isVisible ? theme.onPrimary : resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
-                .background(ControlCenterController.shared.isVisible ? theme.primary : resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(ControlCenterController.shared.isVisible ? theme.primary : resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
@@ -1042,7 +1185,7 @@ public struct DankBarView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
         .help("Power & Session")
@@ -1054,7 +1197,7 @@ public struct DankBarView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
@@ -1065,7 +1208,7 @@ public struct DankBarView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
     }
@@ -1076,7 +1219,7 @@ public struct DankBarView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.surfaceContainerHigh))
+                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
         .help("Color Picker")
@@ -1149,7 +1292,7 @@ private struct BarClockWidgetView: View {
         }()
         let hourFormatter = (timeFormat == "24h") ? Self.hour24Formatter : Self.hour12Formatter
 
-        Button(action: { DashController.shared.toggle() }) {
+        Button(action: { DashController.shared.toggle(fromBar: true) }) {
             if isVertical {
                 VStack(spacing: 1) {
                     Text(hourFormatter.string(from: currentTime))
@@ -1160,7 +1303,7 @@ private struct BarClockWidgetView: View {
                         .foregroundColor(theme.primary)
                 }
                 .frame(width: 28, height: 38)
-                .background(style.customBackgroundHex.map { Color(hex: $0) } ?? theme.surfaceContainerHigh)
+                .background(style.customBackgroundHex.map { Color(hex: $0) } ?? theme.barWidgetBackground)
             } else {
                 HStack(spacing: 5) {
                     if style.showIcon {
@@ -1185,7 +1328,7 @@ private struct BarClockWidgetView: View {
                 }
                 .padding(.horizontal, style.paddingOverride.map { CGFloat($0) } ?? 10)
                 .frame(height: 28)
-                .background(style.customBackgroundHex.map { Color(hex: $0) } ?? theme.surfaceContainerHigh)
+                .background(style.customBackgroundHex.map { Color(hex: $0) } ?? theme.barWidgetBackground)
             }
         }
         .buttonStyle(.plain)

@@ -105,13 +105,13 @@ public struct ColorPickerView: View {
         }
         .padding(24)
         .frame(width: 420)
-        .background(Color(hex: p.surface.hex))
+        .background(GlassSurfaceBackground())
         .cornerRadius(26)
         .overlay(
             RoundedRectangle(cornerRadius: 26)
-                .stroke(Color(hex: p.outlineVariant.hex).opacity(0.6), lineWidth: 1)
+                .stroke(themeStore.panelBorderColor, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.3), radius: 24, x: 0, y: 12)
+        .shadow(color: themeStore.adaptiveShadowColor(baseOpacity: 0.32), radius: 24, x: 0, y: 12)
     }
 }
 

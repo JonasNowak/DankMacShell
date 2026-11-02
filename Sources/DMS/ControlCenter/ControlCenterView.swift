@@ -46,29 +46,23 @@ public struct ControlCenterView: View {
     }
 
     public var body: some View {
-        ZStack {
-            if activePage == .root {
-                rootDashboardView
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.96)),
-                        removal: .opacity.combined(with: .scale(scale: 0.96))
-                    ))
-            } else {
-                detailPageView
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .trailing).combined(with: .opacity)
-                    ))
+        PopoutSurfaceContainer(bodyWidth: sheetWidth, bodyHeight: 348) {
+            ZStack {
+                if activePage == .root {
+                    rootDashboardView
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                            removal: .opacity.combined(with: .scale(scale: 0.96))
+                        ))
+                } else {
+                    detailPageView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
+                }
             }
         }
-        .frame(width: sheetWidth, height: 348)
-        .background(theme.surfaceContainer)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
         .onAppear {
             updateUptime()
         }

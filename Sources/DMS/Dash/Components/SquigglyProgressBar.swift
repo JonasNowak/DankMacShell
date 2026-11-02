@@ -17,7 +17,7 @@ public struct SquigglyProgressBar: View {
         progress: Double,
         isPlaying: Bool = true,
         color: Color,
-        trackColor: Color = Color.white.opacity(0.12),
+        trackColor: Color = ThemeStore.shared.subtleTrackColor,
         onSeek: ((Double) -> Void)? = nil
     ) {
         self.progress = min(1.0, max(0.0, progress))

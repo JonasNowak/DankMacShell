@@ -46,7 +46,7 @@ public struct NetworkMonitorWidget: View {
         if let hex = style.customBackgroundHex, !hex.isEmpty {
             return Color(hex: hex)
         }
-        return theme.surfaceContainerHigh
+        return theme.barWidgetBackground
     }
 
     public var body: some View {

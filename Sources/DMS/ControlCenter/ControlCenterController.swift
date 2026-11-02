@@ -21,16 +21,15 @@ public final class ControlCenterController {
         panel.contentView = NSHostingView(rootView: ControlCenterView())
     }
 
-    public func toggle() {
+    public func toggle(fromBar: Bool = false) {
         if isVisible {
             hide()
         } else {
-            show()
+            show(fromBar: fromBar)
         }
     }
 
-    public func show() {
-        guard let screen = NSScreen.main else { return }
+    public func show(fromBar: Bool = false) {
         DashController.shared.hide()
         LauncherController.shared.hide()
         PowerMenuController.shared.hide()
@@ -41,61 +40,47 @@ public final class ControlCenterController {
         ColorPickerPopoutController.shared.hide()
         PowerPopoutController.shared.hide()
 
-        reposition(on: screen)
-        panel.orderFront(nil)
-        isVisible = true
+        let mouseLoc = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+        guard let targetScreen = screen else { return }
 
+        let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
+        let bodyWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
+        let targetFrame = PopoutLayoutHelper.frame(
+            bodyWidth: bodyWidth,
+            bodyHeight: 348,
+            screen: targetScreen,
+            isControlCenter: true
+        )
+
+        panel.setFrame(targetFrame, display: false)
+        // Fresh-mount ControlCenterView so entrance scaling & state reset cleanly
+        panel.contentView = NSHostingView(rootView: ControlCenterView())
+
+        isVisible = true
+        PopoutAnimationHelper.animateIn(panel: panel, targetFrame: targetFrame, screen: targetScreen)
         installClickMonitor()
     }
 
     public func hide() {
         guard isVisible else { return }
-        PowerPopoutController.shared.hide()
-        panel.orderOut(nil)
-        isVisible = false
         removeClickMonitor()
+        isVisible = false
+        PowerPopoutController.shared.hide()
+
+        let screen = panel.screen ?? NSScreen.main
+        PopoutAnimationHelper.animateOut(panel: panel, screen: screen)
     }
 
     public func reposition(on screen: NSScreen) {
-        let barPosition = ConfigStore.shared.config.barPosition.lowercased()
-        let isBottom = barPosition == "bottom"
-        let isVertical = barPosition == "left" || barPosition == "right"
         let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
-        let popoutWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
-        let marginX: CGFloat = CGFloat(ConfigStore.shared.config.barMarginX)
-        let gap: CGFloat = 10
-        let popoutHeight: CGFloat = 348
-
-        let visibleFrame = screen.visibleFrame
-        let fullFrame = screen.frame
-
-        let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == screen }) ?? DankBarController.shared.panel
-        let barFrame = barPanel.frame
-
-        let yPos: CGFloat
-        let xPos: CGFloat
-
-        if isVertical {
-            let mouseLoc = NSEvent.mouseLocation
-            yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - popoutHeight - 12, mouseLoc.y - popoutHeight / 2.0))
-            if barPosition == "left" {
-                let barRight = barFrame.width > 0 ? barFrame.maxX : (fullFrame.minX + DankBarController.verticalBarWidth + 8)
-                xPos = barRight + gap
-            } else {
-                let barLeft = barFrame.width > 0 ? barFrame.minX : (fullFrame.maxX - DankBarController.verticalBarWidth - 8)
-                xPos = barLeft - popoutWidth - gap
-            }
-        } else if isBottom {
-            xPos = fullFrame.maxX - popoutWidth - marginX
-            let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
-            yPos = min(visibleFrame.maxY - popoutHeight - gap, barTop + gap)
-        } else {
-            xPos = fullFrame.maxX - popoutWidth - marginX
-            let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
-            yPos = max(visibleFrame.minY + gap, barBottom - popoutHeight - gap)
-        }
-
-        let frame = NSRect(x: xPos, y: yPos, width: popoutWidth, height: popoutHeight)
+        let bodyWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
+        let frame = PopoutLayoutHelper.frame(
+            bodyWidth: bodyWidth,
+            bodyHeight: 348,
+            screen: screen,
+            isControlCenter: true
+        )
         panel.setFrame(frame, display: true)
     }
 

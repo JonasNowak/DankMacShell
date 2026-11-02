@@ -34,8 +34,9 @@ public struct ProcessListView: View {
     public var body: some View {
         let p = themeStore.palette
 
-        VStack(spacing: 0) {
-            // Header
+        PopoutSurfaceContainer(bodyWidth: 400, bodyHeight: 350) {
+            VStack(spacing: 0) {
+                // Header
             HStack(spacing: 12) {
                 Image(systemName: sortByMemory ? "memorychip" : "gauge.with.needle.fill")
                     .foregroundColor(Color(hex: p.primary.hex))
@@ -73,7 +74,7 @@ public struct ProcessListView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
-            .background(Color(hex: p.surfaceContainerHigh.hex))
+            .background(themeStore.panelHeaderBackground)
 
             Divider().background(Color(hex: p.outlineVariant.hex).opacity(0.5))
 
@@ -211,16 +212,9 @@ public struct ProcessListView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color(hex: p.surfaceContainerHigh.hex))
+            .background(themeStore.panelHeaderBackground)
+            }
         }
-        .frame(width: 400, height: 350)
-        .background(Color(hex: p.surface.hex))
-        .cornerRadius(18)
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color(hex: p.outlineVariant.hex).opacity(0.6), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
     }
 
     @ViewBuilder

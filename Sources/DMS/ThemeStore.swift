@@ -250,9 +250,10 @@ public final class ThemeStore: ObservableObject {
     }
 
     public static func detectSystemLightMode() -> Bool {
-        let appearance = NSApp?.effectiveAppearance ?? NSAppearance.currentDrawing()
-        let match = appearance.bestMatch(from: [.aqua, .darkAqua])
-        return match == .aqua
+        if let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") {
+            return style.lowercased() != "dark"
+        }
+        return true
     }
 
     public func refreshTheme() {
@@ -285,6 +286,79 @@ public final class ThemeStore: ObservableObject {
         } else {
             self.palette = StockThemes.theme(named: themeName, isDark: !isLightMode)
         }
+
+        let targetAppearanceName: NSAppearance.Name = isLightMode ? .aqua : .darkAqua
+        if let app = NSApp, app.appearance?.name != targetAppearanceName {
+            app.appearance = NSAppearance(named: targetAppearanceName)
+        }
+    }
+
+    // MARK: - Adaptive Surface, Glass & Light Mode Helpers
+
+    /// Adaptive background for bar widget capsules that respects glass/transparent bar modes and Light Mode contrast.
+    public var barWidgetBackground: Color {
+        let cfg = ConfigStore.shared.config
+        let bar = cfg.barConfigs.first ?? .default
+        let style = bar.backgroundStyle.lowercased()
+        let isGlassOrTranslucent = style == "glass"
+            || style == "island"
+            || style == "transparent"
+            || cfg.barTransparent
+            || bar.transparency < 0.99
+            || surfaceTokens.surfaceOpacity < 0.99
+
+        if isGlassOrTranslucent {
+            if isLightMode {
+                return surfaceContainerLowest.opacity(0.72)
+            } else {
+                return surfaceContainerHigh.opacity(0.58)
+            }
+        } else {
+            // In solid Light Mode, elevated white capsules on the soft tinted bar look crisp rather than muddy gray.
+            return isLightMode ? surfaceContainerLowest : surfaceContainerHigh
+        }
+    }
+
+    /// Adaptive background for cards, tiles, and rows inside panels/popouts.
+    public var cardBackground: Color {
+        let cfg = ConfigStore.shared.config
+        let isGlass = cfg.barTransparent
+            || cfg.popupTransparency < 0.99
+            || surfaceTokens.surfaceOpacity < 0.99
+        if isGlass {
+            return isLightMode ? surfaceContainerLowest.opacity(0.75) : surfaceContainerHigh.opacity(0.68)
+        }
+        return isLightMode ? surfaceContainerLowest : surfaceContainerHigh
+    }
+
+    /// Adaptive background for headers and footers inside panels/popouts.
+    public var panelHeaderBackground: Color {
+        let cfg = ConfigStore.shared.config
+        let isGlass = cfg.barTransparent
+            || cfg.popupTransparency < 0.99
+            || surfaceTokens.surfaceOpacity < 0.99
+        if isGlass {
+            return isLightMode ? surfaceContainerLow.opacity(0.55) : surfaceContainerHigh.opacity(0.55)
+        }
+        return isLightMode ? surfaceContainerLow : surfaceContainerHigh
+    }
+
+    /// Subtle progress/gauge track color visible in both Light and Dark mode.
+    public var subtleTrackColor: Color {
+        isLightMode ? outlineVariant.opacity(0.55) : Color.white.opacity(0.14)
+    }
+
+    /// Crisp perimeter border stroke color for floating glass and surface panels.
+    public var panelBorderColor: Color {
+        if isLightMode {
+            return outlineVariant.opacity(0.65)
+        }
+        return outlineVariant.opacity(0.38)
+    }
+
+    /// Elevation shadow color scaled appropriately for Light Mode vs Dark Mode.
+    public func adaptiveShadowColor(baseOpacity: Double = 0.35) -> Color {
+        Color.black.opacity(isLightMode ? baseOpacity * 0.45 : baseOpacity)
     }
 
     // MARK: - Typography & Shape Helpers

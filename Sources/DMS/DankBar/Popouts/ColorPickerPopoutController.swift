@@ -35,42 +35,15 @@ public final class ColorPickerPopoutController: ObservableObject {
         ProcessListController.shared.hide()
         ControlCenterController.shared.hide()
 
-        let popoutWidth: CGFloat = 240
-        let popoutHeight: CGFloat = 280
-        let gap: CGFloat = 10
-        let isBottom = ConfigStore.shared.config.barPosition.lowercased() == "bottom"
-        let isVertical = ConfigStore.shared.config.barPosition.lowercased() == "left" || ConfigStore.shared.config.barPosition.lowercased() == "right"
+        let bodyWidth: CGFloat = 240
+        let bodyHeight: CGFloat = 280
 
-        let visibleFrame = screen.visibleFrame
-        let fullFrame = screen.frame
-
-        let targetX = (anchorX != nil && anchorX! > 0) ? anchorX! : mouseLoc.x
-        var xPos = targetX - popoutWidth / 2.0
-        xPos = max(visibleFrame.minX + 12, min(visibleFrame.maxX - popoutWidth - 12, xPos))
-
-        let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == screen }) ?? DankBarController.shared.panel
-        let barFrame = barPanel.frame
-
-        let yPos: CGFloat
-        if isBottom {
-            let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
-            yPos = min(visibleFrame.maxY - popoutHeight - gap, barTop + gap)
-        } else if !isVertical {
-            let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
-            yPos = max(visibleFrame.minY + gap, barBottom - popoutHeight - gap)
-        } else {
-            let targetY = mouseLoc.y
-            yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - popoutHeight - 12, targetY - popoutHeight / 2.0))
-            let barRight = barFrame.width > 0 ? barFrame.maxX : (fullFrame.minX + DankBarController.verticalBarWidth + 8)
-            let barLeft = barFrame.width > 0 ? barFrame.minX : (fullFrame.maxX - DankBarController.verticalBarWidth - 8)
-            if ConfigStore.shared.config.barPosition.lowercased() == "left" {
-                xPos = barRight + gap
-            } else {
-                xPos = barLeft - popoutWidth - gap
-            }
-        }
-
-        let rect = NSRect(x: xPos, y: yPos, width: popoutWidth, height: popoutHeight)
+        let rect = PopoutLayoutHelper.frame(
+            bodyWidth: bodyWidth,
+            bodyHeight: bodyHeight,
+            anchorX: anchorX,
+            screen: screen
+        )
 
         let panel = ShellPanel(
             contentRect: rect,
@@ -88,16 +61,20 @@ public final class ColorPickerPopoutController: ObservableObject {
         self.panel = panel
         self.isVisible = true
 
-        panel.makeKeyAndOrderFront(nil)
+        PopoutAnimationHelper.animateIn(panel: panel, targetFrame: rect, screen: screen)
         installClickMonitor()
     }
 
     public func hide() {
         guard isVisible else { return }
         removeClickMonitor()
-        panel?.orderOut(nil)
-        panel = nil
         isVisible = false
+
+        let panelToClose = self.panel
+        let screen = panelToClose?.screen ?? NSScreen.main
+        self.panel = nil
+
+        PopoutAnimationHelper.animateOut(panel: panelToClose, screen: screen)
     }
 
     private func installClickMonitor() {
@@ -130,8 +107,9 @@ public struct ColorPickerPopoutView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            // Header
+        PopoutSurfaceContainer(bodyWidth: 240, bodyHeight: 280) {
+            VStack(spacing: 0) {
+                // Header
             HStack(spacing: 8) {
                 Image(systemName: "eyedropper.halffull")
                     .foregroundColor(theme.primary)
@@ -151,7 +129,7 @@ public struct ColorPickerPopoutView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(theme.surfaceContainerHigh)
+            .background(theme.panelHeaderBackground)
 
             Divider().background(theme.outlineVariant.opacity(0.4))
 
@@ -243,13 +221,6 @@ public struct ColorPickerPopoutView: View {
             }
             .padding(12)
         }
-        .frame(width: 240, height: 280)
-        .background(theme.surfaceContainer)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(theme.outlineVariant.opacity(0.5), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
+    }
     }
 }

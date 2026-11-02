@@ -17,7 +17,7 @@
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.0</string>
+	<string>0.3.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>CFBundleURLTypes</key>
@@ -35,10 +35,16 @@
 	<string>26.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>DMS uses System Events for Log Out, Restart and Shut Down in the power menu.</string>
 	<key>NSAccessibilityUsageDescription</key>
-	<string>DMS uses Accessibility to manage virtual workspaces and detect running application windows.</string>
+	<string>DMS uses Device Control &amp; Accessibility to intercept hardware media and volume keys, manage virtual workspaces, and detect running application windows.</string>
+	<key>NSInputMonitoringUsageDescription</key>
+	<string>DMS uses Input Monitoring to observe hardware media and brightness keys to replace the native system bezel HUD.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>DMS uses Bluetooth to display and toggle adapter power in the control center.</string>
 	<key>NSHumanReadableCopyright</key>

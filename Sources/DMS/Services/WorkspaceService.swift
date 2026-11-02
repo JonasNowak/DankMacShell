@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Darwin
 import DMSCore
 
 // MARK: - OmniWM IPC Decodable Models
@@ -116,12 +117,14 @@ public final class WorkspaceService: ObservableObject {
 
     private init() {
         setupSkyLight()
-        setupOmniWM()
-        if !isOmniWMRunning {
-            updateSpaces()
-            updateWorkspaceApps()
-        }
         registerObservers()
+        DispatchQueue.main.async { [weak self] in
+            self?.setupOmniWM()
+            if self?.isOmniWMRunning != true {
+                self?.updateSpaces()
+                self?.updateWorkspaceApps()
+            }
+        }
     }
 
     // MARK: - OmniWM Integration
@@ -160,22 +163,47 @@ public final class WorkspaceService: ObservableObject {
         }
     }
 
+    public static func isOmniWMRunningProcess() -> Bool {
+        var pids = [pid_t](repeating: 0, count: 2048)
+        let bytes = proc_listpids(UInt32(PROC_ALL_PIDS), 0, &pids, Int32(MemoryLayout<pid_t>.size * pids.count))
+        guard bytes > 0 else { return false }
+        let count = Int(bytes) / MemoryLayout<pid_t>.size
+        for i in 0..<count {
+            let pid = pids[i]
+            guard pid > 0 else { continue }
+            var nameBuffer = [CChar](repeating: 0, count: 256)
+            proc_name(pid, &nameBuffer, UInt32(nameBuffer.count))
+            if strcmp(nameBuffer, "OmniWM") == 0 {
+                return true
+            }
+        }
+        return false
+    }
+
     public func checkAndStartOmniWM() {
+        if omniWMCtlPath == nil {
+            omniWMCtlPath = Self.findOmniWMCtl()
+        }
         guard let ctl = omniWMCtlPath,
               FileManager.default.isExecutableFile(atPath: ctl) else {
+            if isOmniWMRunning {
+                stopOmniWMSubscription()
+            }
             return
         }
 
-        let isRunning = NSWorkspace.shared.runningApplications.contains(where: {
-            $0.bundleIdentifier == "com.barut.OmniWM" || $0.localizedName == "OmniWM"
-        })
+        let isRunning = Self.isOmniWMRunningProcess()
 
         if isRunning {
             self.isOmniWMRunning = true
             fetchOmniWMStateAsync()
-            startOmniWMSubscription()
+            if self.omniWMProcess == nil {
+                startOmniWMSubscription()
+            }
         } else {
-            stopOmniWMSubscription()
+            if self.isOmniWMRunning {
+                stopOmniWMSubscription()
+            }
         }
     }
 
@@ -290,12 +318,10 @@ public final class WorkspaceService: ObservableObject {
         self.omniWMPipe = nil
         self.omniWMBuffer = ""
 
-        let stillRunning = NSWorkspace.shared.runningApplications.contains(where: {
-            $0.bundleIdentifier == "com.barut.OmniWM" || $0.localizedName == "OmniWM"
-        })
+        let stillRunning = Self.isOmniWMRunningProcess()
 
         if stillRunning {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 self?.checkAndStartOmniWM()
             }
         } else {
@@ -604,6 +630,14 @@ public final class WorkspaceService: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Periodic polling timer to monitor OmniWM lifecycle (since LSUIElement apps don't reliably trigger NSWorkspace notifications)
+        let timer = Timer(timeInterval: 2.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.checkAndStartOmniWM()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     // MARK: - Native Spaces & Windows Updating
@@ -699,6 +733,11 @@ public final class WorkspaceService: ObservableObject {
     /// Switches to the specified workspace number.
     public func switchSpace(_ number: Int) {
         self.activeSpaceIndex = number
+
+        // If not yet flagged as running, check if OmniWM process is present
+        if !isOmniWMRunning && Self.isOmniWMRunningProcess() {
+            checkAndStartOmniWM()
+        }
 
         if isOmniWMRunning {
             // Optimistically update UI

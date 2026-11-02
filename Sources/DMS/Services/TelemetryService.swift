@@ -17,6 +17,23 @@ public final class TelemetryService {
     @ObservationIgnored private var previousNetworkSample: (inBytes: UInt64, outBytes: UInt64, timestamp: Date)?
     @ObservationIgnored private var timer: Timer?
 
+    // Apple Silicon IOHID Client handle (kept persistent across polls to prevent Mach port leaks)
+    private typealias ClientCreateFunc = @convention(c) (CFAllocator?, Int32, UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer?
+    private typealias SetMatchingFunc = @convention(c) (UnsafeMutableRawPointer, CFDictionary) -> Void
+    private typealias CopyServicesFunc = @convention(c) (UnsafeMutableRawPointer) -> Unmanaged<CFArray>?
+    private typealias CopyEventFunc = @convention(c) (UnsafeMutableRawPointer, Int64, Int32, Int64) -> UnsafeMutableRawPointer?
+    private typealias GetFloatFunc = @convention(c) (UnsafeMutableRawPointer, UInt32) -> Double
+    private typealias CopyPropFunc = @convention(c) (UnsafeMutableRawPointer, CFString) -> Unmanaged<CFTypeRef>?
+
+    @ObservationIgnored private var hidClient: UnsafeMutableRawPointer?
+    @ObservationIgnored private var hidFunctionsResolved: Bool = false
+    @ObservationIgnored private var clientCreateFn: ClientCreateFunc?
+    @ObservationIgnored private var setMatchingFn: SetMatchingFunc?
+    @ObservationIgnored private var copyServicesFn: CopyServicesFunc?
+    @ObservationIgnored private var copyEventFn: CopyEventFunc?
+    @ObservationIgnored private var getFloatFn: GetFloatFunc?
+    @ObservationIgnored private var copyPropFn: CopyPropFunc?
+
     private init() {
         refresh()
         startTimer()
@@ -159,63 +176,94 @@ public final class TelemetryService {
         return (simulatedCpuTemp, simulatedGpuTemp)
     }
 
+    private func ensureHIDClient() -> UnsafeMutableRawPointer? {
+        if !hidFunctionsResolved {
+            hidFunctionsResolved = true
+            if let handle = dlopen(nil, RTLD_NOW) {
+                if let createPtr = dlsym(handle, "IOHIDEventSystemClientCreateWithType") {
+                    clientCreateFn = unsafeBitCast(createPtr, to: ClientCreateFunc.self)
+                }
+                if let matchPtr = dlsym(handle, "IOHIDEventSystemClientSetMatching") {
+                    setMatchingFn = unsafeBitCast(matchPtr, to: SetMatchingFunc.self)
+                }
+                if let copyServicesPtr = dlsym(handle, "IOHIDEventSystemClientCopyServices") {
+                    copyServicesFn = unsafeBitCast(copyServicesPtr, to: CopyServicesFunc.self)
+                }
+                if let copyEventPtr = dlsym(handle, "IOHIDServiceClientCopyEvent") {
+                    copyEventFn = unsafeBitCast(copyEventPtr, to: CopyEventFunc.self)
+                }
+                if let getFloatPtr = dlsym(handle, "IOHIDEventGetFloatValue") {
+                    getFloatFn = unsafeBitCast(getFloatPtr, to: GetFloatFunc.self)
+                }
+                if let copyPropPtr = dlsym(handle, "IOHIDServiceClientCopyProperty") {
+                    copyPropFn = unsafeBitCast(copyPropPtr, to: CopyPropFunc.self)
+                }
+            }
+        }
+
+        if let existing = hidClient {
+            return existing
+        }
+
+        guard let clientCreate = clientCreateFn,
+              let setMatching = setMatchingFn,
+              let newClient = clientCreate(kCFAllocatorDefault, 1, nil) else {
+            return nil
+        }
+
+        var pageVal: Int = 0xff00
+        var usageVal: Int = 5
+        guard let pageNum = CFNumberCreate(kCFAllocatorDefault, .intType, &pageVal),
+              let usageNum = CFNumberCreate(kCFAllocatorDefault, .intType, &usageVal) else {
+            Unmanaged<AnyObject>.fromOpaque(newClient).release()
+            return nil
+        }
+
+        let dict = ["PrimaryUsagePage" as CFString: pageNum, "PrimaryUsage" as CFString: usageNum] as CFDictionary
+        setMatching(newClient, dict)
+        self.hidClient = newClient
+        return newClient
+    }
+
     private func readSMCAndIOHIDTemperatures() -> (Double, Double)? {
-        // Dynamic symbol resolution for IOHIDEventSystemClient (Apple Silicon)
-        typealias ClientCreateFunc = @convention(c) (CFAllocator?, Int32, UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer?
-        typealias SetMatchingFunc = @convention(c) (UnsafeMutableRawPointer, CFDictionary) -> Void
-        typealias CopyServicesFunc = @convention(c) (UnsafeMutableRawPointer) -> CFArray?
-        typealias CopyEventFunc = @convention(c) (UnsafeMutableRawPointer, Int64, Int32, Int64) -> UnsafeMutableRawPointer?
-        typealias GetFloatFunc = @convention(c) (UnsafeMutableRawPointer, UInt32) -> Double
-        typealias CopyPropFunc = @convention(c) (UnsafeMutableRawPointer, CFString) -> Unmanaged<CFTypeRef>?
+        guard let client = ensureHIDClient(),
+              let copyServices = copyServicesFn,
+              let copyEvent = copyEventFn,
+              let getFloat = getFloatFn,
+              let copyProp = copyPropFn else {
+            return nil
+        }
 
-        let handle = dlopen(nil, RTLD_NOW)
-        guard let handle else { return nil }
+        guard let unmanagedServices = copyServices(client) else {
+            return nil
+        }
+        let cfServices = unmanagedServices.takeRetainedValue()
+        let count = CFArrayGetCount(cfServices)
+        guard count > 0 else { return nil }
 
-        if let createPtr = dlsym(handle, "IOHIDEventSystemClientCreateWithType"),
-           let matchPtr = dlsym(handle, "IOHIDEventSystemClientSetMatching"),
-           let copyServicesPtr = dlsym(handle, "IOHIDEventSystemClientCopyServices"),
-           let copyEventPtr = dlsym(handle, "IOHIDServiceClientCopyEvent"),
-           let getFloatPtr = dlsym(handle, "IOHIDEventGetFloatValue"),
-           let copyPropPtr = dlsym(handle, "IOHIDServiceClientCopyProperty") {
+        var cpuReadings: [Double] = []
+        var gpuReadings: [Double] = []
 
-            let clientCreate = unsafeBitCast(createPtr, to: ClientCreateFunc.self)
-            let setMatching = unsafeBitCast(matchPtr, to: SetMatchingFunc.self)
-            let copyServices = unsafeBitCast(copyServicesPtr, to: CopyServicesFunc.self)
-            let copyEvent = unsafeBitCast(copyEventPtr, to: CopyEventFunc.self)
-            let getFloat = unsafeBitCast(getFloatPtr, to: GetFloatFunc.self)
-            let copyProp = unsafeBitCast(copyPropPtr, to: CopyPropFunc.self)
-
-            if let client = clientCreate(kCFAllocatorDefault, 1, nil) {
-                let dict: [String: Any] = [
-                    "PrimaryUsagePage": NSNumber(value: 0xff00),
-                    "PrimaryUsage": NSNumber(value: 5)
-                ]
-                setMatching(client, dict as CFDictionary)
-                if let services = copyServices(client) as? [UnsafeMutableRawPointer], !services.isEmpty {
-                    var cpuReadings: [Double] = []
-                    var gpuReadings: [Double] = []
-
-                    for s in services {
-                        let name = (copyProp(s, "Product" as CFString)?.takeRetainedValue() as? String)?.lowercased() ?? ""
-                        if let ev = copyEvent(s, 15, 0, 0) {
-                            let val = getFloat(ev, 0xf0000)
-                            if val > 10.0 && val < 125.0 {
-                                if name.contains("gpu") {
-                                    gpuReadings.append(val)
-                                } else {
-                                    cpuReadings.append(val)
-                                }
-                            }
-                        }
-                    }
-
-                    if !cpuReadings.isEmpty {
-                        let avgCpu = cpuReadings.reduce(0.0, +) / Double(cpuReadings.count)
-                        let avgGpu = gpuReadings.isEmpty ? avgCpu : (gpuReadings.reduce(0.0, +) / Double(gpuReadings.count))
-                        return (avgCpu, avgGpu)
+        for i in 0..<count {
+            let s = unsafeBitCast(CFArrayGetValueAtIndex(cfServices, i), to: UnsafeMutableRawPointer.self)
+            if let ev = copyEvent(s, 15, 0, 0) {
+                defer { Unmanaged<AnyObject>.fromOpaque(ev).release() }
+                let val = getFloat(ev, 0xf0000)
+                if val > 10.0 && val < 125.0 {
+                    let name = (copyProp(s, "Product" as CFString)?.takeRetainedValue() as? String)?.lowercased() ?? ""
+                    if name.contains("gpu") {
+                        gpuReadings.append(val)
+                    } else {
+                        cpuReadings.append(val)
                     }
                 }
             }
+        }
+
+        if !cpuReadings.isEmpty {
+            let avgCpu = cpuReadings.reduce(0.0, +) / Double(cpuReadings.count)
+            let avgGpu = gpuReadings.isEmpty ? avgCpu : (gpuReadings.reduce(0.0, +) / Double(gpuReadings.count))
+            return (avgCpu, avgGpu)
         }
 
         return nil
@@ -335,6 +383,9 @@ public final class TelemetryService {
         if let prev = previousCpuInfo {
             let prevSize = vm_size_t(previousCpuInfoCount) * vm_size_t(MemoryLayout<integer_t>.size)
             vm_deallocate(mach_task_self_, vm_address_t(UInt(bitPattern: prev)), prevSize)
+        }
+        if let client = hidClient {
+            Unmanaged<AnyObject>.fromOpaque(client).release()
         }
     }
 }

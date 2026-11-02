@@ -172,7 +172,10 @@ public struct SettingsSidebar: View {
         }
         .padding(.vertical, 10)
         .frame(width: 230)
-        .background(Color(hex: palette.surfaceContainerLow.hex))
+        .background(
+            Color(hex: palette.surfaceContainerLow.hex)
+                .opacity(ConfigStore.shared.config.barTransparent || ConfigStore.shared.config.surfaceOpacity < 0.99 ? 0.55 : 1.0)
+        )
     }
 
     @ViewBuilder

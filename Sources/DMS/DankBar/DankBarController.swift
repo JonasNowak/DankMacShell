@@ -110,15 +110,19 @@ public final class DankBarController {
                 let peekAmount: CGFloat = 2.0
 
                 let frame: NSRect
+                let hMargin = barConfig.gothCorners ? 0.0 : margin
+                let vMargin = barConfig.gothCorners ? 0.0 : margin
+
                 switch barConfig.position.lowercased() {
                 case "top":
-                    let topMargin = (barConfig.gothCorners || isTopNotched) ? 0.0 : margin
+                    let isIslandStyle = barConfig.backgroundStyle.lowercased() == "island" || ConfigStore.shared.config.islandSettings.instance == .mainBar
+                    let topMargin = (barConfig.gothCorners || (isTopNotched && !isIslandStyle)) ? 0.0 : margin
                     let normalY = screenFrame.maxY - thickness - topMargin
                     let hiddenY = screenFrame.maxY - peekAmount
                     frame = NSRect(
-                        x: screenFrame.minX + margin,
+                        x: screenFrame.minX + hMargin,
                         y: isRevealed ? normalY : hiddenY,
-                        width: max(100, screenFrame.width - (margin * 2)),
+                        width: max(100, screenFrame.width - (hMargin * 2)),
                         height: thickness
                     )
                 case "left":
@@ -127,9 +131,9 @@ public final class DankBarController {
                     let hiddenX = screenFrame.minX - thickness + peekAmount
                     frame = NSRect(
                         x: isRevealed ? normalX : hiddenX,
-                        y: screenFrame.minY + margin,
+                        y: screenFrame.minY + vMargin,
                         width: thickness,
-                        height: max(100, screenFrame.height - (margin * 2))
+                        height: max(100, screenFrame.height - (vMargin * 2))
                     )
                 case "right":
                     let rightMargin = barConfig.gothCorners ? 0.0 : margin
@@ -137,9 +141,9 @@ public final class DankBarController {
                     let hiddenX = screenFrame.maxX - peekAmount
                     frame = NSRect(
                         x: isRevealed ? normalX : hiddenX,
-                        y: screenFrame.minY + margin,
+                        y: screenFrame.minY + vMargin,
                         width: thickness,
-                        height: max(100, screenFrame.height - (margin * 2))
+                        height: max(100, screenFrame.height - (vMargin * 2))
                     )
                 case "bottom":
                     fallthrough
@@ -148,9 +152,9 @@ public final class DankBarController {
                     let normalY = screenFrame.minY + bottomMargin
                     let hiddenY = screenFrame.minY - thickness + peekAmount
                     frame = NSRect(
-                        x: screenFrame.minX + margin,
+                        x: screenFrame.minX + hMargin,
                         y: isRevealed ? normalY : hiddenY,
-                        width: max(100, screenFrame.width - (margin * 2)),
+                        width: max(100, screenFrame.width - (hMargin * 2)),
                         height: thickness
                     )
                 }

@@ -36,7 +36,7 @@ public struct SettingsTab: View {
                                         .frame(width: 32, height: 32)
                                         .overlay(
                                             Circle()
-                                                .stroke(Color.white, lineWidth: themeStore.themeName == tName ? 2.5 : 0)
+                                                .stroke(Color(hex: p.primary.hex), lineWidth: themeStore.themeName == tName ? 2.5 : 0)
                                         )
 
                                     Text(tName.capitalized)
@@ -74,12 +74,15 @@ public struct SettingsTab: View {
                     }
 
                     Divider()
-                        .background(Color.white.opacity(0.1))
+                        .background(Color(hex: p.outlineVariant.hex).opacity(0.35))
 
                     // Dark / Light Mode Toggle
                     Toggle(isOn: Binding(
                         get: { !themeStore.isLightMode },
-                        set: { themeStore.setLightMode(!$0) }
+                        set: { dark in
+                            configStore.update { $0.isLightMode = !dark }
+                            themeStore.setLightMode(!dark)
+                        }
                     )) {
                         HStack {
                             Image(systemName: themeStore.isLightMode ? "sun.max.fill" : "moon.stars.fill")
@@ -113,7 +116,7 @@ public struct SettingsTab: View {
                     .toggleStyle(.switch)
 
                     Divider()
-                        .background(Color.white.opacity(0.1))
+                        .background(Color(hex: p.outlineVariant.hex).opacity(0.35))
 
                     Toggle(isOn: Binding(
                         get: { configStore.config.weatherUnits.lowercased() == "celsius" },
@@ -132,7 +135,7 @@ public struct SettingsTab: View {
                     .toggleStyle(.switch)
 
                     Divider()
-                        .background(Color.white.opacity(0.1))
+                        .background(Color(hex: p.outlineVariant.hex).opacity(0.35))
 
                     // Weather Location Input
                     VStack(alignment: .leading, spacing: 6) {

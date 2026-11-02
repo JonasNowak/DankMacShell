@@ -212,7 +212,11 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
     public var borderColor: String?
     public var cornerRadius: Double // -1 = auto/capsule, 0 = square, > 0 = fixed radius
     public var gothCorners: Bool
-    public var gothFilletRadius: Double
+    public var gothFilletRadius: Double {
+        didSet {
+            gothFilletRadius = max(4.0, min(32.0, gothFilletRadius))
+        }
+    }
     public var autoSquareAttachedCorners: Bool
     public var hoverOpenDelayMs: Int
     public var hoverCloseDelayMs: Int

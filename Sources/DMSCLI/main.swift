@@ -2,18 +2,20 @@ import Foundation
 import AppKit
 import DMSCore
 
-let version = "0.2.0"
+let version = "0.3.0"
 
 func printHelp() {
     print("""
     DankMacShell (DMS) macOS CLI (v\(version))
 
     Usage:
-      dms run                          Start DankMaterialShell app
+      dms start                        Start DankMaterialShell app (alias: run)
+      dms run                          Alias for 'dms start'
       dms stop                         Stop running DankMaterialShell
       dms restart                      Restart DankMaterialShell
       dms status                       Show running status of DMS daemon and socket
       dms doctor                       Run diagnostics check on permissions and subsystems
+      dms permission                   Open Accessibility settings to enable full OSD swallowing
 
       dms ipc call <target> <action> [args...]  Send IPC command to shell
 
@@ -36,6 +38,7 @@ func printHelp() {
       dms settings [open|get|set|dump]  Material 3 configuration manager
       dms bar [reveal|hide|toggle|status]       DankBar controls
       dms dock [reveal|hide|toggle|status]      Dock controls
+      dms workspace [status|switch <num>|next|prev] Virtual workspace manager
       dms audio [status|setvolume <0-100>|mute|unmute|toggle]
       dms mic [status|mute|unmute|toggle]
       dms brightness [get|set <0-100>|increment|decrement]
@@ -113,10 +116,33 @@ func resolveAppPath() -> String? {
     return candidates.first { FileManager.default.fileExists(atPath: $0) }
 }
 
+func resolveBinaryPath(in appPath: String) -> String? {
+    let candidates = [
+        "\(appPath)/Contents/MacOS/DankMaterialShell",
+        "\(appPath)/Contents/MacOS/DankMacShell",
+        "\(appPath)/Contents/MacOS/DMS"
+    ]
+    return candidates.first { FileManager.default.fileExists(atPath: $0) }
+}
+
+func spawnDMS(appPath: String) -> Bool {
+    guard let binPath = resolveBinaryPath(in: appPath) else { return false }
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: binPath)
+    task.standardOutput = FileHandle.nullDevice
+    task.standardError = FileHandle.nullDevice
+    do {
+        try task.run()
+        return true
+    } catch {
+        return false
+    }
+}
+
 func isDMSRunning() -> Bool {
     let task = Process()
     task.launchPath = "/usr/bin/pgrep"
-    task.arguments = ["-E", "-f", "DankMacShell|DankMaterialShell"]
+    task.arguments = ["-x", "DankMaterialShell|DankMacShell"]
     let pipe = Pipe()
     task.standardOutput = pipe
     try? task.run()
@@ -137,43 +163,79 @@ case "help", "-h", "--help":
 case "version", "-v", "--version":
     print("DankMaterialShell (DMS) for macOS v\(version)")
 
-case "run":
-    if let appPath = resolveAppPath() {
+case "start", "run":
+    if isDMSRunning() {
+        print("DankMacShell is already running. Use 'dms restart' to restart it.")
+        exit(0)
+    }
+
+    unlink(getSocketPath())
+
+    guard let appPath = resolveAppPath() else {
+        print("DankMacShell.app not found in ~/Applications. Run ./build.sh first.")
+        exit(1)
+    }
+
+    if spawnDMS(appPath: appPath) {
+        print("DankMacShell launched from \(appPath)")
+    } else {
         let task = Process()
         task.launchPath = "/usr/bin/open"
         task.arguments = [appPath]
         try? task.run()
         print("DankMacShell launched from \(appPath)")
-    } else {
-        print("DankMacShell.app not found in ~/Applications. Run ./build.sh first.")
-        exit(1)
     }
 
 case "stop":
     let task = Process()
     task.launchPath = "/usr/bin/pkill"
-    task.arguments = ["-x", "DMS"]
+    task.arguments = ["-x", "DankMaterialShell|DankMacShell"]
     try? task.run()
     task.waitUntilExit()
+
+    unlink(getSocketPath())
     print("DankMacShell stopped.")
 
 case "restart":
     let stopTask = Process()
     stopTask.launchPath = "/usr/bin/pkill"
-    stopTask.arguments = ["-x", "DMS"]
+    stopTask.arguments = ["-x", "DankMaterialShell|DankMacShell"]
     try? stopTask.run()
     stopTask.waitUntilExit()
-    Thread.sleep(forTimeInterval: 0.5)
 
-    if let appPath = resolveAppPath() {
+    // Drain wait until previous PID fully terminates
+    for _ in 0..<20 {
+        if !isDMSRunning() { break }
+        Thread.sleep(forTimeInterval: 0.1)
+    }
+
+    unlink(getSocketPath())
+
+    guard let appPath = resolveAppPath() else {
+        print("DankMacShell.app not found in ~/Applications.")
+        exit(1)
+    }
+
+    if spawnDMS(appPath: appPath) {
+        print("DankMacShell restarted.")
+    } else {
         let openTask = Process()
         openTask.launchPath = "/usr/bin/open"
         openTask.arguments = [appPath]
         try? openTask.run()
         print("DankMacShell restarted.")
-    } else {
-        print("DankMacShell.app not found in ~/Applications.")
     }
+
+case "permission", "accessibility":
+    let modernURL = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility")
+    let legacyURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+    if let modernURL, NSWorkspace.shared.open(modernURL) {
+        // Opened
+    } else if let legacyURL {
+        NSWorkspace.shared.open(legacyURL)
+    }
+    print("Opened System Settings > Privacy & Security > Accessibility (Gerätesteuerung und Datenzugriff).")
+    print("Toggle 'DankMacShell' ON to enable active media key interception and full OSD swallowing.")
 
 case "status":
     let running = isDMSRunning()
@@ -207,13 +269,25 @@ case "doctor":
     let clipPath = ("~/Library/Application Support/DMS/clipboard_history.json" as NSString).expandingTildeInPath
     print("[\(FileManager.default.fileExists(atPath: clipPath) ? "✓" : "i")] Clipboard history storage: \(clipPath)")
 
-    print("Subsystems check:")
-    print("[✓] CoreAudio: Enabled")
-    print("[✓] CoreWLAN: Enabled")
-    print("[✓] IOBluetooth: Enabled")
-    print("[✓] IOKit Power Sources: Enabled")
-    print("[✓] DisplayServices: Brightness dynamic lookup")
-    print("[✓] CBBlueLightClient: Night Shift dynamic lookup")
+    if running, socketExists, let daemonDoc = sendSocketCommand("doctor") {
+        print("\nLive Daemon Diagnostics:")
+        for line in daemonDoc.components(separatedBy: "\n") {
+            print("  \(line)")
+        }
+        if daemonDoc.contains("AXTrusted=false") {
+            print("\n[!] Accessibility Permission: NOT GRANTED")
+            print("    Media keys are in passive listening mode.")
+            print("    Run 'dms permission' and toggle DankMacShell ON to enable active event swallowing.")
+        }
+    } else {
+        print("\nSubsystems check:")
+        print("[✓] CoreAudio: Enabled")
+        print("[✓] CoreWLAN: Enabled")
+        print("[✓] IOBluetooth: Enabled")
+        print("[✓] IOKit Power Sources: Enabled")
+        print("[✓] DisplayServices: Brightness dynamic lookup")
+        print("[✓] CBBlueLightClient: Night Shift dynamic lookup")
+    }
     print("Doctor check complete.")
 
 case "ipc":

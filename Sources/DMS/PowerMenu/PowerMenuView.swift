@@ -84,13 +84,13 @@ public struct PowerMenuView: View {
         }
         .padding(14)
         .frame(width: 295)
-        .background(theme.surfaceContainer)
+        .background(GlassSurfaceBackground())
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(theme.outlineVariant.opacity(0.35), lineWidth: 1)
+                .stroke(theme.panelBorderColor, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
+        .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.35), radius: 18, x: 0, y: 8)
     }
 
     public static func executeAppleScript(_ script: String) {

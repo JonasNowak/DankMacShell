@@ -78,6 +78,7 @@ struct IPCCommandTests {
         // 11. Bar & Dock
         #expect(IPCCommand.parse(url: URL(string: "dms://bar/reveal?position=top")!) == .bar(action: "reveal", value: "top"))
         #expect(IPCCommand.parse(url: URL(string: "dms://dock/hide")!) == .dock(action: "hide", value: nil))
+        #expect(IPCCommand.parse(url: URL(string: "dms://workspace/switch?number=3")!) == .workspace(action: "switch", value: "3"))
 
         // 12. Audio, Mic, Brightness, Inhibit, Media
         #expect(IPCCommand.parse(url: URL(string: "dms://audio/setvolume?volume=80")!) == .audio(action: "setvolume", value: "80"))
@@ -174,6 +175,8 @@ struct IPCCommandTests {
 
         #expect(IPCCommand.parseCLI(args: ["bar", "reveal", "bottom"]) == .bar(action: "reveal", value: "bottom"))
         #expect(IPCCommand.parseCLI(args: ["dock", "toggle"]) == .dock(action: "toggle", value: nil))
+        #expect(IPCCommand.parseCLI(args: ["workspace", "status"]) == .workspace(action: "status", value: nil))
+        #expect(IPCCommand.parseCLI(args: ["workspace", "switch", "2"]) == .workspace(action: "switch", value: "2"))
 
         #expect(IPCCommand.parseCLI(args: ["mic", "mute"]) == .mic(action: "mute", value: nil))
         #expect(IPCCommand.parseCLI(args: ["brightness", "set", "75"]) == .brightness(action: "set", value: "75"))

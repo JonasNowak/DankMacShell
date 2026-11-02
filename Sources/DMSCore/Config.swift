@@ -6,7 +6,13 @@ import Foundation
 public struct DMSConfig: Sendable, Codable, Equatable {
     public var version: Int
     public var theme: String
-    public var isLightMode: Bool
+    public var isLightMode: Bool {
+        didSet {
+            if rawSettings["themeMode"] != nil {
+                rawSettings["themeMode"] = AnyCodable(isLightMode ? "light" : "dark")
+            }
+        }
+    }
 
     // MARK: - Multi-Instance Layout Arrays
     public var barConfigs: [BarConfig]
@@ -38,9 +44,19 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         }
     }
     public var barTransparent: Bool {
-        get { (barConfigs.first?.transparency ?? 1.0) < 1.0 }
+        get {
+            (barConfigs.first?.transparency ?? 1.0) < 1.0
+                || barConfigs.first?.backgroundStyle.lowercased() == "glass"
+        }
         set {
-            if !barConfigs.isEmpty { barConfigs[0].transparency = newValue ? 0.7 : 1.0 }
+            if !barConfigs.isEmpty {
+                barConfigs[0].transparency = newValue ? 0.7 : 1.0
+                if newValue && barConfigs[0].backgroundStyle.lowercased() == "surface" {
+                    barConfigs[0].backgroundStyle = "glass"
+                } else if !newValue && barConfigs[0].backgroundStyle.lowercased() == "glass" {
+                    barConfigs[0].backgroundStyle = "surface"
+                }
+            }
         }
     }
     public var barMarginX: Double
@@ -706,16 +722,16 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         }
     }
 
-    /// Global surface opacity (`0.1` to `1.0`, default `0.85`).
+    /// Global surface opacity (`0.0` to `1.0`, default `0.85`).
     public var surfaceOpacity: Double {
         get { rawSettings["surfaceOpacity"]?.doubleValue ?? 0.85 }
-        set { rawSettings["surfaceOpacity"] = AnyCodable(min(1.0, max(0.1, newValue))) }
+        set { rawSettings["surfaceOpacity"] = AnyCodable(min(1.0, max(0.0, newValue))) }
     }
 
-    /// Popup / modal surface transparency (`0.1` to `1.0`, default `0.92`).
+    /// Popup / modal surface transparency (`0.0` to `1.0`, default `0.92`).
     public var popupTransparency: Double {
         get { rawSettings["popupTransparency"]?.doubleValue ?? 0.92 }
-        set { rawSettings["popupTransparency"] = AnyCodable(min(1.0, max(0.1, newValue))) }
+        set { rawSettings["popupTransparency"] = AnyCodable(min(1.0, max(0.0, newValue))) }
     }
 
     /// Connected mode popout concave fillet corners per spec 06 (SURF-001).
@@ -724,10 +740,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         set { rawSettings["gothCornersEnabled"] = AnyCodable(newValue) }
     }
 
-    /// Floating window transparency (`0.1` to `1.0`, default `0.90`).
+    /// Floating window transparency (`0.0` to `1.0`, default `0.90`).
     public var floatingWindowTransparency: Double {
         get { rawSettings["floatingWindowTransparency"]?.doubleValue ?? 0.90 }
-        set { rawSettings["floatingWindowTransparency"] = AnyCodable(min(1.0, max(0.1, newValue))) }
+        set { rawSettings["floatingWindowTransparency"] = AnyCodable(min(1.0, max(0.0, newValue))) }
     }
 
     /// Blur radius (`0` to `64`, default `20`).
@@ -855,5 +871,11 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             offsetY: shadowOffsetY,
             opacity: shadowOpacity
         )
+    }
+
+    /// Native media key interception via CGEventTap on NX_SYSDEFINED aux buttons (suppressing standard macOS HUD).
+    public var interceptMediaKeys: Bool {
+        get { rawSettings["interceptMediaKeys"]?.boolValue ?? true }
+        set { rawSettings["interceptMediaKeys"] = AnyCodable(newValue) }
     }
 }

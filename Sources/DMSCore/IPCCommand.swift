@@ -78,6 +78,9 @@ public enum IPCCommand: Sendable, Equatable {
     case bar(action: String, value: String? = nil)
     case dock(action: String, value: String? = nil)
 
+    // Workspaces & Virtual Spaces (OmniWM / SkyLight)
+    case workspace(action: String, value: String? = nil)
+
     // Hardware & Media Controls
     case audio(action: String, value: String? = nil)
     case mic(action: String, value: String? = nil)
@@ -256,6 +259,10 @@ public enum IPCCommand: Sendable, Equatable {
         case "dock":
             let act = subPath.isEmpty ? (param("action") ?? "toggle") : subPath
             return .dock(action: act, value: param("value"))
+
+        case "workspace", "workspaces":
+            let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
+            return .workspace(action: act, value: param("number") ?? param("value") ?? param("id"))
 
         case "audio":
             let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
@@ -501,6 +508,9 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "dock":
             return .dock(action: action.isEmpty ? "toggle" : action, value: extra.first)
+
+        case "workspace", "workspaces":
+            return .workspace(action: action.isEmpty ? "status" : action, value: extra.first)
 
         case "audio":
             return .audio(action: action.isEmpty ? "status" : action, value: extra.first)

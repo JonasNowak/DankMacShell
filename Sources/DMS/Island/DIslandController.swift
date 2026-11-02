@@ -104,11 +104,22 @@ public final class DIslandController: ObservableObject {
         reposition()
     }
 
-    /// Returns the horizontal exclusion width that the Dynamic Island occupies in the top bar center area.
+    /// Returns the horizontal exclusion width that the Dynamic Island occupies in the host bar center area.
     public func exclusionWidth(for screen: NSScreen, barPosition: String) -> CGFloat {
-        guard barPosition.lowercased() == "top" else { return 0 }
         let s = settings
         guard s.instance != .off else { return 0 }
+        if s.instance == .mainBar {
+            let matchingBar = ConfigStore.shared.config.barConfigs.first(where: {
+                $0.screenPreferences.contains("all") ||
+                $0.screenPreferences.contains(screen.localizedName)
+            }) ?? ConfigStore.shared.config.barConfigs.first
+            let matchingPosition = matchingBar?.position.lowercased() ?? "top"
+            if barPosition.lowercased() == matchingPosition {
+                return CGFloat(max(currentGeometry.width, s.compactWidth))
+            }
+            return 0
+        }
+        guard barPosition.lowercased() == "top" else { return 0 }
         if s.float && s.edge.lowercased() != "top" {
             return 0
         }
@@ -146,7 +157,7 @@ public final class DIslandController: ObservableObject {
 
     public func open(activity: IslandActivity) {
         let s = settings
-        guard s.enabledActivities.contains(activity.rawValue) || activity == .home || activity == .osd || activity == .notification else {
+        guard s.enabledActivities.contains(activity.rawValue) || activity == .home || activity == .osd || activity == .notification || activity == .controlCenter || activity == .dash else {
             return
         }
         autoDismissTask?.cancel()
@@ -162,7 +173,7 @@ public final class DIslandController: ObservableObject {
 
     public func triggerOSD(icon: String, label: String, progress: Double? = nil) {
         let s = settings
-        guard s.instance != .off, s.enabledActivities.contains(IslandActivity.osd.rawValue) else { return }
+        guard s.enabledActivities.contains(IslandActivity.osd.rawValue) else { return }
         osdPayload = (icon: icon, label: label, progress: progress)
         stateMachine.triggerOSD(at: Date())
         syncStateAndAnimate()
@@ -171,7 +182,7 @@ public final class DIslandController: ObservableObject {
 
     public func triggerNotification(title: String, body: String, level: String = "info") {
         let s = settings
-        guard s.instance != .off, s.enabledActivities.contains(IslandActivity.notification.rawValue) else { return }
+        guard s.enabledActivities.contains(IslandActivity.notification.rawValue) else { return }
         toastPayload = (title: title, body: body, level: level)
         stateMachine.triggerNotification(at: Date())
         syncStateAndAnimate()
@@ -234,7 +245,7 @@ public final class DIslandController: ObservableObject {
         let notch = screen.extractNotchGeometry()
         currentNotch = notch
 
-        guard s.instance != .off else {
+        guard s.instance != .off || activeActivity == .osd || activeActivity == .notification else {
             panel?.orderOut(nil)
             stopAnimationLoop()
             return
@@ -243,19 +254,26 @@ public final class DIslandController: ObservableObject {
         let enabledSet = Set(s.enabledActivities.compactMap { IslandActivity(rawValue: $0) })
         stateMachine.enabledModules = enabledSet.union([.home])
 
+        var effectiveSettings = s
+        if s.instance == .off {
+            effectiveSettings.instance = notch.hasNotch ? .notch : .mainBar
+        }
+
+        let ccCols = ConfigStore.shared.config.controlCenterColumns
         let targetGeom = IslandStateMachine.targetGeometry(
             for: presentationState,
-            settings: s,
-            notch: notch
+            settings: effectiveSettings,
+            notch: notch,
+            controlCenterColumns: ccCols
         )
-        springEngine.stiffness = s.springStiffness
-        springEngine.damping = s.springDamping
+        springEngine.stiffness = effectiveSettings.springStiffness
+        springEngine.damping = effectiveSettings.springDamping
         springEngine.target = targetGeom
 
         if ThemeStore.shared.motionTokens.reducedMotion {
             springEngine.snapToTarget()
             currentGeometry = targetGeom
-            updatePanelFrame(on: screen, geometry: targetGeom, settings: s, notch: notch)
+            updatePanelFrame(on: screen, geometry: targetGeom, settings: effectiveSettings, notch: notch)
         } else {
             startAnimationLoop()
         }
@@ -309,10 +327,17 @@ public final class DIslandController: ObservableObject {
         let geom = springEngine.step(dt: 1.0 / 60.0)
         currentGeometry = geom
         if let screen = NSScreen.main ?? NSScreen.screens.first {
-            updatePanelFrame(on: screen, geometry: geom, settings: settings, notch: currentNotch)
+            var effectiveSettings = settings
+            if effectiveSettings.instance == .off {
+                effectiveSettings.instance = currentNotch.hasNotch ? .notch : .mainBar
+            }
+            updatePanelFrame(on: screen, geometry: geom, settings: effectiveSettings, notch: currentNotch)
         }
         if springEngine.isAtRest {
             stopAnimationLoop()
+            if settings.instance == .off && activeActivity != .osd && activeActivity != .notification {
+                panel?.orderOut(nil)
+            }
         }
     }
 
@@ -323,8 +348,15 @@ public final class DIslandController: ObservableObject {
         notch: ScreenNotchGeometry
     ) {
         let screenFrame = screen.frame
-        let isNotchAttached = !settings.float && (settings.instance == .notch || (settings.instance == .mainBar && (notch.hasNotch || ConfigStore.shared.config.barPosition.lowercased() == "top")))
-        let isTopAnchored = isNotchAttached || settings.edge.lowercased() == "top" || settings.instance == .notch
+        let matchingBar = ConfigStore.shared.config.barConfigs.first(where: {
+            $0.screenPreferences.contains("all") ||
+            $0.screenPreferences.contains(screen.localizedName)
+        }) ?? ConfigStore.shared.config.barConfigs.first
+        let barPosition = matchingBar?.position.lowercased() ?? "top"
+        let barMargin = CGFloat(matchingBar?.margin ?? 8)
+
+        let isNotchAttached = !settings.float && (settings.instance == .notch || (settings.instance == .mainBar && barPosition == "top" && notch.hasNotch))
+        let isTopAnchored = isNotchAttached || (settings.float && settings.edge.lowercased() == "top") || (settings.instance == .mainBar && barPosition == "top") || settings.instance == .notch
         let gothFlange: CGFloat = (settings.gothCorners && isTopAnchored) ? CGFloat(settings.gothFilletRadius) : 0.0
         let width = max(80.0, CGFloat(geometry.width) + gothFlange * 2)
         let height = max(24.0, CGFloat(geometry.height))
@@ -350,15 +382,20 @@ public final class DIslandController: ObservableObject {
                 originX = screenFrame.minX + (screenFrame.width - width) * CGFloat(settings.anchorX) + CGFloat(geometry.offsetX)
                 originY = screenFrame.maxY - height - 8.0 - CGFloat(geometry.offsetY)
             }
+        } else if settings.instance == .mainBar && barPosition == "bottom" {
+            // Main Bar mode at screen bottom: dock centered between bottom satellite pills
+            originX = screenFrame.minX + (screenFrame.width - width) * 0.5 + CGFloat(geometry.offsetX)
+            originY = screenFrame.minY + barMargin + CGFloat(geometry.offsetY)
         } else if isNotchAttached {
             let centerX = screenFrame.minX + (notch.hasNotch ? CGFloat(notch.notchMidX) : screenFrame.width * 0.5)
             originX = centerX - width * 0.5 + CGFloat(geometry.offsetX)
-            originY = screenFrame.maxY - height - CGFloat(geometry.offsetY)
+            let topMargin: CGFloat = notch.hasNotch ? 0.0 : barMargin
+            originY = screenFrame.maxY - height - topMargin - CGFloat(geometry.offsetY)
         } else {
-            let topBar = ConfigStore.shared.config.barConfigs.first(where: { $0.position.lowercased() == "top" })
-            let barMargin = CGFloat(topBar?.margin ?? 8)
-            originX = screenFrame.minX + (screenFrame.width - width) * 0.5 + CGFloat(geometry.offsetX)
-            originY = screenFrame.maxY - height - barMargin - CGFloat(geometry.offsetY)
+            let topMargin: CGFloat = (settings.instance == .notch && notch.hasNotch) ? 0.0 : barMargin
+            let centerX = (settings.instance == .notch && notch.hasNotch) ? (screenFrame.minX + CGFloat(notch.notchMidX)) : (screenFrame.minX + screenFrame.width * 0.5)
+            originX = centerX - width * 0.5 + CGFloat(geometry.offsetX)
+            originY = screenFrame.maxY - height - topMargin - CGFloat(geometry.offsetY)
         }
 
         let frame = NSRect(x: originX, y: originY, width: width, height: height)

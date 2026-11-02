@@ -66,10 +66,10 @@ make clean
 - **Material 3 Design:** Rounded pill chips, dynamic tonal elevation surfaces, and fluid spring animations.
 - **Top or Bottom Docking:** Position as a top status bar or bottom floating dock with instant hot-repositioning.
 - **Launcher Pill Button:** Direct trigger for the Material 3 Spotlight-style launcher.
-- **Spaces / Desktops Pill:** Fast desktop spaces switcher with active workspace indication.
+- **Spaces / Desktops Pill:** Fast desktop spaces switcher with active workspace indication (OmniWM virtual workspace integration via `omniwmctl subscribe` & Darwin kernel detection).
 - **Active App Indicator:** Live display of the currently focused application name and icon.
 - **Apps Dock / Taskbar:** Pinned and running applications with live indicator dots, click-to-activate, and context menus (Pin/Unpin, Hide, Quit).
-- **Dynamic Island / Clock & Media Pill:** Real-time clock with date tooltip, expandable now-playing snippet with inline pause/play, and live weather pill.
+- **Dynamic Island / Clock & Media Pill:** Real-time clock with date tooltip, expandable now-playing snippet with inline pause/play, native volume/brightness/backlight OSD bezel swallowing with fluid capsule expansion, and live weather pill.
 - **Hardware Telemetry:** Real-time CPU usage, RAM usage, and battery indicators with live charge states.
 - **Quick Controls:** Direct toggles for Control Center, Power Menu, Microphone mute, and Caffeinate (Idle Inhibit).
 
@@ -158,11 +158,13 @@ A dedicated command-line utility is installed to `~/.local/bin/dms` for controll
 
 ```bash
 # General Management
-dms run                          # Start DankMacShell app
+dms start                        # Start DankMacShell app (alias: run)
+dms run                          # Alias for 'dms start'
 dms stop                         # Stop running DankMacShell
 dms restart                      # Restart DankMacShell
 dms status                       # Show running status of DMS daemon and socket
 dms doctor                       # Run diagnostics check on permissions and subsystems
+dms permission                   # Open Accessibility / Device Control settings to grant event swallowing
 
 # Direct Shortcuts
 dms spotlight [toggle|open|close]
@@ -179,6 +181,7 @@ dms keybinds [open]
 dms settings [open|get|set|dump]
 dms bar [reveal|hide|toggle|status|setposition <top|bottom>]
 dms dock [reveal|hide|toggle|status]
+dms workspace [status|switch <num>|next|prev]
 dms audio [status|setvolume <0-100>|mute|unmute|toggle]
 dms mic [status|mute|unmute|toggle]
 dms brightness [get|set <0-100>|increment|decrement]

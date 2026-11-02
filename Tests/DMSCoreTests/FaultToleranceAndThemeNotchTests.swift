@@ -465,7 +465,6 @@ struct IslandEngineTests {
             .expandedMedia,
             .expandedNotification,
             .expandedOSD,
-            .expandedControlCenter,
             .expandedLauncher,
             .expandedClipboard,
             .expandedPowerMenu,

@@ -50,11 +50,15 @@ public struct SettingsCard<Content: View>: View {
             content
         }
         .padding(12)
-        .background(Color(hex: palette.surfaceContainerHigh.hex))
+        .background(
+            ThemeStore.shared.isLightMode
+                ? Color(hex: palette.surfaceContainerLowest.hex).opacity(0.85)
+                : Color(hex: palette.surfaceContainerHigh.hex).opacity(0.75)
+        )
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(hex: palette.outlineVariant.hex).opacity(0.3), lineWidth: 1)
+                .stroke(Color(hex: palette.outlineVariant.hex).opacity(0.35), lineWidth: 1)
         )
     }
 }

@@ -78,5 +78,5 @@ fi
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || true
 
 echo "==> Signing $APP with identity: $IDENTITY..."
-codesign --force --sign "$IDENTITY" "$APP"
+codesign --force --deep --sign "$IDENTITY" "$APP"
 echo "Assembled and signed $APP"

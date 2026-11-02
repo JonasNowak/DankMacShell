@@ -17,8 +17,9 @@ public struct DashView: View {
         let p = themeStore.palette
         let isBottom = ConfigStore.shared.config.barPosition.lowercased() == "bottom"
 
-        VStack(spacing: 0) {
-            // Top Tab Navigation Bar
+        PopoutSurfaceContainer(bodyWidth: DashController.defaultWidth, bodyHeight: DashController.defaultHeight, cornerRadius: 16) {
+            VStack(spacing: 0) {
+                // Top Tab Navigation Bar
             HStack(spacing: 0) {
                 ForEach(DashTab.allCases) { tab in
                     Button(action: {
@@ -78,15 +79,7 @@ public struct DashView: View {
             .padding(10)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: DashController.defaultWidth, height: DashController.defaultHeight)
-        .background(Color(hex: p.surface.hex).opacity(0.96))
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color(hex: p.outlineVariant.hex).opacity(0.45), lineWidth: 1)
-        )
-
-        .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 10)
+        }
         .scaleEffect(isPresented ? 1.0 : 0.88, anchor: isBottom ? .bottom : .top)
         .opacity(isPresented ? 1.0 : 0.0)
         .onAppear {

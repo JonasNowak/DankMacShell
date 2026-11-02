@@ -303,6 +303,41 @@ public enum IPCCommandExecutor {
                 return "Unknown dock action \(act)"
             }
 
+        case .workspace(let act, let val):
+            let ws = WorkspaceService.shared
+            switch act.lowercased() {
+            case "status":
+                let mode = ws.isOmniWMRunning ? "OmniWM" : "SkyLight Native"
+                let current = ws.activeSpaceIndex
+                let count = ws.spacesCount
+                let wsList = ws.workspaces.map { "\($0.number)\($0.isCurrent ? "*" : "")" }.joined(separator: ", ")
+                return "Workspaces Mode: \(mode)\nActive Space: \(current)\nSpaces Count: \(count)\nWorkspaces: [\(wsList)]"
+
+            case "switch", "select", "goto":
+                if let val = val, let num = Int(val) {
+                    ws.switchSpace(num)
+                    return "Switched to workspace \(num)"
+                }
+                return "Error: missing or invalid workspace number"
+
+            case "next":
+                let next = (ws.activeSpaceIndex % max(ws.spacesCount, 1)) + 1
+                ws.switchSpace(next)
+                return "Switched to workspace \(next)"
+
+            case "prev", "previous":
+                let prev = ws.activeSpaceIndex > 1 ? ws.activeSpaceIndex - 1 : ws.spacesCount
+                ws.switchSpace(prev)
+                return "Switched to workspace \(prev)"
+
+            default:
+                if let num = Int(act) {
+                    ws.switchSpace(num)
+                    return "Switched to workspace \(num)"
+                }
+                return "Unknown workspace action: \(act). Usage: dms workspace [status|switch <num>|next|prev]"
+            }
+
         case .audio(let act, let val):
             switch act.lowercased() {
             case "mute":
@@ -460,7 +495,13 @@ public enum IPCCommandExecutor {
 
         case .doctor:
             let dsStatus = DankSearchClient.shared.healthState
-            return "DMS Daemon: Active\nCoreAudio: Active\nCoreWLAN: Active\nIOBluetooth: Active\nDankSearch: \(dsStatus)\nSocket: Active"
+            let interceptor = MediaKeyInterceptor.shared
+            _ = interceptor.checkPermissionsAndRetryTaps()
+            let osdHelperPids = SystemOSDManager.osduiHelperPIDs()
+            let helperStr = osdHelperPids.isEmpty ? "Not running" : "Suspended (PIDs: \(osdHelperPids.map(String.init).joined(separator: ", ")))"
+            let wsService = WorkspaceService.shared
+            let wsStr = wsService.isOmniWMRunning ? "OmniWM (Active: \(wsService.activeSpaceIndex), Total: \(wsService.spacesCount))" : "SkyLight Native (Active: \(wsService.activeSpaceIndex), Total: \(wsService.spacesCount))"
+            return "DMS Daemon: Active\nCoreAudio: Active\nCoreWLAN: Active\nIOBluetooth: Active\nDankSearch: \(dsStatus)\nWorkspace: \(wsStr)\nMediaKeyInterceptor: mode=\(interceptor.mode.rawValue) active=\(interceptor.isIntercepting) AXTrusted=\(interceptor.hasAccessibilityPermission)\nOSDUIHelper: \(helperStr)\nSocket: Active"
 
         case .reloadConfig:
             ConfigStore.shared.loadConfig()

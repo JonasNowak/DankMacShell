@@ -9,6 +9,7 @@ public struct DockView: View {
     public let onEditToggle: (() -> Void)?
 
     @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var configStore = ConfigStore.shared
     private var appsService = RunningAppsService.shared
 
     @State private var mouseLocation: CGPoint? = nil
@@ -21,6 +22,10 @@ public struct DockView: View {
     ) {
         self.config = config
         self.onEditToggle = onEditToggle
+    }
+
+    private var activeConfig: DockConfig {
+        configStore.config.dockConfigs.first(where: { $0.id == config.id }) ?? config
     }
 
     private var allDockApps: [AppItem] {
@@ -85,7 +90,7 @@ public struct DockView: View {
                 .background(dockBackground)
                 .clipShape(dockShape)
                 .overlay(dockBorder)
-                .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 4)
+                .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.28), radius: 12, x: 0, y: 4)
 
             if isEditMode && config.position == 0 {
                 DockEditChrome(
@@ -188,25 +193,37 @@ public struct DockView: View {
     }
 
     // MARK: - Surface Background & Styling
+    @ViewBuilder
     private var dockBackground: some View {
-        ZStack {
-            VisualEffectBlur(material: .headerView, blendingMode: .withinWindow)
-            theme.surfaceContainer.opacity(config.transparency)
+        let effectiveOpacity = min(activeConfig.transparency, theme.surfaceTokens.surfaceOpacity)
+        if effectiveOpacity <= 0.005 {
+            Color.clear
+        } else {
+            GlassSurfaceBackground(
+                baseColor: theme.isLightMode ? theme.surfaceContainerLowest : theme.surfaceContainer,
+                opacity: effectiveOpacity,
+                forceGlass: true,
+                material: .popover
+            )
         }
     }
 
     private var dockShape: some Shape {
-        RoundedRectangle(cornerRadius: CGFloat(config.iconSize) / 2.0 + CGFloat(config.spacing), style: .continuous)
+        RoundedRectangle(cornerRadius: CGFloat(activeConfig.iconSize) / 2.0 + CGFloat(activeConfig.spacing), style: .continuous)
     }
 
     @ViewBuilder
     private var dockBorder: some View {
-        if config.borderEnabled {
-            RoundedRectangle(cornerRadius: CGFloat(config.iconSize) / 2.0 + CGFloat(config.spacing), style: .continuous)
-                .stroke(
-                    Color(hex: config.borderColor.starts(with: "#") ? config.borderColor : "#FFFFFF").opacity(config.borderOpacity),
-                    lineWidth: CGFloat(config.borderThickness)
-                )
+        if activeConfig.transparency > 0.005 {
+            let strokeColor: Color = {
+                if activeConfig.borderEnabled && activeConfig.borderColor.starts(with: "#") {
+                    return Color(hex: activeConfig.borderColor).opacity(activeConfig.borderOpacity * activeConfig.transparency)
+                }
+                return theme.panelBorderColor.opacity(activeConfig.transparency)
+            }()
+            let width: CGFloat = activeConfig.borderEnabled ? CGFloat(max(0.5, activeConfig.borderThickness)) : 1.0
+            RoundedRectangle(cornerRadius: CGFloat(activeConfig.iconSize) / 2.0 + CGFloat(activeConfig.spacing), style: .continuous)
+                .stroke(strokeColor, lineWidth: width)
         }
     }
 }

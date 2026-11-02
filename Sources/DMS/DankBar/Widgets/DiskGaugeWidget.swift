@@ -39,7 +39,7 @@ public struct DiskGaugeWidget: View {
             }
             .padding(.horizontal, isVertical ? 0 : 6)
             .frame(width: isVertical ? 28 : nil, height: isVertical ? 28 : 26)
-            .background(theme.surfaceContainerHigh)
+            .background(theme.barWidgetBackground)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)

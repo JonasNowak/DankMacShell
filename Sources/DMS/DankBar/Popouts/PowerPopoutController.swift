@@ -38,63 +38,16 @@ public final class PowerPopoutController: ObservableObject {
             ControlCenterController.shared.hide()
         }
 
-        let isBottom = ConfigStore.shared.config.barPosition.lowercased() == "bottom"
-        let isVertical = ConfigStore.shared.config.barPosition.lowercased() == "left" || ConfigStore.shared.config.barPosition.lowercased() == "right"
-        let gap: CGFloat = 10
-        let visibleFrame = screen.visibleFrame
-        let fullFrame = screen.frame
+        let bodyWidth: CGFloat = anchorToControlCenter ? (ControlCenterController.shared.panel.frame.width > 0 ? ControlCenterController.shared.panel.frame.width : 295) : 220
+        let bodyHeight: CGFloat = 290
 
-        let popoutHeight: CGFloat = 290
-        let popoutWidth: CGFloat
-        let xPos: CGFloat
-        let yPos: CGFloat
-
-        if anchorToControlCenter {
-            let ccPanel = ControlCenterController.shared.panel
-            let ccFrame = ccPanel.frame
-            popoutWidth = ccFrame.width > 0 ? ccFrame.width : 295
-            xPos = ccFrame.width > 0 ? ccFrame.minX : (fullFrame.maxX - popoutWidth - 12)
-
-            if isBottom {
-                // Sits directly above Control Center
-                yPos = min(visibleFrame.maxY - popoutHeight - gap, ccFrame.maxY + gap)
-            } else if !isVertical {
-                // Top bar: overlaid right at top of Control Center matching its width
-                yPos = ccFrame.height > 0 ? (ccFrame.maxY - popoutHeight) : max(visibleFrame.minY + gap, ccFrame.minY)
-            } else {
-                // Vertical bar
-                yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - popoutHeight - 12, ccFrame.midY - popoutHeight / 2.0))
-            }
-        } else {
-            popoutWidth = 220
-            let targetX = (anchorX != nil && anchorX! > 0) ? anchorX! : mouseLoc.x
-            var computedX = targetX - popoutWidth / 2.0
-            computedX = max(visibleFrame.minX + 12, min(visibleFrame.maxX - popoutWidth - 12, computedX))
-            xPos = computedX
-
-            let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == screen }) ?? DankBarController.shared.panel
-            let barFrame = barPanel.frame
-
-            if isBottom {
-                let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
-                yPos = min(visibleFrame.maxY - popoutHeight - gap, barTop + gap)
-            } else if !isVertical {
-                let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
-                yPos = max(visibleFrame.minY + gap, barBottom - popoutHeight - gap)
-            } else {
-                let targetY = mouseLoc.y
-                yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - popoutHeight - 12, targetY - popoutHeight / 2.0))
-                let barRight = barFrame.width > 0 ? barFrame.maxX : (fullFrame.minX + DankBarController.verticalBarWidth + 8)
-                let barLeft = barFrame.width > 0 ? barFrame.minX : (fullFrame.maxX - DankBarController.verticalBarWidth - 8)
-                if ConfigStore.shared.config.barPosition.lowercased() == "left" {
-                    computedX = barRight + gap
-                } else {
-                    computedX = barLeft - popoutWidth - gap
-                }
-            }
-        }
-
-        let rect = NSRect(x: xPos, y: yPos, width: popoutWidth, height: popoutHeight)
+        let rect = PopoutLayoutHelper.frame(
+            bodyWidth: bodyWidth,
+            bodyHeight: bodyHeight,
+            anchorX: anchorX,
+            screen: screen,
+            anchorToControlCenter: anchorToControlCenter
+        )
 
         let panel = ShellPanel(
             contentRect: rect,
@@ -104,7 +57,7 @@ public final class PowerPopoutController: ObservableObject {
         )
         panel.level = .popUpMenu
 
-        let rootView = PowerPopoutView(width: popoutWidth) { [weak self] in
+        let rootView = PowerPopoutView(width: bodyWidth, anchorToControlCenter: anchorToControlCenter) { [weak self] in
             self?.hide()
         }
         panel.contentView = NSHostingView(rootView: rootView)
@@ -112,16 +65,20 @@ public final class PowerPopoutController: ObservableObject {
         self.panel = panel
         self.isVisible = true
 
-        panel.makeKeyAndOrderFront(nil)
+        PopoutAnimationHelper.animateIn(panel: panel, targetFrame: rect, screen: screen, anchorToControlCenter: anchorToControlCenter)
         installClickMonitor()
     }
 
     public func hide() {
         guard isVisible else { return }
         removeClickMonitor()
-        panel?.orderOut(nil)
-        panel = nil
         isVisible = false
+
+        let panelToClose = self.panel
+        let screen = panelToClose?.screen ?? NSScreen.main
+        self.panel = nil
+
+        PopoutAnimationHelper.animateOut(panel: panelToClose, screen: screen)
     }
 
     private func installClickMonitor() {
@@ -156,16 +113,19 @@ public final class PowerPopoutController: ObservableObject {
 public struct PowerPopoutView: View {
     @ObservedObject private var theme = ThemeStore.shared
     public var width: CGFloat
+    public var anchorToControlCenter: Bool
     let onClose: () -> Void
 
-    public init(width: CGFloat = 220, onClose: @escaping () -> Void) {
+    public init(width: CGFloat = 220, anchorToControlCenter: Bool = false, onClose: @escaping () -> Void) {
         self.width = width
+        self.anchorToControlCenter = anchorToControlCenter
         self.onClose = onClose
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            // Header
+        PopoutSurfaceContainer(bodyWidth: width, bodyHeight: 290, anchorToControlCenter: anchorToControlCenter) {
+            VStack(spacing: 0) {
+                // Header
             HStack(spacing: 8) {
                 Image(systemName: "power")
                     .foregroundColor(theme.primary)
@@ -185,7 +145,7 @@ public struct PowerPopoutView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(theme.surfaceContainerHigh)
+            .background(theme.panelHeaderBackground)
 
             Divider().background(theme.outlineVariant.opacity(0.4))
 
@@ -256,14 +216,7 @@ public struct PowerPopoutView: View {
             }
             .padding(12)
         }
-        .frame(width: width, height: 290)
-        .background(theme.surfaceContainer)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(theme.outlineVariant.opacity(0.5), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
+    }
     }
 }
 

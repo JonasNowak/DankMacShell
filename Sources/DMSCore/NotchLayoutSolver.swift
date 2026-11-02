@@ -526,4 +526,52 @@ public enum NotchAwareBarLayoutSolver: Sendable {
             rightSafeWidgets: rightWings
         )
     }
+
+    public struct IslandPillBarSolution: Sendable, Equatable {
+        public let leftPillBounds: ClosedRange<Double>
+        public let rightPillBounds: ClosedRange<Double>
+        public let centerGapBounds: ClosedRange<Double>
+        public let isSplitActive: Bool
+
+        public init(
+            leftPillBounds: ClosedRange<Double>,
+            rightPillBounds: ClosedRange<Double>,
+            centerGapBounds: ClosedRange<Double>,
+            isSplitActive: Bool
+        ) {
+            self.leftPillBounds = leftPillBounds
+            self.rightPillBounds = rightPillBounds
+            self.centerGapBounds = centerGapBounds
+            self.isSplitActive = isSplitActive
+        }
+    }
+
+    /// Solves the floating satellite pill boundaries for DankBar under "island" ("Floating Pills") mode.
+    public static func solveIslandPillBar(
+        screenWidth: Double,
+        barLength: Double,
+        barMargin: Double = 8.0,
+        notch: ScreenNotchGeometry,
+        islandExclusionWidth: Double = 220.0
+    ) -> IslandPillBarSolution {
+        let split = solve(
+            layout: BarLayout(),
+            notch: notch,
+            barMargin: barMargin,
+            spacing: 8.0,
+            islandExclusionWidth: islandExclusionWidth
+        )
+
+        let leftEnd = max(60.0, split.leftSafeEndX)
+        let rightStart = min(barLength, split.rightSafeStartX)
+        let gapStart = leftEnd
+        let gapEnd = max(gapStart, rightStart)
+
+        return IslandPillBarSolution(
+            leftPillBounds: 0.0...leftEnd,
+            rightPillBounds: rightStart...barLength,
+            centerGapBounds: gapStart...gapEnd,
+            isSplitActive: (notch.hasNotch || islandExclusionWidth > 0.0)
+        )
+    }
 }

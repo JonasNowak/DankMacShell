@@ -1,6 +1,7 @@
 import AppKit
 import CoreAudio
 import Observation
+import DMSCore
 
 public struct AudioOutput: Identifiable, Equatable, Sendable {
     public let id: AudioObjectID
@@ -84,10 +85,15 @@ public final class AudioService {
     @ObservationIgnored private var device: AudioObjectID = 0
     @ObservationIgnored private var deviceListener: AudioObjectPropertyListenerBlock?
     @ObservationIgnored private var systemListener: AudioObjectPropertyListenerBlock?
+    @ObservationIgnored private var watchedAddresses: [(AudioObjectID, AudioObjectPropertyAddress)] = []
+    @ObservationIgnored private var isInitialized: Bool = false
 
     public var onVolumeChanged: ((Double, Bool) -> Void)?
+    public var onMicMuteChanged: ((Bool) -> Void)?
+    public var onDefaultOutputChanged: ((String, String) -> Void)?
 
-    private static let virtualMainVolume: AudioObjectPropertySelector = 0x766D_7663
+    private static let virtualMainVolume: AudioObjectPropertySelector = 0x766D_7663 // 'vmvc'
+    private static let scalarVolume: AudioObjectPropertySelector = kAudioDevicePropertyVolumeScalar // 'volm'
 
     private init() {
         let listener: AudioObjectPropertyListenerBlock = { _, _ in
@@ -103,6 +109,7 @@ public final class AudioService {
             AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, listener)
         }
         refresh()
+        isInitialized = true
     }
 
 
@@ -115,26 +122,48 @@ public final class AudioService {
 
     public func refresh() {
         let newDevice = Self.defaultOutputDevice()
-        if newDevice != device { watch(newDevice) }
-        if let v = Self.float(device, Self.virtualMainVolume) { volume = Double(v) }
+        if newDevice != device {
+            let oldDevice = device
+            watch(newDevice)
+            if oldDevice != 0 {
+                let name = outputs.first(where: { $0.id == newDevice })?.name ?? currentOutputName
+                let icon = Self.iconForDevice(name: name)
+                onDefaultOutputChanged?(name, icon)
+            }
+        }
+        let oldVol = volume
+        let oldMute = isMuted
+        if let v = Self.getDeviceVolume(device) { volume = Double(v) }
         if let m = Self.uint32(device, kAudioDevicePropertyMute) { isMuted = m != 0 }
         let list = Self.outputDevices(defaultID: device)
         if list != outputs { outputs = list }
         let inList = Self.inputDevicesList()
         if inList != inputs { inputs = inList }
         EventSubscriptionBroker.shared.broadcast(event: "events.audio", payload: ["volume": volume, "isMuted": isMuted])
+
+        if isInitialized && (abs(volume - oldVol) > 0.001 || isMuted != oldMute) {
+            SystemOSDManager.suppressNativeOSDNow()
+            onVolumeChanged?(volume, isMuted)
+        }
     }
 
 
     public func setVolume(_ value: Double) {
         guard device != 0 else { return }
         let clamped = Float32(min(max(value, 0), 1))
-        Self.setFloat(device, Self.virtualMainVolume, clamped)
+        Self.setDeviceVolume(device, clamped)
         if isMuted { Self.setUInt32(device, kAudioDevicePropertyMute, 0) }
         volume = Double(clamped)
         isMuted = false
         onVolumeChanged?(volume, isMuted)
         EventSubscriptionBroker.shared.broadcast(event: "events.audio", payload: ["volume": volume, "isMuted": isMuted])
+    }
+
+    public func stepVolume(up: Bool, fine: Bool = false) {
+        let d = SystemKey.step(fine: fine)
+        let cur = isMuted ? 0.0 : volume
+        let next = SystemKey.stepped(cur, by: up ? d : -d)
+        setVolume(next)
     }
 
     public func setMuted(_ muted: Bool) {
@@ -158,6 +187,7 @@ public final class AudioService {
             var error: NSDictionary?
             appleScript.executeAndReturnError(&error)
         }
+        onMicMuteChanged?(muted)
     }
 
     public func toggleMicMute() {
@@ -199,21 +229,83 @@ public final class AudioService {
     }
 
     private func watch(_ newDevice: AudioObjectID) {
-        for selector in [Self.virtualMainVolume, kAudioDevicePropertyMute] {
-            var address = Self.address(selector, scope: kAudioDevicePropertyScopeOutput)
-            if let old = deviceListener, device != 0 {
-                AudioObjectRemovePropertyListenerBlock(device, &address, .main, old)
+        if let old = deviceListener {
+            for (devId, var addr) in watchedAddresses {
+                AudioObjectRemovePropertyListenerBlock(devId, &addr, .main, old)
             }
         }
+        watchedAddresses.removeAll()
+
         device = newDevice
         guard newDevice != 0 else { return }
+
         let listener: AudioObjectPropertyListenerBlock = { _, _ in
             MainActor.assumeIsolated { AudioService.shared.refresh() }
         }
         deviceListener = listener
-        for selector in [Self.virtualMainVolume, kAudioDevicePropertyMute] {
-            var address = Self.address(selector, scope: kAudioDevicePropertyScopeOutput)
-            AudioObjectAddPropertyListenerBlock(newDevice, &address, .main, listener)
+
+        let propertiesToWatch: [(AudioObjectPropertySelector, AudioObjectPropertyElement)] = [
+            (Self.virtualMainVolume, kAudioObjectPropertyElementMain),
+            (Self.scalarVolume, kAudioObjectPropertyElementMain),
+            (Self.scalarVolume, 1),
+            (Self.scalarVolume, 2),
+            (kAudioDevicePropertyMute, kAudioObjectPropertyElementMain)
+        ]
+
+        for (selector, element) in propertiesToWatch {
+            var address = AudioObjectPropertyAddress(
+                mSelector: selector,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: element
+            )
+            if AudioObjectHasProperty(newDevice, &address) {
+                let status = AudioObjectAddPropertyListenerBlock(newDevice, &address, .main, listener)
+                if status == noErr {
+                    watchedAddresses.append((newDevice, address))
+                }
+            }
+        }
+    }
+
+    private static func getDeviceVolume(_ dev: AudioObjectID) -> Float32? {
+        guard dev != 0 else { return nil }
+        if let v = float(dev, virtualMainVolume) {
+            return v
+        }
+        if let v = float(dev, scalarVolume) {
+            return v
+        }
+        for el in [1, 2] as [AudioObjectPropertyElement] {
+            var addr = AudioObjectPropertyAddress(
+                mSelector: scalarVolume,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: el
+            )
+            if AudioObjectHasProperty(dev, &addr) {
+                var value = Float32(0)
+                var size = UInt32(MemoryLayout<Float32>.size)
+                if AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &value) == noErr {
+                    return value
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func setDeviceVolume(_ dev: AudioObjectID, _ value: Float32) {
+        guard dev != 0 else { return }
+        setFloat(dev, virtualMainVolume, value)
+        setFloat(dev, scalarVolume, value)
+        for el in [1, 2] as [AudioObjectPropertyElement] {
+            var addr = AudioObjectPropertyAddress(
+                mSelector: scalarVolume,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: el
+            )
+            if AudioObjectHasProperty(dev, &addr) {
+                var v = value
+                AudioObjectSetPropertyData(dev, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &v)
+            }
         }
     }
 

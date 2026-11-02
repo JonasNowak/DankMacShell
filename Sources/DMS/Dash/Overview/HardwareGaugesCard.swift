@@ -22,21 +22,21 @@ public struct HardwareGaugesCard: View {
                 fraction: cpuFraction,
                 icon: "cpu",
                 primaryColor: Color(hex: p.primary.hex),
-                trackColor: Color.white.opacity(0.1)
+                trackColor: themeStore.subtleTrackColor
             )
             Spacer()
             VerticalMeterColumn(
                 fraction: tempFraction,
                 icon: "thermometer.medium",
                 primaryColor: Color(hex: p.primary.hex),
-                trackColor: Color.white.opacity(0.1)
+                trackColor: themeStore.subtleTrackColor
             )
             Spacer()
             VerticalMeterColumn(
                 fraction: ramFraction,
                 icon: "memorychip",
                 primaryColor: Color(hex: p.primary.hex),
-                trackColor: Color.white.opacity(0.1)
+                trackColor: themeStore.subtleTrackColor
             )
             Spacer()
         }

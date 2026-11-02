@@ -35,7 +35,7 @@ public struct MediaPlayerTab: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: p.primaryContainer.hex), Color.black.opacity(0.85)],
+                                colors: [Color(hex: p.primaryContainer.hex), Color(hex: p.surfaceContainerHighest.hex)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -106,7 +106,7 @@ public struct MediaPlayerTab: View {
                         progress: track.durationSeconds > 0 ? track.progress : 0.0,
                         isPlaying: track.isPlaying,
                         color: Color(hex: p.primary.hex),
-                        trackColor: Color.white.opacity(0.12)
+                        trackColor: themeStore.subtleTrackColor
                     ) { newProgress in
                         nowPlaying.seek(to: newProgress)
                     }

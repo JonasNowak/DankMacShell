@@ -54,7 +54,7 @@ public struct SettingsView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(Color(hex: p.surfaceContainerHigh.hex))
+                .background(themeStore.panelHeaderBackground)
 
                 Divider().background(Color(hex: p.outlineVariant.hex).opacity(0.4))
 
@@ -104,10 +104,15 @@ public struct SettingsView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Color(hex: p.surfaceContainerHigh.hex))
+                .background(themeStore.panelHeaderBackground)
             }
             .frame(minWidth: 840, idealWidth: 980, maxWidth: .infinity, minHeight: 560, idealHeight: 700, maxHeight: .infinity)
-            .background(Color(hex: p.surface.hex))
+            .background(
+                GlassSurfaceBackground(
+                    baseColor: Color(hex: p.surface.hex),
+                    opacity: configStore.config.surfaceOpacity
+                )
+            )
 
             // Add Widget Modal Overlay
             if let section = activeAddWidgetSection {
@@ -371,7 +376,7 @@ public struct SettingsView: View {
                     get: { configStore.config.surfaceOpacity },
                     set: { val in configStore.update(immediate: false) { $0.surfaceOpacity = val } }
                 ),
-                range: 0.25...1.0,
+                range: 0.0...1.0,
                 step: 0.05,
                 palette: palette
             )
@@ -383,7 +388,7 @@ public struct SettingsView: View {
                     get: { configStore.config.popupTransparency },
                     set: { val in configStore.update(immediate: false) { $0.popupTransparency = val } }
                 ),
-                range: 0.35...1.0,
+                range: 0.0...1.0,
                 step: 0.05,
                 palette: palette
             )
@@ -854,7 +859,7 @@ public struct SettingsView: View {
                         }
                     }
                 ),
-                range: 0.15...1.0,
+                range: 0.0...1.0,
                 step: 0.05,
                 palette: palette
             )
@@ -939,6 +944,7 @@ public struct SettingsView: View {
                             configStore.update(immediate: false) {
                                 if !$0.barConfigs.isEmpty { $0.barConfigs[0].gothFilletRadius = val }
                             }
+                            DankBarController.shared.reposition()
                         }
                     ),
                     range: 6...32,
@@ -956,6 +962,7 @@ public struct SettingsView: View {
                             configStore.update(immediate: false) {
                                 if !$0.barConfigs.isEmpty { $0.barConfigs[0].cornerRadius = val }
                             }
+                            DankBarController.shared.reposition()
                         }
                     ),
                     range: 0...32,
@@ -1007,6 +1014,9 @@ public struct SettingsView: View {
                     get: { configStore.config.gothCornersEnabled },
                     set: { val in
                         configStore.update { $0.gothCornersEnabled = val }
+                        if let screen = NSScreen.main ?? NSScreen.screens.first {
+                            ControlCenterController.shared.reposition(on: screen)
+                        }
                     }
                 ),
                 palette: palette
@@ -1446,6 +1456,20 @@ public struct SettingsView: View {
                 .foregroundColor(Color(hex: palette.onSurface.hex))
                 .cornerRadius(6)
             }
+
+            SettingsToggleRow(
+                title: "Media Key & Brightness Interception",
+                subtitle: "Directly routes hardware volume/brightness keys through Dynamic Island OSD",
+                isOn: Binding(
+                    get: { configStore.config.interceptMediaKeys },
+                    set: { val in configStore.update { $0.interceptMediaKeys = val } }
+                ),
+                palette: palette
+            )
+
+            if configStore.config.interceptMediaKeys {
+                mediaKeyInterceptionStatusView(palette: palette)
+            }
         }
 
         // Card 2: Dimensions & Position
@@ -1663,7 +1687,8 @@ public struct SettingsView: View {
                     set: { val in
                         var updated = island
                         updated.gothCorners = val
-                        configStore.update { $0.rawSettings.merge(updated.toDictionary()) { _, new in new } }
+                        configStore.update { $0.islandSettings = updated }
+                        DIslandController.shared.reposition()
                     }
                 ),
                 palette: palette
@@ -1678,7 +1703,8 @@ public struct SettingsView: View {
                         set: { val in
                             var updated = island
                             updated.gothFilletRadius = val
-                            configStore.update(immediate: false) { $0.rawSettings.merge(updated.toDictionary()) { _, new in new } }
+                            configStore.update(immediate: false) { $0.islandSettings = updated }
+                            DIslandController.shared.reposition()
                         }
                     ),
                     range: 6...28,
@@ -1699,7 +1725,7 @@ public struct SettingsView: View {
                         configStore.update(immediate: false) { $0.rawSettings.merge(updated.toDictionary()) { _, new in new } }
                     }
                 ),
-                range: 0.4...1.0,
+                range: 0.0...1.0,
                 step: 0.05,
                 palette: palette
             )
@@ -1767,6 +1793,128 @@ public struct SettingsView: View {
                 ),
                 palette: palette
             )
+
+            SettingsToggleRow(
+                title: "Native Media Key Interception",
+                subtitle: "Intercepts hardware volume and brightness keys (F1, F2, F10-F12) to suppress standard macOS bezel HUDs",
+                isOn: Binding(
+                    get: { configStore.config.interceptMediaKeys },
+                    set: { val in configStore.update { $0.interceptMediaKeys = val } }
+                ),
+                palette: palette
+            )
+
+            if configStore.config.interceptMediaKeys {
+                mediaKeyInterceptionStatusView(palette: palette)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mediaKeyInterceptionStatusView(palette: DMSPalette) -> some View {
+        let interceptor = MediaKeyInterceptor.shared
+        switch interceptor.mode {
+        case .active:
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                Text("Active: Hardware media, volume & brightness keys intercepted directly")
+                    .font(.caption)
+                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(hex: palette.surfaceContainerHigh.hex).opacity(0.6))
+            .cornerRadius(8)
+
+        case .passive:
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.trianglebadge.exclamationmark")
+                        .foregroundColor(.blue)
+                    Text("Passive Monitoring Active (Input Monitoring)")
+                        .font(.caption.bold())
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                    Spacer()
+                }
+                Text("Media keys are monitored via Input Monitoring. Native macOS bezel HUD is suppressed, and volume adjustments update the HUD via CoreAudio. To swallow keys directly, grant Device Control & Data Access.")
+                    .font(.caption2)
+                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+
+                Button(action: {
+                    interceptor.requestAccessibilityPermission()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.open.fill")
+                        Text("Open Device Control & Data Access (macOS 27+)")
+                    }
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: palette.primary.hex))
+                    .foregroundColor(Color(hex: palette.onPrimary.hex))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(hex: palette.surfaceContainerHigh.hex).opacity(0.6))
+            .cornerRadius(8)
+
+        case .fallback:
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "shield.checkered")
+                        .foregroundColor(.orange)
+                    Text("CoreAudio Fallback Active (Zero Permissions Required)")
+                        .font(.caption.bold())
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                    Spacer()
+                }
+                Text("Native macOS volume HUD is suppressed and volume adjustments trigger the HUD via CoreAudio. In macOS 27+, Accessibility is renamed to 'Device Control and Data Access'.")
+                    .font(.caption2)
+                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+
+                HStack(spacing: 8) {
+                    Button(action: {
+                        interceptor.requestAccessibilityPermission()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "lock.open.fill")
+                            Text("Open Device Control (Accessibility)")
+                        }
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color(hex: palette.primary.hex))
+                        .foregroundColor(Color(hex: palette.onPrimary.hex))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {
+                        interceptor.openInputMonitoringSettings()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hand.tap.fill")
+                            Text("Open Input Monitoring")
+                        }
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color(hex: palette.surfaceContainerHighest.hex))
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(hex: palette.surfaceContainerHigh.hex).opacity(0.6))
+            .cornerRadius(8)
         }
     }
 
@@ -1817,6 +1965,24 @@ public struct SettingsView: View {
                 ),
                 range: 32...64,
                 step: 2,
+                palette: palette
+            )
+
+            Divider().opacity(0.3)
+
+            SettingsSliderRow(
+                title: "Dock Opacity",
+                valueFormatted: "\(Int(dockConfig.transparency * 100))%",
+                value: Binding(
+                    get: { dockConfig.transparency },
+                    set: { val in
+                        if !configStore.config.dockConfigs.isEmpty {
+                            configStore.update { $0.dockConfigs[0].transparency = val }
+                        }
+                    }
+                ),
+                range: 0.0...1.0,
+                step: 0.05,
                 palette: palette
             )
 

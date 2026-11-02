@@ -685,7 +685,11 @@ public struct IslandSettings: Sendable, Codable, Equatable {
     public var borderEnabled: Bool
     public var shadowEnabled: Bool
     public var gothCorners: Bool
-    public var gothFilletRadius: Double
+    public var gothFilletRadius: Double {
+        didSet {
+            gothFilletRadius = max(4.0, min(32.0, gothFilletRadius))
+        }
+    }
     public var edge: String // "top", "bottom"
     public var anchorX: Double
     public var anchorY: Double

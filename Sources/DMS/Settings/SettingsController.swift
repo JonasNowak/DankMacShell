@@ -79,6 +79,8 @@ public final class SettingsController: NSObject, ObservableObject, NSWindowDeleg
         window.title = "Settings"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.level = .floating

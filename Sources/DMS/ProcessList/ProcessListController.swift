@@ -45,43 +45,16 @@ public final class ProcessListController: ObservableObject {
 
         let mouseLoc = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first else { return }
-        let visibleFrame = screen.visibleFrame
-        let fullFrame = screen.frame
 
-        let width: CGFloat = 400
-        let height: CGFloat = 350
-        let gap: CGFloat = 10
-        let isBottom = ConfigStore.shared.config.barPosition.lowercased() == "bottom"
-        let isVertical = ConfigStore.shared.config.barPosition.lowercased() == "left" || ConfigStore.shared.config.barPosition.lowercased() == "right"
+        let bodyWidth: CGFloat = 400
+        let bodyHeight: CGFloat = 350
 
-        // Center on the trigger applet's X coordinate, clamped to visible screen margins
-        let targetX = (anchorX != nil && anchorX! > 0) ? anchorX! : mouseLoc.x
-        var xPos = targetX - width / 2.0
-        xPos = max(visibleFrame.minX + 12, min(visibleFrame.maxX - width - 12, xPos))
-
-        let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == screen }) ?? DankBarController.shared.panel
-        let barFrame = barPanel.frame
-
-        let yPos: CGFloat
-        if isBottom {
-            let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
-            yPos = min(visibleFrame.maxY - height - gap, barTop + gap)
-        } else if !isVertical {
-            let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
-            yPos = max(visibleFrame.minY + gap, barBottom - height - gap)
-        } else {
-            let targetY = mouseLoc.y
-            yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - height - 12, targetY - height / 2.0))
-            let barRight = barFrame.width > 0 ? barFrame.maxX : (fullFrame.minX + DankBarController.verticalBarWidth + 8)
-            let barLeft = barFrame.width > 0 ? barFrame.minX : (fullFrame.maxX - DankBarController.verticalBarWidth - 8)
-            if ConfigStore.shared.config.barPosition.lowercased() == "left" {
-                xPos = barRight + gap
-            } else {
-                xPos = barLeft - width - gap
-            }
-        }
-
-        let rect = NSRect(x: xPos, y: yPos, width: width, height: height)
+        let rect = PopoutLayoutHelper.frame(
+            bodyWidth: bodyWidth,
+            bodyHeight: bodyHeight,
+            anchorX: anchorX,
+            screen: screen
+        )
 
         let panel = ShellPanel(
             contentRect: rect,
@@ -100,16 +73,20 @@ public final class ProcessListController: ObservableObject {
         self.isVisible = true
         self.currentSortByMemory = sortByMemory
 
-        panel.makeKeyAndOrderFront(nil)
+        PopoutAnimationHelper.animateIn(panel: panel, targetFrame: rect, screen: screen)
         installClickMonitor()
     }
 
     public func hide() {
         guard isVisible else { return }
         removeClickMonitor()
-        panel?.orderOut(nil)
-        panel = nil
         isVisible = false
+
+        let panelToClose = self.panel
+        let screen = panelToClose?.screen ?? NSScreen.main
+        self.panel = nil
+
+        PopoutAnimationHelper.animateOut(panel: panelToClose, screen: screen)
     }
 
     private func installClickMonitor() {

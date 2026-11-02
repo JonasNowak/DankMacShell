@@ -39,7 +39,7 @@ public struct MediaOverviewCard: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: p.surfaceVariant.hex), Color.black],
+                                    colors: [Color(hex: p.surfaceVariant.hex), Color(hex: p.surfaceContainerHighest.hex)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -47,7 +47,7 @@ public struct MediaOverviewCard: View {
 
                         ZStack {
                             RadialGradient(
-                                gradient: Gradient(colors: [Color.cyan.opacity(0.8), Color.blue.opacity(0.4), Color.clear]),
+                                gradient: Gradient(colors: [Color.cyan.opacity(0.55), Color.blue.opacity(0.28), Color.clear]),
                                 center: .center,
                                 startRadius: 2,
                                 endRadius: 28
@@ -55,7 +55,7 @@ public struct MediaOverviewCard: View {
 
                             Image(systemName: "music.note")
                                 .font(.system(size: 18))
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(Color(hex: p.primary.hex))
                         }
                     }
                 }
@@ -87,7 +87,7 @@ public struct MediaOverviewCard: View {
                 progress: displayProgress,
                 isPlaying: track.isPlaying,
                 color: Color(hex: p.primary.hex),
-                trackColor: Color.white.opacity(0.12)
+                trackColor: themeStore.subtleTrackColor
             ) { newProgress in
                 nowPlaying.seek(to: newProgress)
             }

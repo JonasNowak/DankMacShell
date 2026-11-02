@@ -1,22 +1,31 @@
 import AppKit
 import SwiftUI
+import Combine
 import Carbon.HIToolbox
+import Darwin
 import DMSCore
 
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var cancellables = Set<AnyCancellable>()
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        // Enforce single instance
-        let runningInstances = NSRunningApplication.runningApplications(
+        ProcessInfo.processInfo.disableAutomaticTermination("DMS Shell Daemon")
+
+        // Enforce single instance (filter out self and dead/zombie processes)
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        let activeInstances = NSRunningApplication.runningApplications(
             withBundleIdentifier: Bundle.main.bundleIdentifier ?? "io.github.jonasnowak.dms"
-        )
-        if runningInstances.count > 1 {
-            let others = runningInstances.filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
-            if !others.isEmpty {
-                print("DMS is already running. Exiting duplicate instance.")
-                NSApp.terminate(nil)
-                return
-            }
+        ).filter { app in
+            guard app.processIdentifier != myPID && !app.isTerminated else { return false }
+            var bsdInfo = proc_bsdinfo()
+            let size = proc_pidinfo(app.processIdentifier, PROC_PIDTBSDINFO, 0, &bsdInfo, Int32(MemoryLayout<proc_bsdinfo>.size))
+            return size > 0 && bsdInfo.pbi_status != 5 /* SZOMB */
+        }
+        if !activeInstances.isEmpty {
+            print("DMS is already running (PID: \(activeInstances.map { "\($0.processIdentifier)" }.joined(separator: ", "))). Exiting duplicate instance.")
+            NSApp.terminate(nil)
+            return
         }
 
         setupAppIcon()
@@ -45,6 +54,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = PluginService.shared
         _ = ToastController.shared
         _ = OSDController.shared
+        if cfg.interceptMediaKeys {
+            MediaKeyInterceptor.shared.start()
+        }
+        ConfigStore.shared.$config
+            .map { $0.interceptMediaKeys }
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { shouldIntercept in
+                if shouldIntercept {
+                    MediaKeyInterceptor.shared.start()
+                } else {
+                    MediaKeyInterceptor.shared.stop()
+                }
+            }
+            .store(in: &cancellables)
         _ = ClipboardService.shared
         _ = NowPlayingService.shared
         _ = WeatherService.shared
@@ -65,6 +90,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
+        MediaKeyInterceptor.shared.stop()
+        SystemOSDManager.resumeOSDUIHelperForTermination()
         ConfigStore.shared.flushSave()
         IPCSocketServer.shared.stop()
         HotkeyService.shared.unregisterAll()

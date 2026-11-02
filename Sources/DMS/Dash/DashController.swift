@@ -45,7 +45,7 @@ public final class DashController: ObservableObject {
         self.lastCenterRowFrame = screenRect
     }
 
-    public func toggle(tab: DashTab? = nil, anchorX: CGFloat? = nil) {
+    public func toggle(tab: DashTab? = nil, anchorX: CGFloat? = nil, fromBar: Bool = false) {
         if isVisible {
             if let targetTab = tab, activeTab != targetTab {
                 activeTab = targetTab
@@ -53,24 +53,14 @@ public final class DashController: ObservableObject {
                 hide()
             }
         } else {
-            show(tab: tab, anchorX: anchorX)
+            show(tab: tab, anchorX: anchorX, fromBar: fromBar)
         }
     }
 
-    public func show(tab: DashTab? = nil, anchorX: CGFloat? = nil) {
+    public func show(tab: DashTab? = nil, anchorX: CGFloat? = nil, fromBar: Bool = false) {
         if let targetTab = tab {
             self.activeTab = targetTab
         }
-
-        if isVisible {
-            panel?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        let mouseLoc = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
-        guard let targetScreen = screen else { return }
 
         // Close peer popouts
         AudioPopoutController.shared.hide()
@@ -83,47 +73,27 @@ public final class DashController: ObservableObject {
         LauncherController.shared.hide()
         PowerMenuController.shared.hide()
 
-        let popoutWidth: CGFloat = Self.defaultWidth
-        let popoutHeight: CGFloat = Self.defaultHeight
-        let gap: CGFloat = 10
-        let barPosition = ConfigStore.shared.config.barPosition.lowercased()
-        let isBottom = barPosition == "bottom"
-        let isVertical = barPosition == "left" || barPosition == "right"
-
-        let visibleFrame = targetScreen.visibleFrame
-        let fullFrame = targetScreen.frame
-
-        let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == targetScreen }) ?? DankBarController.shared.panel
-        let barFrame = barPanel.frame
-
-        var xPos: CGFloat
-        let yPos: CGFloat
-
-        if isBottom {
-            let targetX = fullFrame.midX
-            xPos = targetX - popoutWidth / 2.0
-            xPos = max(visibleFrame.minX + 12, min(visibleFrame.maxX - popoutWidth - 12, xPos))
-            let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
-            yPos = min(visibleFrame.maxY - popoutHeight - gap, barTop + gap)
-        } else if !isVertical {
-            let targetX = fullFrame.midX
-            xPos = targetX - popoutWidth / 2.0
-            xPos = max(visibleFrame.minX + 12, min(visibleFrame.maxX - popoutWidth - 12, xPos))
-            let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
-            yPos = max(visibleFrame.minY + gap, barBottom - popoutHeight - gap)
-        } else {
-            let targetY = lastClockCenter?.y ?? mouseLoc.y
-            yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - popoutHeight - 12, targetY - popoutHeight / 2.0))
-            let barRight = barFrame.width > 0 ? barFrame.maxX : (fullFrame.minX + DankBarController.verticalBarWidth + 8)
-            let barLeft = barFrame.width > 0 ? barFrame.minX : (fullFrame.maxX - DankBarController.verticalBarWidth - 8)
-            if barPosition == "left" {
-                xPos = barRight + gap
-            } else {
-                xPos = barLeft - popoutWidth - gap
-            }
+        if isVisible {
+            panel?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
         }
 
-        let rect = NSRect(x: xPos, y: yPos, width: popoutWidth, height: popoutHeight)
+        let mouseLoc = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+        guard let targetScreen = screen else { return }
+
+        let fullFrame = targetScreen.frame
+        let bodyWidth: CGFloat = Self.defaultWidth
+        let bodyHeight: CGFloat = Self.defaultHeight
+        let targetX = (anchorX != nil && anchorX! > 0) ? anchorX! : fullFrame.midX
+
+        let rect = PopoutLayoutHelper.frame(
+            bodyWidth: bodyWidth,
+            bodyHeight: bodyHeight,
+            anchorX: targetX,
+            screen: targetScreen
+        )
 
         let panel = ShellPanel(
             contentRect: rect,
@@ -145,7 +115,7 @@ public final class DashController: ObservableObject {
         self.panel = panel
         self.isVisible = true
 
-        panel.makeKeyAndOrderFront(nil)
+        PopoutAnimationHelper.animateIn(panel: panel, targetFrame: rect, screen: targetScreen)
         NSApp.activate(ignoringOtherApps: true)
         installClickMonitor()
     }
@@ -160,9 +130,13 @@ public final class DashController: ObservableObject {
     public func hide() {
         guard isVisible else { return }
         removeClickMonitor()
-        panel?.orderOut(nil)
-        panel = nil
         isVisible = false
+
+        let panelToClose = self.panel
+        let screen = panelToClose?.screen ?? NSScreen.main
+        self.panel = nil
+
+        PopoutAnimationHelper.animateOut(panel: panelToClose, screen: screen)
     }
 
     private func installClickMonitor() {

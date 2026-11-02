@@ -156,9 +156,9 @@ public struct M3SurfaceTokens: Sendable, Codable, Equatable {
         borderWidth: Double = 1.0,
         outlineOpacity: Double = 0.12
     ) {
-        self.surfaceOpacity = max(0.1, min(1.0, surfaceOpacity))
-        self.popupTransparency = max(0.1, min(1.0, popupTransparency))
-        self.floatingWindowTransparency = max(0.1, min(1.0, floatingWindowTransparency))
+        self.surfaceOpacity = max(0.0, min(1.0, surfaceOpacity))
+        self.popupTransparency = max(0.0, min(1.0, popupTransparency))
+        self.floatingWindowTransparency = max(0.0, min(1.0, floatingWindowTransparency))
         self.blurRadius = max(0, min(64, blurRadius))
         self.borderWidth = max(0.0, min(4.0, borderWidth))
         self.outlineOpacity = max(0.0, min(1.0, outlineOpacity))

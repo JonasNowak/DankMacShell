@@ -70,7 +70,7 @@ public struct ClipboardView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color(hex: p.surfaceContainerHigh.hex))
+            .background(themeStore.panelHeaderBackground)
 
             Divider().background(Color(hex: p.outlineVariant.hex).opacity(0.5))
 
@@ -160,15 +160,15 @@ public struct ClipboardView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(Color(hex: p.surfaceContainerHigh.hex))
+            .background(themeStore.panelHeaderBackground)
         }
         .frame(width: 480, height: 440)
-        .background(Color(hex: p.surface.hex))
+        .background(GlassSurfaceBackground())
         .cornerRadius(24)
         .overlay(
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color(hex: p.outlineVariant.hex).opacity(0.6), lineWidth: 1)
+                .stroke(themeStore.panelBorderColor, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.3), radius: 24, x: 0, y: 12)
+        .shadow(color: themeStore.adaptiveShadowColor(baseOpacity: 0.32), radius: 24, x: 0, y: 12)
     }
 }
