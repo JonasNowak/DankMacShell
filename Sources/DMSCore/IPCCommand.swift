@@ -127,6 +127,9 @@ public enum IPCCommand: Sendable, Equatable {
     // Danksearch / File Search Diagnostics & Control (Spec 18 / 35)
     case danksearch(action: String, query: String? = nil)
 
+    // Digital Wellbeing & Screen Time Sync
+    case wellbeing(action: String, arg: String? = nil)
+
     case unknown(String)
 
     // MARK: - URL Parser (dms:// scheme)
@@ -362,6 +365,10 @@ public enum IPCCommand: Sendable, Equatable {
         case "danksearch", "dsearch":
             let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
             return .danksearch(action: act, query: param("q") ?? param("query"))
+
+        case "wellbeing", "screentime":
+            let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
+            return .wellbeing(action: act, arg: param("arg") ?? param("value"))
 
         default:
             return .unknown(url.absoluteString)
@@ -663,6 +670,12 @@ public enum IPCCommand: Sendable, Equatable {
             return .danksearch(
                 action: action.isEmpty ? "status" : action,
                 query: extra.isEmpty ? nil : extra.joined(separator: " ")
+            )
+
+        case "wellbeing", "screentime":
+            return .wellbeing(
+                action: action.isEmpty ? "status" : action,
+                arg: extra.first
             )
 
         default:

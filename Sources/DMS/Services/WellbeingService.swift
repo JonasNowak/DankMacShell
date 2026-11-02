@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Combine
+import Darwin
 import DMSCore
 
 /// Service tracking frontmost application active focus time, daily usage records, and quota limits.
@@ -11,11 +12,15 @@ public final class WellbeingService: ObservableObject {
     @Published public private(set) var store: WellbeingStoreData
     @Published public private(set) var todayTotalSeconds: TimeInterval = 0
     @Published public private(set) var currentFrontmostApp: String = ""
+    @Published public private(set) var isMacOSScreenTimeActive: Bool = true
+    @Published public private(set) var isTrackingActive: Bool = true
 
     private let storageURL: URL
     private var activeFocusSession: (bundleID: String, appName: String, startTime: Date)?
     private var flushTimer: Timer?
+    private var statusCheckTimer: Timer?
     private var alertedLimits: Set<String> = []
+    private var cancellables = Set<AnyCancellable>()
 
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -25,17 +30,77 @@ public final class WellbeingService: ObservableObject {
         self.store = WellbeingStoreData()
 
         loadStore()
+        updateMacOSScreenTimeStatus()
+        recomputeTrackingState()
         setupObservers()
         startPeriodicFlush()
+        startPeriodicStatusCheck()
 
         // Capture initial frontmost app
-        if let front = NSWorkspace.shared.frontmostApplication,
+        if isTrackingActive,
+           let front = NSWorkspace.shared.frontmostApplication,
            let bid = front.bundleIdentifier,
            let name = front.localizedName {
             currentFrontmostApp = name
             activeFocusSession = (bundleID: bid, appName: name, startTime: Date())
+        } else if let front = NSWorkspace.shared.frontmostApplication, let name = front.localizedName {
+            currentFrontmostApp = name
         }
         updateTodayTotal()
+    }
+
+    public func updateMacOSScreenTimeStatus() {
+        var pids = [pid_t](repeating: 0, count: 4096)
+        let bytes = proc_listpids(UInt32(PROC_ALL_PIDS), 0, &pids, Int32(MemoryLayout<pid_t>.size * pids.count))
+        guard bytes > 0 else {
+            self.isMacOSScreenTimeActive = true
+            return
+        }
+
+        let count = min(Int(bytes) / MemoryLayout<pid_t>.size, pids.count)
+        var found = false
+        for i in 0..<count {
+            let pid = pids[i]
+            if pid <= 0 { continue }
+            var nameBuffer = [CChar](repeating: 0, count: 256)
+            let len = proc_name(pid, &nameBuffer, UInt32(nameBuffer.count))
+            if len > 0 {
+                let name = nameBuffer.withUnsafeBufferPointer { ptr in
+                    ptr.baseAddress != nil ? String(cString: ptr.baseAddress!) : ""
+                }
+                if name == "ScreenTimeAgent" {
+                    found = true
+                    break
+                }
+            }
+        }
+
+        if self.isMacOSScreenTimeActive != found {
+            self.isMacOSScreenTimeActive = found
+        }
+    }
+
+    public func recomputeTrackingState() {
+        let cfg = ConfigStore.shared.config
+        let shouldTrack = cfg.enableWellbeing && (!cfg.syncWellbeingWithMacOS || isMacOSScreenTimeActive)
+        if self.isTrackingActive != shouldTrack {
+            self.isTrackingActive = shouldTrack
+            if !shouldTrack {
+                pauseTracking()
+            } else if activeFocusSession == nil {
+                resumeTracking()
+            }
+        }
+    }
+
+    public func openMacOSScreenTimeSettings() {
+        let modernURL = URL(string: "x-apple.systempreferences:com.apple.Screen-Time-Settings.extension")
+        let legacyURL = URL(string: "x-apple.systempreferences:com.apple.preference.screentime")
+        if let modernURL, NSWorkspace.shared.open(modernURL) {
+            return
+        } else if let legacyURL {
+            NSWorkspace.shared.open(legacyURL)
+        }
     }
 
     private func setupObservers() {
@@ -95,18 +160,42 @@ public final class WellbeingService: ObservableObject {
                 self?.resumeTracking()
             }
         }
+
+        ConfigStore.shared.$config
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateMacOSScreenTimeStatus()
+                self?.recomputeTrackingState()
+            }
+            .store(in: &cancellables)
     }
 
     private func startPeriodicFlush() {
         flushTimer?.invalidate()
         flushTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.flushInFlight()
+                guard let self = self, self.isTrackingActive else { return }
+                self.flushInFlight()
+            }
+        }
+    }
+
+    private func startPeriodicStatusCheck() {
+        statusCheckTimer?.invalidate()
+        statusCheckTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateMacOSScreenTimeStatus()
+                self?.recomputeTrackingState()
             }
         }
     }
 
     private func appDidActivate(bundleID: String, appName: String) {
+        guard isTrackingActive else {
+            currentFrontmostApp = appName
+            activeFocusSession = nil
+            return
+        }
         flushInFlight()
         currentFrontmostApp = appName
         activeFocusSession = (bundleID: bundleID, appName: appName, startTime: Date())
@@ -118,6 +207,7 @@ public final class WellbeingService: ObservableObject {
     }
 
     private func resumeTracking() {
+        guard isTrackingActive else { return }
         if let front = NSWorkspace.shared.frontmostApplication,
            let bid = front.bundleIdentifier,
            let name = front.localizedName {
@@ -127,6 +217,10 @@ public final class WellbeingService: ObservableObject {
     }
 
     public func flushInFlight() {
+        guard isTrackingActive else {
+            activeFocusSession = nil
+            return
+        }
         guard let session = activeFocusSession else { return }
         let now = Date()
         let elapsed = now.timeIntervalSince(session.startTime)
@@ -212,5 +306,6 @@ public final class WellbeingService: ObservableObject {
 
     isolated deinit {
         flushTimer?.invalidate()
+        statusCheckTimer?.invalidate()
     }
 }

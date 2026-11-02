@@ -87,7 +87,7 @@ make clean
 - **Interactive Calendar:** Full month view with live day highlight.
 - **Live Weather Card:** Open-Meteo REST API integration with SF Symbols, temperature in °C/°F, and weather descriptions.
 - **Celestial Engine & Weather v2:** Day progress arc with sunrise/sunset/twilight visualization, dew point calculation, and surface pressure.
-- **Digital Wellbeing Tab:** Local screen time tracking with active app usage breakdown, 7-day weekly comparison bar charts, and 92-day retention pruning.
+- **Digital Wellbeing Tab:** Local screen time tracking synchronized with macOS Screen Time (`ScreenTimeAgent`), active app usage breakdown, daily app quotas, 7-day weekly comparison bar charts, and 92-day retention pruning.
 - **Now Playing Media Player:** Full media controls (playback progress bar, elapsed/duration time, play/pause, next/previous) for Apple Music and Spotify.
 - **Hardware Telemetry Gauges:** Detailed CPU, RAM, and Battery circular/linear progress gauges.
 - **Quick Scratchpad:** Embedded mini-notepad synchronized with the main Notepad store.
@@ -189,6 +189,7 @@ dms colorpicker [pick]
 dms qr <text>
 dms keybinds [open]
 dms settings [open|get|set|dump]
+dms wellbeing [status|enable|disable|toggle|sync|open-system]
 dms bar [reveal|hide|toggle|status|setposition <top|bottom>]
 dms dock [reveal|hide|toggle|status]
 dms workspace [status|switch <num>|next|prev]

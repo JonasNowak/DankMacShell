@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import DMSCore
 
-let version = "0.4.0"
+let version = "0.4.1"
 
 func printHelp() {
     print("""
@@ -36,6 +36,7 @@ func printHelp() {
       dms qr <text>                     Generate QR code for text/URL
       dms keybinds [open]               Keyboard shortcuts cheatsheet
       dms settings [open|get|set|dump]  Material 3 configuration manager
+      dms wellbeing [status|enable|disable|toggle|sync|open-system] Digital Wellbeing & Screen Time
       dms bar [reveal|hide|toggle|status]       DankBar controls
       dms dock [reveal|hide|toggle|status]      Dock controls
       dms workspace [status|switch <num>|next|prev] Virtual workspace manager

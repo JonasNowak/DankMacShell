@@ -22,6 +22,29 @@ public struct WellbeingTab: View {
         let apps = wellbeingService.store.topApps(for: activeKey, limit: 10)
 
         VStack(spacing: 12) {
+            // Screen Time Sync / Tracking Warning Banner
+            if !wellbeingService.isTrackingActive {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 12))
+                    Text(wellbeingService.isMacOSScreenTimeActive ? "Focus tracking is disabled in DMS Settings." : "Focus tracking paused: macOS Screen Time is turned off or inactive.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: p.onSurface.hex))
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Open Screen Time") {
+                        wellbeingService.openMacOSScreenTimeSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.12))
+                .cornerRadius(10)
+            }
+
             // Header Hero & Weekly Bar Chart
             HStack(spacing: 10) {
                 // Total Screen Time Hero
@@ -100,9 +123,22 @@ public struct WellbeingTab: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                     Spacer()
-                    Text("Daily Limits")
-                        .font(.system(size: 10))
+                    Button(action: {
+                        wellbeingService.openMacOSScreenTimeSettings()
+                    }) {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(wellbeingService.isMacOSScreenTimeActive ? Color.green : Color.orange)
+                                .frame(width: 6, height: 6)
+                            Text("macOS Screen Time")
+                                .font(.system(size: 10, weight: .medium))
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.system(size: 8))
+                        }
                         .foregroundColor(Color(hex: p.outline.hex))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open macOS Screen Time in System Settings")
                 }
 
                 if apps.isEmpty {

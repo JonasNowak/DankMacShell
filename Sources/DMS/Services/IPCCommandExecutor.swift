@@ -713,6 +713,63 @@ public enum IPCCommandExecutor {
                 return "Unknown danksearch action \(act)"
             }
 
+        case .wellbeing(let act, let arg):
+            switch act.lowercased() {
+            case "status":
+                let enabled = ConfigStore.shared.config.enableWellbeing
+                let sync = ConfigStore.shared.config.syncWellbeingWithMacOS
+                let screenTime = WellbeingService.shared.isMacOSScreenTimeActive
+                let active = WellbeingService.shared.isTrackingActive
+                let todayKey = WellbeingFormatter.dateKey(for: Date())
+                let todaySecs = WellbeingService.shared.store.totalDuration(for: todayKey)
+                let formatted = WellbeingFormatter.formatDuration(seconds: todaySecs)
+                return """
+                Digital Wellbeing Status:
+                  - Enabled: \(enabled)
+                  - Sync with macOS Screen Time: \(sync)
+                  - macOS ScreenTimeAgent: \(screenTime ? "Running / Active" : "Inactive / Not Found")
+                  - Focus Tracking Active: \(active ? "Yes" : "No (Paused)")
+                  - Today's Focus Duration: \(formatted)
+                  - Current Frontmost App: \(WellbeingService.shared.currentFrontmostApp.isEmpty ? "None" : WellbeingService.shared.currentFrontmostApp)
+                """
+
+            case "enable":
+                ConfigStore.shared.update { $0.enableWellbeing = true }
+                return "Digital Wellbeing enabled."
+
+            case "disable":
+                ConfigStore.shared.update { $0.enableWellbeing = false }
+                return "Digital Wellbeing disabled."
+
+            case "toggle":
+                let current = ConfigStore.shared.config.enableWellbeing
+                ConfigStore.shared.update { $0.enableWellbeing = !current }
+                return "Digital Wellbeing toggled to \(!current ? "enabled" : "disabled")."
+
+            case "sync":
+                if let arg = arg?.lowercased() {
+                    let enableSync = (arg == "true" || arg == "1" || arg == "on" || arg == "enable")
+                    ConfigStore.shared.update { $0.syncWellbeingWithMacOS = enableSync }
+                    return "macOS Screen Time sync set to \(enableSync)."
+                } else {
+                    let current = ConfigStore.shared.config.syncWellbeingWithMacOS
+                    ConfigStore.shared.update { $0.syncWellbeingWithMacOS = !current }
+                    return "macOS Screen Time sync toggled to \(!current)."
+                }
+
+            case "open-system", "settings", "screentime", "open":
+                WellbeingService.shared.openMacOSScreenTimeSettings()
+                return "Opened macOS Screen Time settings."
+
+            case "check":
+                WellbeingService.shared.updateMacOSScreenTimeStatus()
+                let screenTime = WellbeingService.shared.isMacOSScreenTimeActive
+                return "macOS ScreenTimeAgent is \(screenTime ? "running" : "not running")."
+
+            default:
+                return "Unknown wellbeing action '\(act)'. Valid actions: status, enable, disable, toggle, sync [true|false], open-system, check."
+            }
+
         case .unknown(let raw):
             return "Unknown command: \(raw)"
         }

@@ -2228,16 +2228,79 @@ public struct SettingsView: View {
     // MARK: - 11. Widgets & Notifications - Dashboard Tab
     @ViewBuilder
     private func dashboardTab(palette: DMSPalette) -> some View {
-        SettingsCard(icon: "gauge", title: "DankDash Overview", subtitle: "Full-screen calendar & system dashboard", palette: palette) {
-            SettingsToggleRow(
-                title: "Global Dash Hotkey (⌥D)",
-                subtitle: "Quick toggle overlay with celestial cards and calendar",
-                isOn: Binding(
-                    get: { configStore.config.dashHotkey },
-                    set: { val in configStore.update { $0.dashHotkey = val } }
-                ),
+        VStack(spacing: 12) {
+            SettingsCard(icon: "gauge", title: "DankDash Overview", subtitle: "Full-screen calendar & system dashboard", palette: palette) {
+                SettingsToggleRow(
+                    title: "Global Dash Hotkey (⌥D)",
+                    subtitle: "Quick toggle overlay with celestial cards and calendar",
+                    isOn: Binding(
+                        get: { configStore.config.dashHotkey },
+                        set: { val in configStore.update { $0.dashHotkey = val } }
+                    ),
+                    palette: palette
+                )
+            }
+
+            SettingsCard(
+                icon: "hourglass",
+                title: "Digital Wellbeing & Screen Time",
+                subtitle: "Application focus tracking and macOS Screen Time alignment",
                 palette: palette
-            )
+            ) {
+                SettingsToggleRow(
+                    title: "Track Application Focus",
+                    subtitle: "Record active frontmost application duration in DMS locally",
+                    isOn: Binding(
+                        get: { configStore.config.enableWellbeing },
+                        set: { val in configStore.update { $0.enableWellbeing = val } }
+                    ),
+                    palette: palette
+                )
+
+                Divider().opacity(0.3)
+
+                SettingsToggleRow(
+                    title: "Synchronize with macOS Screen Time",
+                    subtitle: "Align tracking state with system Screen Time daemon (ScreenTimeAgent)",
+                    isOn: Binding(
+                        get: { configStore.config.syncWellbeingWithMacOS },
+                        set: { val in configStore.update { $0.syncWellbeingWithMacOS = val } }
+                    ),
+                    palette: palette
+                )
+
+                Divider().opacity(0.3)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("macOS Screen Time Integration")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                        Text(WellbeingService.shared.isMacOSScreenTimeActive ? "macOS ScreenTimeAgent is running and active" : "macOS ScreenTimeAgent is inactive or disabled")
+                            .font(.system(size: 11))
+                            .foregroundColor(WellbeingService.shared.isMacOSScreenTimeActive ? Color(hex: palette.primary.hex) : Color(hex: palette.error.hex))
+                    }
+                    Spacer()
+                    Button(action: {
+                        WellbeingService.shared.openMacOSScreenTimeSettings()
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.system(size: 11))
+                            Text("Open Screen Time")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: palette.secondaryContainer.hex))
+                        .foregroundColor(Color(hex: palette.onSecondaryContainer.hex))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+            }
         }
     }
 

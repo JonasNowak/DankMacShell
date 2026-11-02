@@ -93,4 +93,56 @@ struct WellbeingTests {
         #expect(WellbeingFormatter.formatDuration(seconds: 3720) == "1h 2m")
         #expect(WellbeingFormatter.formatDurationDetailed(seconds: 3720) == "1 hr 2 min")
     }
+
+    @Test("DMSConfig Digital Wellbeing Defaults and Serialization")
+    func testConfigWellbeingSerialization() throws {
+        var config = DMSConfig()
+        #expect(config.enableWellbeing == true)
+        #expect(config.syncWellbeingWithMacOS == true)
+
+        config.enableWellbeing = false
+        config.syncWellbeingWithMacOS = false
+
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(DMSConfig.self, from: data)
+
+        #expect(decoded.enableWellbeing == false)
+        #expect(decoded.syncWellbeingWithMacOS == false)
+    }
+
+    @Test("DMSConfig Dynamic Setting Accessors for Wellbeing")
+    func testConfigDynamicWellbeingSettings() {
+        var config = DMSConfig()
+
+        #expect(config.getSetting("enableWellbeing")?.boolValue == true)
+        #expect(config.getSetting("syncWellbeingWithMacOS")?.boolValue == true)
+
+        config.setSetting("enableWellbeing", value: AnyCodable(false))
+        config.setSetting("syncWellbeingWithMacOS", value: AnyCodable(false))
+
+        #expect(config.enableWellbeing == false)
+        #expect(config.syncWellbeingWithMacOS == false)
+        #expect(config.getSetting("wellbeingEnabled")?.boolValue == false)
+        #expect(config.getSetting("syncWellbeingWithScreenTime")?.boolValue == false)
+    }
+
+    @Test("IPCCommand Wellbeing CLI and URL Parsing")
+    func testIPCWellbeingCommands() {
+        // CLI parsing
+        let cmdStatus = IPCCommand.parseCLI(args: ["wellbeing", "status"])
+        #expect(cmdStatus == .wellbeing(action: "status", arg: nil))
+
+        let cmdSync = IPCCommand.parseCLI(args: ["screentime", "sync", "false"])
+        #expect(cmdSync == .wellbeing(action: "sync", arg: "false"))
+
+        let cmdOpen = IPCCommand.parseCLI(args: ["wellbeing", "open-system"])
+        #expect(cmdOpen == .wellbeing(action: "open-system", arg: nil))
+
+        // URL parsing
+        let urlStatus = URL(string: "dms://wellbeing/status")!
+        #expect(IPCCommand.parse(url: urlStatus) == .wellbeing(action: "status", arg: nil))
+
+        let urlSync = URL(string: "dms://screentime?action=sync&value=true")!
+        #expect(IPCCommand.parse(url: urlSync) == .wellbeing(action: "sync", arg: "true"))
+    }
 }

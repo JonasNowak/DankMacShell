@@ -28,6 +28,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var omniwmGradientDirection: OmniWMGradientDirection
     public var omniwmSyncOverview: Bool
     public var omniwmSyncWorkspaceBar: Bool
+    public var enableWellbeing: Bool
+    public var syncWellbeingWithMacOS: Bool
 
     // MARK: - Legacy / Direct Accessors (Backward Compatibility)
     public var barPosition: String {
@@ -194,6 +196,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         omniwmGradientDirection: OmniWMGradientDirection = .topLeftToBottomRight,
         omniwmSyncOverview: Bool = true,
         omniwmSyncWorkspaceBar: Bool = true,
+        enableWellbeing: Bool = true,
+        syncWellbeingWithMacOS: Bool = true,
         rawSettings: [String: AnyCodable] = [:],
         includes: [String] = []
     ) {
@@ -223,6 +227,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.omniwmGradientDirection = omniwmGradientDirection
         self.omniwmSyncOverview = omniwmSyncOverview
         self.omniwmSyncWorkspaceBar = omniwmSyncWorkspaceBar
+        self.enableWellbeing = enableWellbeing
+        self.syncWellbeingWithMacOS = syncWellbeingWithMacOS
         self.barMarginX = barMarginX
         self.showTelemetry = showTelemetry
         self.showWeather = showWeather
@@ -271,6 +277,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case omniwmGradientDirection
         case omniwmSyncOverview
         case omniwmSyncWorkspaceBar
+        case enableWellbeing
+        case syncWellbeingWithMacOS
         case barPosition
         case barAutoHide
         case barTransparent
@@ -360,6 +368,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.omniwmGradientDirection = try container.decodeIfPresent(OmniWMGradientDirection.self, forKey: .omniwmGradientDirection) ?? .topLeftToBottomRight
         self.omniwmSyncOverview = try container.decodeIfPresent(Bool.self, forKey: .omniwmSyncOverview) ?? true
         self.omniwmSyncWorkspaceBar = try container.decodeIfPresent(Bool.self, forKey: .omniwmSyncWorkspaceBar) ?? true
+        self.enableWellbeing = try container.decodeIfPresent(Bool.self, forKey: .enableWellbeing) ?? true
+        self.syncWellbeingWithMacOS = try container.decodeIfPresent(Bool.self, forKey: .syncWellbeingWithMacOS) ?? true
         if let arr = try? container.decodeIfPresent([String].self, forKey: .includes) {
             self.includes = arr
         } else if let single = try? container.decodeIfPresent(String.self, forKey: .includes) {
@@ -376,6 +386,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
                 "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
+                "enableWellbeing", "syncWellbeingWithMacOS",
                 "barPosition",
                 "barAutoHide", "barTransparent", "barMarginX", "showDock",
                 "showTelemetry", "showWeather", "showMedia", "showSpaces",
@@ -472,6 +483,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(omniwmGradientDirection, forKey: .omniwmGradientDirection)
         try container.encode(omniwmSyncOverview, forKey: .omniwmSyncOverview)
         try container.encode(omniwmSyncWorkspaceBar, forKey: .omniwmSyncWorkspaceBar)
+        try container.encode(enableWellbeing, forKey: .enableWellbeing)
+        try container.encode(syncWellbeingWithMacOS, forKey: .syncWellbeingWithMacOS)
         try container.encode(barMarginX, forKey: .barMarginX)
         try container.encode(showTelemetry, forKey: .showTelemetry)
         try container.encode(showWeather, forKey: .showWeather)
@@ -511,6 +524,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
                 "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
+                "enableWellbeing", "syncWellbeingWithMacOS",
                 "barPosition",
                 "barAutoHide", "barTransparent", "barMarginX", "showDock",
                 "showTelemetry", "showWeather", "showMedia", "showSpaces",
@@ -641,6 +655,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case "omniwmGradientDirection": return AnyCodable(omniwmGradientDirection.rawValue)
         case "omniwmSyncOverview": return AnyCodable(omniwmSyncOverview)
         case "omniwmSyncWorkspaceBar": return AnyCodable(omniwmSyncWorkspaceBar)
+        case "enableWellbeing", "wellbeingEnabled": return AnyCodable(enableWellbeing)
+        case "syncWellbeingWithMacOS", "syncWellbeingWithScreenTime": return AnyCodable(syncWellbeingWithMacOS)
         default:
             return rawSettings[key]
         }
@@ -687,6 +703,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if let b = value.boolValue { self.omniwmSyncOverview = b }
         case "omniwmSyncWorkspaceBar":
             if let b = value.boolValue { self.omniwmSyncWorkspaceBar = b }
+        case "enableWellbeing", "wellbeingEnabled":
+            if let b = value.boolValue { self.enableWellbeing = b }
+        case "syncWellbeingWithMacOS", "syncWellbeingWithScreenTime":
+            if let b = value.boolValue { self.syncWellbeingWithMacOS = b }
         case "showClock":
             if let b = value.boolValue { self.showClock = b }
         case "showInhibit":
