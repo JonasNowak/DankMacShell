@@ -72,6 +72,7 @@ make clean
 - **Dynamic Island / Clock & Media Pill:** Real-time clock with date tooltip, expandable now-playing snippet with inline pause/play, native volume/brightness/backlight OSD bezel swallowing with fluid capsule expansion, and live weather pill.
 - **Hardware Telemetry:** Real-time CPU usage, RAM usage, and battery indicators with live charge states.
 - **Quick Controls:** Direct toggles for Control Center, Power Menu, Microphone mute, and Caffeinate (Idle Inhibit).
+- **Smart Auto-Hide & Multi-Monitor Layout:** Automatic edge-avoidance and independent status bar managers across secondary monitors and display notches.
 
 ### 2. DLauncherV2 (Spotlight App Launcher)
 - **Multi-Category Tabs:** `All`, `Apps`, `Files`, `Calc`, `Clipboard`, and `Emojis`.
@@ -85,6 +86,8 @@ make clean
 - **Personalized Header:** Dynamic greeting with username and high-resolution live clock.
 - **Interactive Calendar:** Full month view with live day highlight.
 - **Live Weather Card:** Open-Meteo REST API integration with SF Symbols, temperature in °C/°F, and weather descriptions.
+- **Celestial Engine & Weather v2:** Day progress arc with sunrise/sunset/twilight visualization, dew point calculation, and surface pressure.
+- **Digital Wellbeing Tab:** Local screen time tracking with active app usage breakdown, 7-day weekly comparison bar charts, and 92-day retention pruning.
 - **Now Playing Media Player:** Full media controls (playback progress bar, elapsed/duration time, play/pause, next/previous) for Apple Music and Spotify.
 - **Hardware Telemetry Gauges:** Detailed CPU, RAM, and Battery circular/linear progress gauges.
 - **Quick Scratchpad:** Embedded mini-notepad synchronized with the main Notepad store.
@@ -92,6 +95,9 @@ make clean
 
 ### 4. Material 3 Control Center
 - **Quick Action Tiles:** Rounded toggle chips for:
+  - **Modular Drag-and-Drop Editing:** In-situ arrangement chrome with tile library picker sheet and 50-step undo/redo stack.
+  - **Avatar Shape Masking:** Shape cycler (Circle, Rounded Hexagon, Star, Diamond, Shield, Blob).
+  - **Dedicated Detail Pages:** Expandable detail pages for Do Not Disturb and Caffeinate (Idle Inhibit presets).
   - Wi-Fi (CoreWLAN status & toggle)
   - Bluetooth (IOBluetooth status & toggle)
   - Dark / Light Mode
@@ -106,37 +112,41 @@ make clean
   - Display Brightness (`DisplayServices` private framework dynamic lookup)
 - **Theme Switcher:** Live switching between dynamic wallpaper-extracted theme and stock M3 themes (Purple, Blue, Green, Orange, Red, Yellow, Neutral).
 
-### 5. Notepad (Scratchpad & Notes Manager)
+### 5. Desktop Wallpaper Browser & OmniWM Theme Sync
+- **Wallpapers Tab:** Integrated wallpaper browser with tag/category filters, thumbnail grid, and instant desktop background setting.
+- **OmniWM Window Border Sync:** Real-time synchronization of OmniWM focused and inactive window border gradients matching active Material 3 theme palettes (`dms omniwm ...`).
+
+### 6. Notepad (Scratchpad & Notes Manager)
 - **Material 3 Scratchpad Editor:** Autosaving markdown/plain-text editor with word and character counters.
 - **Multi-Note Drawer:** Create, switch between, and delete notes.
 - **Persistent Storage:** Stored locally in JSON format (`~/Library/Application Support/DMS/notes.json`).
 - **Global Hotkey:** Press `⌥N` (Option + N) anywhere to toggle Notepad.
 
-### 6. Clipboard History Manager
+### 7. Clipboard History Manager
 - **Clipboard Store:** Real-time NSPasteboard observer maintaining search-indexed history.
 - **History Modal:** Search past text clippings, view preview snippets, copy back to pasteboard, or clear history.
 - **Persistent Storage:** Stored locally in JSON format (`~/Library/Application Support/DMS/clipboard_history.json`).
 - **Global Hotkey:** Press `⌥V` (Option + V) anywhere to toggle Clipboard history.
 
-### 7. ProcessList (Activity Monitor / Task Manager)
+### 8. ProcessList (Activity Monitor / Task Manager)
 - **Process Enumeration:** Real-time listing of running processes with PID, CPU %, RAM usage (MB), and user.
 - **Sorting & Filtering:** Sort by CPU % or RAM usage, and filter by process name or PID.
 - **Process Termination:** Terminate misbehaving tasks (`kill -15` / `kill -9`) directly from the UI.
 
-### 8. ColorPicker (Screen Eyedropper)
+### 9. ColorPicker (Screen Eyedropper)
 - **Magnifying Eyedropper:** Native `NSColorSampler` for pixel sampling across any display.
 - **Color Format Conversion:** Instant conversion to HEX, RGB, and HSL values with click-to-copy chips.
 - **Recent Swatches:** History strip of recently sampled colors.
 
-### 9. QR Generator
+### 10. QR Generator
 - **CoreImage CIQRCodeGenerator:** Generates crisp QR codes in real-time from arbitrary text or URLs.
 - **Wi-Fi QR Shortcut:** One-click button to format current connected Wi-Fi SSID into standard Wi-Fi QR syntax.
 - **Export Options:** Copy QR image directly to clipboard or save as PNG.
 
-### 10. Keybinds Cheatsheet
+### 11. Keybinds Cheatsheet
 - Searchable quick-reference dialog listing all DMS shell shortcuts and macOS system keybinds.
 
-### 11. Material 3 Settings Window
+### 12. Material 3 Settings Window
 - Multi-tab configuration interface:
   - **Appearance:** Theme selection (Dynamic Wallpaper, Purple, Blue, Green, Orange, Red, Yellow, Neutral), Dark/Light toggle.
   - **Bar & Dock:** Top vs Bottom position, Auto-hide toggle, Transparent bar toggle, Show Dock toggle, Show Telemetry toggle.
@@ -145,7 +155,7 @@ make clean
   - **Diagnostics:** Subsystem connectivity check, configuration reset, hot-reload.
   - **About:** Version info, upstream credits, and quick links.
 
-### 12. Dynamic Wallpaper Theming (Material You)
+### 13. Dynamic Wallpaper Theming (Material You)
 - Automatically samples the current desktop wallpaper using `CoreImage`.
 - Mathematically generates full Material 3 tonal palettes (Primary, Secondary, Tertiary, Surface, Container, Outline, Error tones) for both Dark and Light modes.
 - Updates the shell in real time whenever the wallpaper or display appearance changes.
@@ -188,6 +198,9 @@ dms brightness [get|set <0-100>|increment|decrement]
 dms inhibit [toggle|status]
 dms mpris [status|play|pause|next|prev]
 dms theme [get|set <name>|list|toggle-mode]
+dms weather [status|refresh|location <city|lat,lon>]
+dms wallpaper [get|set <path>|list]
+dms omniwm [get|sync|mode <mode>|direction <dir>|toggle]
 dms screenshot [region|full|window]
 dms toast <info|warn|error> <message>
 dms version

@@ -72,6 +72,8 @@ public struct DashView: View {
                     WallpapersTab()
                 case .weather:
                     WeatherTab()
+                case .wellbeing:
+                    WellbeingTab()
                 case .settings:
                     SettingsTab()
                 }

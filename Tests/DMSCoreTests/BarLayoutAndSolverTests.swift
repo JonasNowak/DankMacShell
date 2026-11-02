@@ -266,6 +266,51 @@ struct BarLayoutAndSolverTests {
             screenCGY: 0
         )
         #expect(secondaryMismatch == false)
+
+        // 6. Direct Bar Overlap: Window on bottom half of screen overlaps bottom bar
+        let bottomBarRect = CGRect(x: 0, y: screenH - 48, width: screenW, height: 48)
+        let bottomWinRect = CGRect(x: 10, y: 500, width: screenW - 20, height: 450) // Y extends to 950, overlapping 934..982
+        #expect(SmartAutoHideSolver.isWindowOverlappingBar(windowBounds: bottomWinRect, barBounds: bottomBarRect) == true)
+
+        // 7. Window on top half does not overlap bottom bar
+        let topWinRect = CGRect(x: 10, y: 40, width: screenW - 20, height: 400) // Y: 40..440, well clear of bottom 934
+        #expect(SmartAutoHideSolver.isWindowOverlappingBar(windowBounds: topWinRect, barBounds: bottomBarRect) == false)
+
+        // 8. Tiled Window with gaps sitting above bottom bar does NOT obstruct bar
+        let tiledSittingAbove = SmartAutoHideSolver.isWindowObstructing(
+            windowX: 10,
+            windowY: 40,
+            windowWidth: screenW - 20,
+            windowHeight: screenH - 100, // Y ends at 922, bar at 934..982 (12pt clear gap)
+            screenWidth: screenW,
+            screenHeight: screenH,
+            screenVisibleHeight: screenVisH,
+            screenCGX: 0,
+            screenCGY: 0,
+            barCGX: 0,
+            barCGY: screenH - 48,
+            barCGWidth: screenW,
+            barCGHeight: 48
+        )
+        #expect(tiledSittingAbove == false)
+
+        // 9. Window directly covering/overlapping bottom bar DOES obstruct
+        let windowOverlapping = SmartAutoHideSolver.isWindowObstructing(
+            windowX: 10,
+            windowY: 40,
+            windowWidth: screenW - 20,
+            windowHeight: screenH - 40, // Y ends at 982, covering bar at 934..982
+            screenWidth: screenW,
+            screenHeight: screenH,
+            screenVisibleHeight: screenVisH,
+            screenCGX: 0,
+            screenCGY: 0,
+            barCGX: 0,
+            barCGY: screenH - 48,
+            barCGWidth: screenW,
+            barCGHeight: 48
+        )
+        #expect(windowOverlapping == true)
     }
 
     @Test("barSmartAutoHide Convenience and Dynamic Setting Getter/Setter")

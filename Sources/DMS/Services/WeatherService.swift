@@ -262,7 +262,7 @@ public final class WeatherService: ObservableObject {
         let lat = self.latitude
         let lon = self.longitude
         let currentLocName = self.locationName
-        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m"
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&hourly=temperature_2m,precipitation_probability,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max&timezone=auto&forecast_days=7"
 
         guard let url = URL(string: urlString) else { return }
 
@@ -286,8 +286,30 @@ public final class WeatherService: ObservableObject {
                     let is_day: Int
                     let weather_code: Int
                     let wind_speed_10m: Double
+                    let wind_direction_10m: Double?
+                    let surface_pressure: Double?
                 }
+                struct Hourly: Codable {
+                    let time: [String]
+                    let temperature_2m: [Double]
+                    let precipitation_probability: [Int]?
+                    let weather_code: [Int]?
+                    let is_day: [Int]?
+                }
+                struct Daily: Codable {
+                    let time: [String]
+                    let weather_code: [Int]
+                    let temperature_2m_max: [Double]
+                    let temperature_2m_min: [Double]
+                    let sunrise: [String]?
+                    let sunset: [String]?
+                    let uv_index_max: [Double]?
+                    let precipitation_probability_max: [Int]?
+                }
+
                 let current: Current
+                let hourly: Hourly?
+                let daily: Daily?
             }
 
             guard let decoded = try? JSONDecoder().decode(OpenMeteoResponse.self, from: data) else {
@@ -296,14 +318,109 @@ public final class WeatherService: ObservableObject {
 
             guard !Task.isCancelled else { return }
 
+            let parseDate: (String) -> Date? = { str in
+                let iso = ISO8601DateFormatter()
+                if let d = iso.date(from: str) { return d }
+                let df = DateFormatter()
+                df.locale = Locale(identifier: "en_US_POSIX")
+                df.timeZone = TimeZone.current
+                df.dateFormat = "yyyy-MM-dd'T'HH:mm"
+                if let d = df.date(from: str) { return d }
+                df.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+                if let d = df.date(from: str) { return d }
+                df.dateFormat = "yyyy-MM-dd"
+                return df.date(from: str)
+            }
+
+            let hourLabelFormatter = DateFormatter()
+            hourLabelFormatter.locale = Locale(identifier: "en_US_POSIX")
+            hourLabelFormatter.dateFormat = "h a"
+
+            // Parse 24-hour forecast starting at current hour
+            var hourlyPoints: [HourlyForecastPoint] = []
+            if let hourly = decoded.hourly {
+                let now = Date()
+                var startIndex = 0
+                for (idx, timeStr) in hourly.time.enumerated() {
+                    if let d = parseDate(timeStr), d >= now.addingTimeInterval(-1800) {
+                        startIndex = idx
+                        break
+                    }
+                }
+
+                let endIndex = min(hourly.time.count, startIndex + 24)
+                for i in startIndex..<endIndex {
+                    guard i < hourly.temperature_2m.count else { break }
+                    let timeStr = hourly.time[i]
+                    let time = parseDate(timeStr) ?? Date()
+                    let temp = hourly.temperature_2m[i]
+                    let precip = (i < (hourly.precipitation_probability?.count ?? 0)) ? (hourly.precipitation_probability?[i] ?? 0) : 0
+                    let code = (i < (hourly.weather_code?.count ?? 0)) ? (hourly.weather_code?[i] ?? decoded.current.weather_code) : decoded.current.weather_code
+                    let day = (i < (hourly.is_day?.count ?? 0)) ? ((hourly.is_day?[i] ?? 1) == 1) : true
+                    let label = (i == startIndex) ? "Now" : hourLabelFormatter.string(from: time)
+
+                    hourlyPoints.append(HourlyForecastPoint(
+                        time: time,
+                        hourLabel: label,
+                        temperatureC: temp,
+                        precipitationProbability: precip,
+                        weatherCode: code,
+                        isDay: day
+                    ))
+                }
+            }
+
+            // Parse 7-day daily forecast
+            var dailyPoints: [DailyForecastPoint] = []
+            var todaySunrise: Date?
+            var todaySunset: Date?
+            var todayUV: Double = 0.0
+
+            if let daily = decoded.daily {
+                for i in 0..<daily.time.count {
+                    let d = parseDate(daily.time[i]) ?? Date()
+                    let code = i < daily.weather_code.count ? daily.weather_code[i] : 0
+                    let maxT = i < daily.temperature_2m_max.count ? daily.temperature_2m_max[i] : 20.0
+                    let minT = i < daily.temperature_2m_min.count ? daily.temperature_2m_min[i] : 10.0
+                    let precip = (i < (daily.precipitation_probability_max?.count ?? 0)) ? (daily.precipitation_probability_max?[i] ?? 0) : 0
+                    let uv = (i < (daily.uv_index_max?.count ?? 0)) ? (daily.uv_index_max?[i] ?? 0.0) : 0.0
+                    let sunrise = (i < (daily.sunrise?.count ?? 0)) ? parseDate(daily.sunrise?[i] ?? "") : nil
+                    let sunset = (i < (daily.sunset?.count ?? 0)) ? parseDate(daily.sunset?[i] ?? "") : nil
+
+                    if i == 0 {
+                        todaySunrise = sunrise
+                        todaySunset = sunset
+                        todayUV = uv
+                    }
+
+                    dailyPoints.append(DailyForecastPoint(
+                        date: d,
+                        weatherCode: code,
+                        tempMaxC: maxT,
+                        tempMinC: minT,
+                        precipitationProbabilityMax: precip,
+                        uvIndexMax: uv,
+                        sunrise: sunrise,
+                        sunset: sunset
+                    ))
+                }
+            }
+
             let weather = WeatherData(
                 temperatureC: decoded.current.temperature_2m,
                 apparentTemperatureC: decoded.current.apparent_temperature,
                 weatherCode: decoded.current.weather_code,
                 humidity: decoded.current.relative_humidity_2m,
                 windSpeedKmh: decoded.current.wind_speed_10m,
+                windDirectionDegrees: decoded.current.wind_direction_10m ?? 0.0,
+                surfacePressureHpa: decoded.current.surface_pressure ?? 1013.25,
+                uvIndex: todayUV,
                 isDay: decoded.current.is_day == 1,
                 locationName: currentLocName,
+                sunrise: todaySunrise,
+                sunset: todaySunset,
+                hourlyForecast: hourlyPoints,
+                dailyForecast: dailyPoints,
                 updatedAt: Date()
             )
 

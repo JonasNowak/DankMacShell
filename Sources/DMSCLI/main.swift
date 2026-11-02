@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import DMSCore
 
-let version = "0.3.0"
+let version = "0.4.0"
 
 func printHelp() {
     print("""
@@ -49,6 +49,8 @@ func printHelp() {
       dms plugins [search|list|install|uninstall|enable|disable|lock|restore]
       dms applets [list|toggle <name>]  Customize DankBar widgets and applets
       dms weather [status|refresh|location <city|lat,lon>] Live Open-Meteo weather controls
+      dms wallpaper [get|set <path>|list] Desktop wallpaper browser and switcher
+      dms omniwm [get|sync|mode <mode>|direction <dir>|toggle] Auto-theme OmniWM window borders
       dms version                      Show version info
     """)
 }

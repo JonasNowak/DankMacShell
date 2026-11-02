@@ -206,6 +206,7 @@ public struct SettingsToggleRow: View {
             Spacer()
             Toggle("", isOn: $isOn)
                 .toggleStyle(.switch)
+                .tint(Color(hex: palette.primary.hex))
                 .labelsHidden()
         }
     }

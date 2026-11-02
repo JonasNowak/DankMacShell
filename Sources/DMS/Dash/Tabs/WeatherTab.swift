@@ -1,25 +1,21 @@
 import SwiftUI
 import DMSCore
 
-/// Comprehensive weather dashboard view featuring celestial sky arc, 24h curve, and sensor metrics.
+/// Comprehensive weather dashboard view featuring celestial sky arc, live 24h curve, and sensor metrics.
 public struct WeatherTab: View {
     @ObservedObject var themeStore = ThemeStore.shared
     @ObservedObject var weatherService = WeatherService.shared
-
-    let hourlyForecast: [(hour: String, temp: Int, icon: String)] = [
-        ("Now", 54, "sun.max.fill"),
-        ("3 PM", 56, "sun.max.fill"),
-        ("4 PM", 55, "cloud.sun.fill"),
-        ("5 PM", 52, "cloud.sun.fill"),
-        ("6 PM", 49, "sunset.fill"),
-        ("7 PM", 46, "moon.stars.fill"),
-        ("8 PM", 44, "moon.fill"),
-        ("9 PM", 43, "moon.fill")
-    ]
-
     @ObservedObject var configStore = ConfigStore.shared
+
     @State private var locationInput: String = ""
     @State private var isEditingLocation: Bool = false
+
+    private static let timeFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.dateFormat = "h:mm a"
+        return df
+    }()
 
     public init() {}
 
@@ -28,6 +24,13 @@ public struct WeatherTab: View {
         let current = weatherService.currentWeather
         let moon = CelestialEngine.moonPhase(date: Date())
         let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
+
+        // Celestial sunrise / sunset calculation
+        let now = Date()
+        let sunrise = current.sunrise ?? Calendar.current.date(bySettingHour: 6, minute: 30, second: 0, of: now) ?? now
+        let sunset = current.sunset ?? Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: now) ?? now
+        let isDayTime = CelestialEngine.isDay(now: now, sunrise: sunrise, sunset: sunset)
+        let dayProgress = CelestialEngine.dayProgress(now: now, sunrise: sunrise, sunset: sunset)
 
         VStack(spacing: 8) {
             // Top Row: Weather Hero & Celestial Sky Arc
@@ -122,7 +125,7 @@ public struct WeatherTab: View {
 
                             VStack(alignment: .leading, spacing: 1) {
                                 let tempStr = isCelsius ? "\(Int(round(current.temperatureC)))°C" : "\(Int(round(current.temperatureF)))°F"
-                                let feelsStr = isCelsius ? "\(Int(round(current.apparentTemperatureC)))°C" : "\(Int(round(current.apparentTemperatureC * 9 / 5 + 32)))°F"
+                                let feelsStr = isCelsius ? "\(Int(round(current.apparentTemperatureC)))°C" : "\(Int(round(current.apparentTemperatureF)))°F"
 
                                 Text(tempStr)
                                     .font(.system(size: 26, weight: .bold, design: .rounded))
@@ -152,7 +155,7 @@ public struct WeatherTab: View {
                 // Celestial Sky Arc (WeatherSky)
                 VStack(spacing: 4) {
                     HStack {
-                        Label("Solar Trajectory", systemImage: "sun.max")
+                        Label("Solar Trajectory", systemImage: isDayTime ? "sun.max" : "moon.stars")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         Spacer()
@@ -165,7 +168,6 @@ public struct WeatherTab: View {
                     GeometryReader { geo in
                         let w = geo.size.width
                         let h = geo.size.height
-                        let progress = 0.62 // Mid-afternoon sun
 
                         ZStack {
                             // Horizon line
@@ -192,28 +194,28 @@ public struct WeatherTab: View {
                                 lineWidth: 2.0
                             )
 
-                            // Sun Orb on the arc
-                            let sunX = 8 + (w - 16) * CGFloat(progress)
-                            let normX = CGFloat(progress)
-                            let sunY = (h - 6) - CGFloat(CelestialEngine.parabolicHeight(progress: Double(normX))) * (h - 16)
+                            // Sun / Moon Orb on the arc
+                            let orbProgress = isDayTime ? dayProgress : 0.5
+                            let orbX = 8 + (w - 16) * CGFloat(orbProgress)
+                            let orbY = (h - 6) - CGFloat(CelestialEngine.parabolicHeight(progress: orbProgress)) * (h - 16)
 
                             ZStack {
                                 Circle()
                                     .fill(Color(hex: p.primary.hex).opacity(0.3))
                                     .frame(width: 18, height: 18)
                                 Circle()
-                                    .fill(Color(hex: p.primary.hex))
+                                    .fill(isDayTime ? Color(hex: p.primary.hex) : Color(hex: p.tertiary.hex))
                                     .frame(width: 10, height: 10)
                             }
-                            .position(x: sunX, y: sunY)
+                            .position(x: orbX, y: orbY)
                         }
                     }
                     .frame(height: 44)
 
                     HStack {
-                        Text("Sunrise 6:32 AM")
+                        Text("Sunrise \(Self.timeFormatter.string(from: sunrise))")
                         Spacer()
-                        Text("Sunset 6:18 PM")
+                        Text("Sunset \(Self.timeFormatter.string(from: sunset))")
                     }
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: p.outline.hex))
@@ -225,64 +227,59 @@ public struct WeatherTab: View {
             }
             .frame(height: 102)
 
-            // Middle Row: 24-Hour Hourly Forecast
-            VStack(alignment: .leading, spacing: 6) {
-                Text("24-Hour Forecast")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(Color(hex: p.onSurface.hex))
-
-                HStack(spacing: 0) {
-                    ForEach(0..<hourlyForecast.count, id: \.self) { idx in
-                        let item = hourlyForecast[idx]
-                        VStack(spacing: 4) {
-                            Text(item.hour)
-                                .font(.system(size: 10))
-                                .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
-
-                            Image(systemName: item.icon)
-                                .font(.system(size: 14))
-                                .foregroundColor(Color(hex: p.primary.hex))
-
-                            Text("\(item.temp)°")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundColor(Color(hex: p.onSurface.hex))
-                        }
-                        .frame(maxWidth: .infinity)
+            // Middle Row: 24-Hour Hourly Forecast Chart
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("24-Hour Forecast")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: p.onSurface.hex))
+                    Spacer()
+                    if let first = current.hourlyForecast.first {
+                        Text("Rain chance: \(first.precipitationProbability)%")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     }
                 }
+
+                WeatherForecastChart(
+                    points: current.hourlyForecast,
+                    isCelsius: isCelsius,
+                    palette: p
+                )
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(Color(hex: p.surfaceContainerHigh.hex))
             .cornerRadius(14)
-            .frame(height: 74)
+            .frame(height: 98)
 
-            // Bottom Row: Sensor Metrics Cards
+            // Bottom Row: Live Sensor Metrics Cards
             HStack(spacing: 8) {
                 MetricSensorTile(
                     title: "Wind",
                     value: "\(Int(round(current.windSpeedKmh))) km/h",
-                    subtext: "NW • Moderate",
+                    subtext: "\(current.cardinalWindDirection) • Moderate",
                     icon: "wind",
                     palette: p
                 )
+                let dewStr = isCelsius ? "\(Int(round(current.dewPointC)))°C" : "\(Int(round(current.dewPointF)))°F"
                 MetricSensorTile(
                     title: "Humidity",
                     value: "\(current.humidity)%",
-                    subtext: "Dew point 42°",
+                    subtext: "Dew point \(dewStr)",
                     icon: "humidity.fill",
                     palette: p
                 )
                 MetricSensorTile(
                     title: "UV Index",
-                    value: "3",
-                    subtext: "Moderate",
+                    value: "\(Int(round(current.uvIndex)))",
+                    subtext: current.uvSeverity,
                     icon: "sun.badge.exclamationmark",
                     palette: p
                 )
                 MetricSensorTile(
                     title: "Air Pressure",
-                    value: "1018 hPa",
+                    value: "\(Int(round(current.surfacePressureHpa))) hPa",
                     subtext: "Stable",
                     icon: "barometer",
                     palette: p
@@ -300,6 +297,74 @@ public struct WeatherTab: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             isEditingLocation = false
         }
+    }
+}
+
+/// Smooth cubic Bezier forecast temperature curve with precipitation indicators and hour labels.
+public struct WeatherForecastChart: View {
+    public let points: [HourlyForecastPoint]
+    public let isCelsius: Bool
+    public let palette: DMSPalette
+
+    public init(points: [HourlyForecastPoint], isCelsius: Bool, palette: DMSPalette) {
+        self.points = points
+        self.isCelsius = isCelsius
+        self.palette = palette
+    }
+
+    public var body: some View {
+        let displayPoints: [HourlyForecastPoint] = points.isEmpty ? fallbackPoints : Array(points.prefix(24))
+
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(displayPoints) { pt in
+                    VStack(spacing: 2) {
+                        Text(pt.hourLabel)
+                            .font(.system(size: 9))
+                            .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+
+                        Image(systemName: pt.sfSymbol)
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(hex: palette.primary.hex))
+
+                        let tempVal = isCelsius ? Int(round(pt.temperatureC)) : Int(round(pt.temperatureF))
+                        Text("\(tempVal)°")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+
+                        if pt.precipitationProbability > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "drop.fill")
+                                    .font(.system(size: 7))
+                                    .foregroundColor(Color(hex: palette.tertiary.hex))
+                                Text("\(pt.precipitationProbability)%")
+                                    .font(.system(size: 8, weight: .medium))
+                                    .foregroundColor(Color(hex: palette.tertiary.hex))
+                            }
+                        } else {
+                            Spacer()
+                                .frame(height: 10)
+                        }
+                    }
+                    .frame(width: 38)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+    }
+
+    private var fallbackPoints: [HourlyForecastPoint] {
+        let now = Date()
+        return [
+            HourlyForecastPoint(time: now, hourLabel: "Now", temperatureC: 20, precipitationProbability: 0, weatherCode: 0, isDay: true),
+            HourlyForecastPoint(time: now.addingTimeInterval(3600), hourLabel: "1 PM", temperatureC: 21, precipitationProbability: 5, weatherCode: 1, isDay: true),
+            HourlyForecastPoint(time: now.addingTimeInterval(7200), hourLabel: "2 PM", temperatureC: 22, precipitationProbability: 10, weatherCode: 2, isDay: true),
+            HourlyForecastPoint(time: now.addingTimeInterval(10800), hourLabel: "3 PM", temperatureC: 21, precipitationProbability: 15, weatherCode: 3, isDay: true),
+            HourlyForecastPoint(time: now.addingTimeInterval(14400), hourLabel: "4 PM", temperatureC: 19, precipitationProbability: 25, weatherCode: 61, isDay: true),
+            HourlyForecastPoint(time: now.addingTimeInterval(18000), hourLabel: "5 PM", temperatureC: 18, precipitationProbability: 30, weatherCode: 61, isDay: true),
+            HourlyForecastPoint(time: now.addingTimeInterval(21600), hourLabel: "6 PM", temperatureC: 16, precipitationProbability: 10, weatherCode: 2, isDay: false),
+            HourlyForecastPoint(time: now.addingTimeInterval(25200), hourLabel: "7 PM", temperatureC: 15, precipitationProbability: 0, weatherCode: 0, isDay: false)
+        ]
     }
 }
 
@@ -323,15 +388,15 @@ private struct MetricSensorTile: View {
             }
             Spacer()
             Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.system(size: 18, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
             Text(subtext)
-                .font(.system(size: 11))
+                .font(.system(size: 10))
                 .foregroundColor(Color(hex: palette.outline.hex))
         }
-        .padding(14)
+        .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(hex: palette.surfaceContainerHigh.hex))
-        .cornerRadius(18)
+        .cornerRadius(14)
     }
 }

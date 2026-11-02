@@ -1,63 +1,76 @@
 import SwiftUI
+import AppKit
 import DMSCore
 
-public struct WallpaperItem: Identifiable, Sendable {
-    public let id: String
-    public let name: String
-    public let category: String
-    public let colors: [Color]
-    public let associatedTheme: String
-}
-
-/// Wallpaper gallery tab allowing live browsing and desktop wallpaper application.
+/// Wallpaper gallery tab allowing live local browsing, thumbnail caching, folder additions, and desktop wallpaper application.
 public struct WallpapersTab: View {
     @ObservedObject var themeStore = ThemeStore.shared
-    @State private var selectedWallpaper: WallpaperItem?
-    @State private var selectedCategory: String = "All"
+    @ObservedObject var wallpaperService = WallpaperService.shared
 
-    let wallpapers: [WallpaperItem] = [
-        WallpaperItem(id: "purple-horizon", name: "Purple Horizon", category: "Abstract", colors: [Color(hex: "#2c1654"), Color(hex: "#7b3fa8"), Color(hex: "#d699ff")], associatedTheme: "purple"),
-        WallpaperItem(id: "midnight-aurora", name: "Midnight Aurora", category: "Nature", colors: [Color(hex: "#051c24"), Color(hex: "#0c505b"), Color(hex: "#34d399")], associatedTheme: "green"),
-        WallpaperItem(id: "deep-ocean", name: "Deep Ocean", category: "Minimal", colors: [Color(hex: "#0f172a"), Color(hex: "#1e3a8a"), Color(hex: "#60a5fa")], associatedTheme: "blue"),
-        WallpaperItem(id: "solar-flare", name: "Solar Flare", category: "Abstract", colors: [Color(hex: "#3b0764"), Color(hex: "#9a3412"), Color(hex: "#f97316")], associatedTheme: "orange"),
-        WallpaperItem(id: "crimson-dusk", name: "Crimson Dusk", category: "Nature", colors: [Color(hex: "#450a0a"), Color(hex: "#991b1b"), Color(hex: "#f87171")], associatedTheme: "red"),
-        WallpaperItem(id: "golden-hour", name: "Golden Hour", category: "Minimal", colors: [Color(hex: "#422006"), Color(hex: "#a16207"), Color(hex: "#facc15")], associatedTheme: "yellow")
-    ]
+    @State private var selectedWallpaper: WallpaperItem?
+    @State private var selectedSource: WallpaperSource = .all
+    @State private var searchQuery: String = ""
 
     public init() {}
 
     public var body: some View {
         let p = themeStore.palette
-        let filtered = selectedCategory == "All" ? wallpapers : wallpapers.filter { $0.category == selectedCategory }
-        let currentSelection = selectedWallpaper ?? wallpapers[0]
+        let filtered = WallpaperItem.filterWallpapers(
+            items: wallpaperService.wallpapers,
+            source: selectedSource,
+            query: searchQuery
+        )
+        let currentSelection = selectedWallpaper ?? filtered.first ?? WallpaperItem.defaultPresets[0]
 
-        VStack(spacing: 16) {
-            // Category Filter Pills
-            HStack(spacing: 10) {
-                ForEach(["All", "Abstract", "Nature", "Minimal"], id: \.self) { cat in
-                    Button(action: { selectedCategory = cat }) {
-                        Text(cat)
-                            .font(.system(size: 12, weight: .semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
-                            .background(selectedCategory == cat ? Color(hex: p.primary.hex) : Color(hex: p.surfaceContainerHigh.hex))
-                            .foregroundColor(selectedCategory == cat ? Color(hex: p.onPrimary.hex) : Color(hex: p.onSurface.hex))
-                            .clipShape(Capsule())
+        VStack(spacing: 12) {
+            // Category Filter Pills & Actions
+            HStack(spacing: 8) {
+                // Source Pills
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(WallpaperSource.allCases) { src in
+                            Button(action: { selectedSource = src }) {
+                                Text(src.rawValue)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 5)
+                                    .background(selectedSource == src ? Color(hex: p.primary.hex) : Color(hex: p.surfaceContainerHigh.hex))
+                                    .foregroundColor(selectedSource == src ? Color(hex: p.onPrimary.hex) : Color(hex: p.onSurface.hex))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
+
                 Spacer()
 
-                Button(action: {
-                    themeStore.apply(theme: currentSelection.associatedTheme)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("Apply to DMS")
-                            .font(.system(size: 12, weight: .bold))
+                // Add Folder Button
+                Button(action: pickFolder) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "folder.badge.plus")
+                        Text("Add Folder…")
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(hex: p.surfaceContainerHighest.hex))
+                    .foregroundColor(Color(hex: p.onSurface.hex))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                // Apply Wallpaper Button
+                Button(action: {
+                    wallpaperService.applyWallpaper(currentSelection)
+                }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Apply Wallpaper")
+                    }
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                     .background(Color(hex: p.primary.hex))
                     .foregroundColor(Color(hex: p.onPrimary.hex))
                     .clipShape(Capsule())
@@ -65,47 +78,144 @@ public struct WallpapersTab: View {
                 .buttonStyle(.plain)
             }
 
+            // Search Bar & Scan Indicator
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: p.outline.hex))
+                    TextField("Search wallpapers…", text: $searchQuery)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color(hex: p.surfaceContainerLow.hex))
+                .cornerRadius(8)
+
+                if wallpaperService.isScanning {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 14, height: 14)
+                }
+
+                Text("\(filtered.count) wallpapers")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
+            }
+
             // Wallpaper Grid
             ScrollView(showsIndicators: false) {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 14) {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     ForEach(filtered) { wp in
+                        let isSelected = (wp.id == currentSelection.id)
+                        let isActiveDesktop = wp.isCurrentDesktop || (!wallpaperService.currentDesktopPath.isEmpty && wp.path == wallpaperService.currentDesktopPath)
+
                         Button(action: { selectedWallpaper = wp }) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: wp.colors,
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(height: 95)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .stroke(wp.id == currentSelection.id ? Color(hex: p.primary.hex) : Color.clear, lineWidth: 2.5)
-                                    )
+                            VStack(alignment: .leading, spacing: 6) {
+                                ZStack(alignment: .topTrailing) {
+                                    // Wallpaper Thumbnail or Gradient
+                                    WallpaperCardPreview(item: wp, palette: p)
+                                        .frame(height: 84)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                                    // Active Desktop or Selected Checkmark
+                                    if isActiveDesktop {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "desktopcomputer")
+                                                .font(.system(size: 8, weight: .bold))
+                                            Text("Active")
+                                                .font(.system(size: 8, weight: .bold))
+                                        }
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2.5)
+                                        .background(Color.black.opacity(0.65))
+                                        .foregroundColor(.white)
+                                        .clipShape(Capsule())
+                                        .padding(5)
+                                    }
+                                }
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(isSelected ? Color(hex: p.primary.hex) : Color.clear, lineWidth: 2.5)
+                                )
 
                                 HStack {
                                     Text(wp.name)
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.system(size: 11, weight: .medium))
                                         .foregroundColor(Color(hex: p.onSurface.hex))
+                                        .lineLimit(1)
                                     Spacer()
-                                    Text(wp.category)
-                                        .font(.system(size: 10))
+                                    Text(wp.source.rawValue)
+                                        .font(.system(size: 9))
                                         .foregroundColor(Color(hex: p.outline.hex))
                                 }
-                                .padding(.horizontal, 4)
+                                .padding(.horizontal, 2)
                             }
-                            .padding(8)
+                            .padding(6)
                             .background(Color(hex: p.surfaceContainerHigh.hex))
-                            .cornerRadius(18)
+                            .cornerRadius(14)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func pickFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose Folder"
+        panel.message = "Select a folder containing wallpaper images"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            wallpaperService.addFolder(path: url.path)
+        }
+    }
+}
+
+/// Preview component for a single wallpaper tile (downsampled image or gradient).
+private struct WallpaperCardPreview: View {
+    let item: WallpaperItem
+    let palette: DMSPalette
+
+    @State private var thumbnailImage: NSImage?
+    @State private var isLoading: Bool = false
+
+    var body: some View {
+        ZStack {
+            if let img = thumbnailImage {
+                Image(nsImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else if let hexes = item.gradientColorsHex, !hexes.isEmpty {
+                LinearGradient(
+                    colors: hexes.map { Color(hex: $0) },
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                Color(hex: palette.surfaceContainerHighest.hex)
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                } else {
+                    Image(systemName: "photo")
+                        .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                }
+            }
+        }
+        .task(id: item.id) {
+            guard item.path != nil else { return }
+            isLoading = true
+            let img = await WallpaperService.shared.thumbnail(for: item)
+            self.thumbnailImage = img
+            self.isLoading = false
+        }
     }
 }

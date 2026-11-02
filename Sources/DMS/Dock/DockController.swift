@@ -42,13 +42,7 @@ public final class DockController {
 
     public func show() {
         isVisible = true
-        let configs = ConfigStore.shared.config.dockConfigs
-        let hasSmartAutoHide = configs.contains { $0.smartAutoHide }
-        for (key, panel) in panels {
-            let screenIndex = Int(key.split(separator: "_").first ?? "") ?? 0
-            if hasSmartAutoHide && DankBarController.shared.isScreenFullscreen(index: screenIndex) {
-                continue
-            }
+        for panel in panels.values {
             panel.orderFront(nil)
         }
     }
@@ -214,16 +208,18 @@ public final class DockController {
                     panels[key] = panel
                 }
 
-                let isScreenFS = DankBarController.shared.isScreenFullscreen(index: screenIndex)
-                if dockConfig.smartAutoHide && isScreenFS {
-                    panel.orderOut(nil)
-                    continue
-                }
-
                 panel.setFrame(frame, display: true)
                 panel.contentView = NSHostingView(rootView: DockView(config: dockConfig))
 
-                if isVisible {
+                let isScreenFS = DankBarController.shared.isScreenFullscreen(index: screenIndex)
+                let isDockObstructed = isScreenFS || DankBarController.shared.isDockObstructed(
+                    screenIndex: screenIndex,
+                    config: dockConfig,
+                    frame: frame
+                )
+                if dockConfig.smartAutoHide && isDockObstructed {
+                    panel.orderOut(nil)
+                } else if isVisible {
                     panel.orderFront(nil)
                 }
             }

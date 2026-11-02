@@ -6,6 +6,7 @@ public enum DashTab: String, CaseIterable, Codable, Sendable, Identifiable {
     case media = "media"
     case wallpapers = "wallpapers"
     case weather = "weather"
+    case wellbeing = "wellbeing"
     case settings = "settings"
 
     public var id: String { rawValue }
@@ -16,6 +17,7 @@ public enum DashTab: String, CaseIterable, Codable, Sendable, Identifiable {
         case .media: return "Media"
         case .wallpapers: return "Wallpapers"
         case .weather: return "Weather"
+        case .wellbeing: return "Wellbeing"
         case .settings: return "Settings"
         }
     }
@@ -26,6 +28,7 @@ public enum DashTab: String, CaseIterable, Codable, Sendable, Identifiable {
         case .media: return "music.note"
         case .wallpapers: return "photo.artframe"
         case .weather: return "sun.max"
+        case .wellbeing: return "hourglass"
         case .settings: return "gearshape"
         }
     }
@@ -41,6 +44,8 @@ public enum DashTab: String, CaseIterable, Codable, Sendable, Identifiable {
             self = .wallpapers
         case "weather", "forecast", "meteo":
             self = .weather
+        case "wellbeing", "focus", "screentime", "usage":
+            self = .wellbeing
         case "settings", "config", "preferences", "prefs":
             self = .settings
         default:

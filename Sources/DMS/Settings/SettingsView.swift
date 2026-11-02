@@ -9,6 +9,7 @@ public struct SettingsView: View {
     @ObservedObject var inhibit = IdleInhibitService.shared
     @ObservedObject var pluginService = PluginService.shared
     @ObservedObject var controller = SettingsController.shared
+    @ObservedObject var wallpaperService = WallpaperService.shared
 
     public typealias SettingsSection = DMSSettingsTab
 
@@ -16,6 +17,12 @@ public struct SettingsView: View {
     @State private var weatherLocationInput: String = ""
     @State private var customSeedHexInput: String = ""
     @State private var expandedWidgetStyleId: String? = nil
+
+    // Wallpaper Tab States
+    @State private var wallpaperSelectedSource: WallpaperSource = .all
+    @State private var wallpaperSearchQuery: String = ""
+    @State private var selectedWallpaperItem: WallpaperItem? = nil
+    @State private var pendingWallpaperChange: Bool = false
 
     // Modal Sheet States
     @State private var activeAddWidgetSection: String? = nil
@@ -89,6 +96,13 @@ public struct SettingsView: View {
                         .lineLimit(1)
                     Spacer()
                     Button(action: {
+                        if pendingWallpaperChange, let sel = selectedWallpaperItem {
+                            wallpaperService.applyWallpaper(sel)
+                            pendingWallpaperChange = false
+                        } else if let sel = selectedWallpaperItem, (sel.path != nil && sel.path != wallpaperService.currentDesktopPath) || (sel.path == nil && sel.associatedTheme != nil && sel.associatedTheme != configStore.config.theme) {
+                            wallpaperService.applyWallpaper(sel)
+                            pendingWallpaperChange = false
+                        }
                         configStore.flushSave()
                         ToastCenter.shared.show(icon: "checkmark.circle.fill", message: "Settings Saved")
                     }) {
@@ -341,6 +355,138 @@ public struct SettingsView: View {
             }
         }
 
+        SettingsCard(icon: "macwindow.on.rectangle", title: "OmniWM Window Borders & Theming", subtitle: "Auto-sync Material 3 gradient borders directly to OmniWM (~/.config/omniwm/settings.toml)", palette: palette) {
+            SettingsToggleRow(
+                title: "Auto-Theme OmniWM Borders",
+                subtitle: "Automatically write gradient colors to OmniWM on theme and wallpaper changes",
+                isOn: Binding(
+                    get: { configStore.config.autoThemeOmniWM },
+                    set: { val in
+                        configStore.update { $0.autoThemeOmniWM = val }
+                        if val {
+                            OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                        }
+                    }
+                ),
+                palette: palette
+            )
+
+            if configStore.config.autoThemeOmniWM {
+                Divider().opacity(0.3)
+
+                OmniWMWindowBorderPreview(
+                    palette: palette,
+                    mode: configStore.config.omniwmGradientMode,
+                    direction: configStore.config.omniwmGradientDirection
+                )
+
+                Divider().opacity(0.3)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Gradient Harmony Strategy")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                        ForEach(OmniWMGradientMode.allCases, id: \.self) { mode in
+                            Button(action: {
+                                configStore.update { $0.omniwmGradientMode = mode }
+                                OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: configStore.config.omniwmGradientMode == mode ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(configStore.config.omniwmGradientMode == mode ? Color(hex: palette.primary.hex) : Color(hex: palette.outline.hex))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(mode.displayName)
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                                            .lineLimit(1)
+                                        Text(mode.subtitle)
+                                            .font(.system(size: 8.5))
+                                            .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(7)
+                                .background(Color(hex: configStore.config.omniwmGradientMode == mode ? palette.surfaceContainerHigh.hex : palette.surfaceContainerLow.hex))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(configStore.config.omniwmGradientMode == mode ? Color(hex: palette.primary.hex) : Color.clear, lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Divider().opacity(0.3)
+
+                HStack {
+                    Text("Gradient Direction")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                    Spacer()
+                    SettingsSegmentedControl(
+                        options: [
+                            ("Top-Left ↘", OmniWMGradientDirection.topLeftToBottomRight),
+                            ("Top-Right ↙", OmniWMGradientDirection.topRightToBottomLeft)
+                        ],
+                        selection: Binding(
+                            get: { configStore.config.omniwmGradientDirection },
+                            set: { val in
+                                configStore.update { $0.omniwmGradientDirection = val }
+                                OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                            }
+                        ),
+                        palette: palette
+                    )
+                }
+
+                Divider().opacity(0.3)
+
+                SettingsToggleRow(
+                    title: "Sync Overview & Exposé Borders",
+                    subtitle: "Apply theme colors to OmniWM overview window borders and backdrop",
+                    isOn: Binding(
+                        get: { configStore.config.omniwmSyncOverview },
+                        set: { val in
+                            configStore.update { $0.omniwmSyncOverview = val }
+                            OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                        }
+                    ),
+                    palette: palette
+                )
+
+                HStack {
+                    if let lastSync = OmniWMThemeSyncService.shared.lastSyncDate {
+                        Text("Last synced: \(lastSync.formatted(date: .omitted, time: .standard))")
+                            .font(.system(size: 9.5))
+                            .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                    }
+                    Spacer()
+                    Button(action: {
+                        OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 10))
+                            Text("Sync to OmniWM Now")
+                                .font(.system(size: 10.5, weight: .bold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: palette.primary.hex))
+                        .foregroundColor(Color(hex: palette.onPrimary.hex))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+
         SettingsCard(icon: "sun.max.fill", title: "Appearance Mode, Opacity, Blur & Shadows", palette: palette) {
             HStack {
                 Text("Theme Mode")
@@ -529,27 +675,374 @@ public struct SettingsView: View {
     // MARK: - 2. Wallpaper Tab
     @ViewBuilder
     private func wallpaperTab(palette: DMSPalette) -> some View {
-        SettingsCard(icon: "photo.fill", title: "Desktop Wallpaper", subtitle: "Dynamic theme color source", palette: palette) {
-            Text("DMS continuously listens to macOS desktop wallpaper changes and recalculates the Material 3 tonal palette off the main thread.")
-                .font(.system(size: 11))
-                .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+        let filtered = WallpaperItem.filterWallpapers(
+            items: wallpaperService.wallpapers,
+            source: wallpaperSelectedSource,
+            query: wallpaperSearchQuery
+        )
+        let currentPath = wallpaperService.currentDesktopPath
+        let selected = selectedWallpaperItem ?? filtered.first(where: { $0.path == currentPath }) ?? filtered.first
 
-            Button(action: {
-                themeStore.setDynamicWallpaper()
-                ToastCenter.shared.show(icon: "arrow.clockwise", message: "Palette Resampled")
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.clockwise")
-                    Text("Force Wallpaper Palette Resample")
+        VStack(spacing: 12) {
+            // Card 1: Active Wallpaper & Auto Color Generation
+            SettingsCard(
+                icon: "sparkles",
+                title: "Active Wallpaper & Theme Sync",
+                subtitle: "Desktop wallpaper and automatic Material 3 color generation",
+                palette: palette
+            ) {
+                VStack(alignment: .leading, spacing: 10) {
+                    SettingsToggleRow(
+                        title: "Auto-Generate Colors on Wallpaper Switch",
+                        subtitle: "Automatically extract dominant colors and apply dynamic Material 3 theme when switching wallpapers",
+                        isOn: Binding(
+                            get: { configStore.config.autoGenerateWallpaperColors },
+                            set: { val in configStore.update { $0.autoGenerateWallpaperColors = val } }
+                        ),
+                        palette: palette
+                    )
+
+                    Divider().opacity(0.3)
+
+                    // Active wallpaper summary
+                    HStack(spacing: 12) {
+                        if !currentPath.isEmpty {
+                            SettingsWallpaperThumbnail(
+                                item: WallpaperItem(id: currentPath, name: (currentPath as NSString).lastPathComponent, path: currentPath),
+                                palette: palette
+                            )
+                            .frame(width: 72, height: 48)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(Color(hex: palette.outlineVariant.hex).opacity(0.4), lineWidth: 1)
+                            )
+                        } else {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color(hex: palette.surfaceContainerHigh.hex))
+                                .frame(width: 72, height: 48)
+                                .overlay(
+                                    Image(systemName: "photo")
+                                        .foregroundColor(Color(hex: palette.outline.hex))
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(currentPath.isEmpty ? "Default System Wallpaper" : (currentPath as NSString).lastPathComponent)
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                                    .lineLimit(1)
+
+                                if configStore.config.theme == "dynamic" {
+                                    Text("Dynamic Theme Active")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color(hex: palette.primaryContainer.hex))
+                                        .foregroundColor(Color(hex: palette.onPrimaryContainer.hex))
+                                        .clipShape(Capsule())
+                                }
+                            }
+
+                            Text(currentPath.isEmpty ? "No custom wallpaper path stored" : currentPath)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(Color(hex: palette.outline.hex))
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        HStack(spacing: 6) {
+                            if !currentPath.isEmpty {
+                                Button {
+                                    NSWorkspace.shared.selectFile(currentPath, inFileViewerRootedAtPath: "")
+                                } label: {
+                                    Image(systemName: "folder")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                                        .frame(width: 28, height: 28)
+                                        .background(Color(hex: palette.surfaceContainerHigh.hex))
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                                .help("Reveal in Finder")
+                            }
+
+                            Button {
+                                if !currentPath.isEmpty {
+                                    themeStore.applyDynamicWallpaper(url: URL(fileURLWithPath: currentPath))
+                                } else {
+                                    themeStore.setDynamicWallpaper()
+                                }
+                                ToastCenter.shared.show(icon: "sparkles", message: "Palette Resampled from Wallpaper")
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.clockwise")
+                                    Text("Resample Colors")
+                                }
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color(hex: palette.onPrimary.hex))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color(hex: palette.primary.hex))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    // Live M3 Tonal Palette Swatches
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Current Theme Palette Swatches (click to copy hex)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(hex: palette.outline.hex))
+
+                        HStack(spacing: 6) {
+                            WallpaperColorSwatch(name: "Primary", colorHex: palette.primary.hex, palette: palette)
+                            WallpaperColorSwatch(name: "Secondary", colorHex: palette.secondary.hex, palette: palette)
+                            WallpaperColorSwatch(name: "Tertiary", colorHex: palette.tertiary.hex, palette: palette)
+                            WallpaperColorSwatch(name: "Surface", colorHex: palette.surfaceContainer.hex, palette: palette)
+                            WallpaperColorSwatch(name: "Outline", colorHex: palette.outline.hex, palette: palette)
+                        }
+                    }
                 }
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Color(hex: palette.onPrimary.hex))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(hex: palette.primary.hex))
-                .cornerRadius(8)
             }
-            .buttonStyle(.plain)
+
+            // Card 2: Wallpaper Gallery & Desktop Switcher
+            SettingsCard(
+                icon: "photo.stack",
+                title: "Wallpaper Gallery & Switcher",
+                subtitle: "Browse local wallpapers, preview thumbnails, and apply desktop wallpapers with automatic color extraction",
+                palette: palette
+            ) {
+                VStack(spacing: 10) {
+                    // Filter Pills & Search Toolbar
+                    HStack(spacing: 8) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 5) {
+                                ForEach(WallpaperSource.allCases) { src in
+                                    Button(action: { wallpaperSelectedSource = src }) {
+                                        Text(src.rawValue)
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 4)
+                                            .background(wallpaperSelectedSource == src ? Color(hex: palette.primary.hex) : Color(hex: palette.surfaceContainerHigh.hex))
+                                            .foregroundColor(wallpaperSelectedSource == src ? Color(hex: palette.onPrimary.hex) : Color(hex: palette.onSurface.hex))
+                                            .clipShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        Spacer()
+
+                        // Add Folder Button
+                        Button(action: pickWallpaperFolder) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "folder.badge.plus")
+                                Text("Add Folder…")
+                            }
+                            .font(.system(size: 11, weight: .semibold))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4.5)
+                            .background(Color(hex: palette.surfaceContainerHighest.hex))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        // Rescan Button
+                        Button(action: { wallpaperService.scan() }) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(hex: palette.onSurface.hex))
+                                .frame(width: 26, height: 26)
+                                .background(Color(hex: palette.surfaceContainerHigh.hex))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Rescan wallpaper folders")
+                    }
+
+                    // Search Field & Counter
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(hex: palette.outline.hex))
+
+                        TextField("Search wallpapers…", text: $wallpaperSearchQuery)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 11))
+
+                        if !wallpaperSearchQuery.isEmpty {
+                            Button(action: { wallpaperSearchQuery = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color(hex: palette.outline.hex))
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if wallpaperService.isScanning {
+                            ProgressView()
+                                .scaleEffect(0.5)
+                                .frame(width: 14, height: 14)
+                        }
+
+                        Text("\(filtered.count) wallpapers")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(hex: palette.outline.hex))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color(hex: palette.surfaceContainerLow.hex))
+                    .cornerRadius(8)
+
+                    // 3-Column Wallpaper Gallery Grid
+                    ScrollView(showsIndicators: false) {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                            ForEach(filtered) { wp in
+                                let isSelected = (selected?.id == wp.id)
+                                let isActiveDesktop = wp.isCurrentDesktop || (!currentPath.isEmpty && wp.path == currentPath)
+
+                                Button(action: {
+                                    selectedWallpaperItem = wp
+                                    pendingWallpaperChange = true
+                                }) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        ZStack(alignment: .topTrailing) {
+                                            SettingsWallpaperThumbnail(item: wp, palette: palette)
+                                                .frame(height: 86)
+                                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                                            if isActiveDesktop {
+                                                HStack(spacing: 3) {
+                                                    Image(systemName: "desktopcomputer")
+                                                        .font(.system(size: 8, weight: .bold))
+                                                    Text("Active")
+                                                        .font(.system(size: 8, weight: .bold))
+                                                }
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2.5)
+                                                .background(Color.black.opacity(0.7))
+                                                .foregroundColor(.white)
+                                                .clipShape(Capsule())
+                                                .padding(5)
+                                            }
+                                        }
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .stroke(isSelected ? Color(hex: palette.primary.hex) : Color.clear, lineWidth: 2.5)
+                                        )
+
+                                        HStack {
+                                            Text(wp.name)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundColor(Color(hex: palette.onSurface.hex))
+                                                .lineLimit(1)
+                                            Spacer()
+                                            Text(wp.source.rawValue)
+                                                .font(.system(size: 9))
+                                                .foregroundColor(Color(hex: palette.outline.hex))
+                                        }
+                                        .padding(.horizontal, 2)
+                                    }
+                                    .padding(5)
+                                    .background(Color(hex: palette.surfaceContainerLow.hex))
+                                    .cornerRadius(12)
+                                }
+                                .buttonStyle(.plain)
+                                .simultaneousGesture(TapGesture(count: 2).onEnded {
+                                    wallpaperService.applyWallpaper(wp)
+                                    selectedWallpaperItem = wp
+                                    pendingWallpaperChange = false
+                                })
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .frame(minHeight: 280, maxHeight: 380)
+
+                    // Selected Wallpaper Action Bar
+                    if let sel = selected {
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Selected: \(sel.name)")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                                    .lineLimit(1)
+                                Text(sel.path ?? "Built-in Gradient Preset")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(Color(hex: palette.outline.hex))
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Button(action: {
+                                wallpaperService.applyWallpaper(sel)
+                                selectedWallpaperItem = sel
+                                pendingWallpaperChange = false
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "sparkles")
+                                    Text("Apply Wallpaper & Generate Colors")
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(Color(hex: palette.primary.hex))
+                                .foregroundColor(Color(hex: palette.onPrimary.hex))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(10)
+                        .background(Color(hex: palette.surfaceContainerHigh.hex))
+                        .cornerRadius(10)
+                    }
+                }
+            }
+
+            // Card 3: Indexed Folders
+            SettingsCard(
+                icon: "folder",
+                title: "Indexed Wallpaper Folders",
+                subtitle: "Manage local directories searched for wallpapers",
+                palette: palette
+            ) {
+                VStack(spacing: 6) {
+                    WallpaperFolderRow(name: "User Pictures (~/Pictures)", path: (FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first?.path) ?? "~/Pictures", isDefault: true, palette: palette, onRemove: {})
+                    WallpaperFolderRow(name: "System Desktop Pictures", path: "/System/Library/Desktop Pictures", isDefault: true, palette: palette, onRemove: {})
+
+                    ForEach(configStore.config.wallpaperFolders, id: \.self) { folder in
+                        WallpaperFolderRow(
+                            name: (folder as NSString).lastPathComponent,
+                            path: folder,
+                            isDefault: false,
+                            palette: palette,
+                            onRemove: {
+                                wallpaperService.removeFolder(path: folder)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func pickWallpaperFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select Folder"
+        panel.message = "Choose a directory containing wallpaper images"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            wallpaperService.addFolder(path: url.path)
         }
     }
 
@@ -2288,6 +2781,206 @@ public struct SettingsView: View {
         case "tokyo-night": return Color(hex: "#7AA2F7")
         case "everforest": return Color(hex: "#A7C080")
         default: return Color(hex: "#7C4DFF")
+        }
+    }
+}
+
+// MARK: - Wallpaper Settings Helper Components
+
+private struct SettingsWallpaperThumbnail: View {
+    let item: WallpaperItem
+    let palette: DMSPalette
+
+    @State private var thumbnailImage: NSImage?
+    @State private var isLoading: Bool = false
+
+    var body: some View {
+        ZStack {
+            if let img = thumbnailImage {
+                Image(nsImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else if let hexes = item.gradientColorsHex, !hexes.isEmpty {
+                LinearGradient(
+                    colors: hexes.map { Color(hex: $0) },
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                Color(hex: palette.surfaceContainerHighest.hex)
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                } else {
+                    Image(systemName: "photo")
+                        .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                }
+            }
+        }
+        .task(id: item.id) {
+            guard item.path != nil else { return }
+            isLoading = true
+            let img = await WallpaperService.shared.thumbnail(for: item)
+            self.thumbnailImage = img
+            self.isLoading = false
+        }
+    }
+}
+
+private struct WallpaperColorSwatch: View {
+    let name: String
+    let colorHex: String
+    let palette: DMSPalette
+
+    var body: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(colorHex, forType: .string)
+            ToastCenter.shared.show(icon: "doc.on.doc", message: "Copied \(name): \(colorHex)")
+        } label: {
+            VStack(spacing: 3) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color(hex: colorHex))
+                    .frame(height: 24)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+                Text(name)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                    .lineLimit(1)
+                Text(colorHex.uppercased())
+                    .font(.system(size: 8, weight: .regular, design: .monospaced))
+                    .foregroundColor(Color(hex: palette.outline.hex))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(4)
+            .background(Color(hex: palette.surfaceContainerLow.hex))
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct WallpaperFolderRow: View {
+    let name: String
+    let path: String
+    let isDefault: Bool
+    let palette: DMSPalette
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: isDefault ? "folder.fill" : "folder.badge.gearshape")
+                .foregroundColor(Color(hex: palette.primary.hex))
+                .font(.system(size: 13))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                Text(path)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(Color(hex: palette.outline.hex))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if isDefault {
+                Text("System Default")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(Color(hex: palette.outline.hex))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: palette.surfaceContainerHighest.hex))
+                    .clipShape(Capsule())
+            } else {
+                Button(action: onRemove) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(hex: palette.error.hex))
+                        .frame(width: 22, height: 22)
+                        .background(Color(hex: palette.errorContainer.hex).opacity(0.3))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Remove folder")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color(hex: palette.surfaceContainerLow.hex))
+        .cornerRadius(8)
+    }
+}
+
+private struct OmniWMWindowBorderPreview: View {
+    let palette: DMSPalette
+    let mode: OmniWMGradientMode
+    let direction: OmniWMGradientDirection
+
+    var body: some View {
+        let (start, end, solid, isGradient) = OmniWMThemeUpdater.resolveColors(palette: palette, mode: mode)
+        let startColor = Color(hex: start.hex)
+        let endColor = Color(hex: end.hex)
+        let solidColor = Color(hex: solid.hex)
+
+        let startPoint: UnitPoint = direction == .topLeftToBottomRight ? .topLeading : .topTrailing
+        let endPoint: UnitPoint = direction == .topLeftToBottomRight ? .bottomTrailing : .bottomLeading
+
+        let borderGradient = LinearGradient(
+            colors: isGradient ? [startColor, endColor] : [solidColor, solidColor],
+            startPoint: startPoint,
+            endPoint: endPoint
+        )
+
+        VStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(hex: palette.surfaceContainerLowest.hex))
+                    .frame(height: 72)
+                    .overlay(
+                        VStack(spacing: 0) {
+                            HStack(spacing: 5) {
+                                Circle().fill(Color.red.opacity(0.85)).frame(width: 8, height: 8)
+                                Circle().fill(Color.yellow.opacity(0.85)).frame(width: 8, height: 8)
+                                Circle().fill(Color.green.opacity(0.85)).frame(width: 8, height: 8)
+                                Spacer()
+                                Text("OmniWM Active Window Preview")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                                Spacer()
+                                Color.clear.frame(width: 32, height: 8)
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(height: 20)
+                            .background(Color(hex: palette.surfaceContainerHigh.hex))
+
+                            Spacer()
+
+                            HStack(spacing: 8) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(Color(hex: palette.primary.hex))
+                                Text(isGradient ? "\(start.hex)  ➔  \(end.hex)" : "\(solid.hex) (Solid)")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                            }
+                            Spacer()
+                        }
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(borderGradient, lineWidth: 2.5)
+                    )
+                    .shadow(color: startColor.opacity(0.35), radius: 6, x: 0, y: 3)
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
         }
     }
 }

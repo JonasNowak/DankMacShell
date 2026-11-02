@@ -10,10 +10,13 @@ public enum ControlCenterPage: Equatable {
     case bluetooth
     case audio
     case battery
+    case doNotDisturb
+    case idleInhibitor
 }
 
-/// Control Center master dashboard implementing 1:1 visual fidelity with DMS reference design (`cc.png`),
-/// responsive hardware toggles, deep navigation stack, dual sliders, and zero-overflow compact layout.
+/// Control Center master dashboard implementing dynamic 2D grid bin-packing (`GridPackingSolver`),
+/// interactive drag-and-drop customization, tile library sheet, 50-step undo/redo stack, 12 geometric
+/// avatar shapes, and deep hardware detail subpages.
 public struct ControlCenterView: View {
     @ObservedObject private var theme = ThemeStore.shared
     @ObservedObject private var configStore = ConfigStore.shared
@@ -23,13 +26,25 @@ public struct ControlCenterView: View {
     private let brightness = BrightnessService.shared
     private let battery = BatteryService.shared
     @ObservedObject private var inhibit = IdleInhibitService.shared
+    @ObservedObject private var dnd = DoNotDisturbService.shared
     @ObservedObject private var nowPlaying = NowPlayingService.shared
 
     @State private var navigationStack: [ControlCenterPage] = [.root]
     @State private var isEditingLayout: Bool = false
-    @State private var avatarShapeIndex: Int = 0
+    @State private var showTileLibrary: Bool = false
     @State private var uptimeText: String = ""
     @State private var timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    // Drag-and-drop state
+    @State private var draggingWidgetID: String? = nil
+    @State private var dragOffset: CGSize = .zero
+    @State private var previewWidgets: [ControlCenterWidgetConfig]? = nil
+
+    // Undo Stack
+    @State private var undoStack: ControlCenterUndoStack = ControlCenterUndoStack(
+        initialWidgets: ConfigStore.shared.config.controlCenterWidgets,
+        initialColumns: ConfigStore.shared.config.controlCenterColumns
+    )
 
     private var currentColumns: Int {
         CcMetrics.clampColumns(configStore.config.controlCenterColumns)
@@ -39,6 +54,48 @@ public struct ControlCenterView: View {
         currentColumns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: currentColumns)
     }
 
+    private var gridWidgets: [ControlCenterWidgetConfig] {
+        let raw = previewWidgets ?? configStore.config.controlCenterWidgets
+        return ControlCenterUtils.hardwareTiles(from: raw)
+    }
+
+    private var currentLayout: GridPackingSolver.LayoutResult {
+        let minRow = gridWidgets.map(\.row).min() ?? 0
+        let cards = gridWidgets.map { w in
+            GridPackingSolver.CardItem(
+                id: w.id,
+                col: Double(w.col),
+                row: Double(max(0, w.row - minRow)),
+                w: Double(w.w),
+                h: Double(w.h),
+                small: w.small,
+                isAvailable: w.enabled
+            )
+        }
+        let gridWidth = Double(sheetWidth - (CcMetrics.sheetPadding * 2.0))
+        return GridPackingSolver.packCards(
+            cards: cards,
+            columns: currentColumns,
+            width: gridWidth,
+            gap: Double(CcMetrics.gridGap),
+            rowUnit: Double(CcMetrics.tileHeight),
+            gravity: true
+        )
+    }
+
+    private var sheetHeight: CGFloat {
+        if activePage != .root {
+            return CcMetrics.preferredDetailHeight(section: pageSectionName(activePage))
+        }
+        let headerH: CGFloat = 36.0
+        let slidersH: CGFloat = 40.0
+        let gridH: CGFloat = currentLayout.totalHeight
+        let bottomH: CGFloat = isEditingLayout ? 50.0 : 44.0
+        let spacing: CGFloat = 8.0 * 3.0
+        let padding: CGFloat = CcMetrics.sheetPadding * 2.0
+        return max(ControlCenterController.standardSheetHeight, headerH + slidersH + gridH + bottomH + spacing + padding)
+    }
+
     public init() {}
 
     private var activePage: ControlCenterPage {
@@ -46,7 +103,7 @@ public struct ControlCenterView: View {
     }
 
     public var body: some View {
-        PopoutSurfaceContainer(bodyWidth: sheetWidth, bodyHeight: 348) {
+        PopoutSurfaceContainer(bodyWidth: sheetWidth, bodyHeight: sheetHeight) {
             ZStack {
                 if activePage == .root {
                     rootDashboardView
@@ -61,30 +118,125 @@ public struct ControlCenterView: View {
                             removal: .move(edge: .trailing).combined(with: .opacity)
                         ))
                 }
+
+                // Tile Library Overlay Sheet
+                if showTileLibrary {
+                    Color.black.opacity(0.4)
+                        .edgesIgnoringSafeArea(.all)
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                showTileLibrary = false
+                            }
+                        }
+
+                    TileLibrarySheet(
+                        activeWidgetIDs: Set(gridWidgets.map(\.id)),
+                        onAddWidget: { tile in
+                            addWidget(tile)
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                showTileLibrary = false
+                            }
+                        },
+                        onClose: {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                showTileLibrary = false
+                            }
+                        }
+                    )
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    .zIndex(100)
+                }
             }
         }
         .onAppear {
             updateUptime()
+            undoStack.reset(widgets: gridWidgets, columns: currentColumns)
+            ControlCenterController.shared.updateHeight(to: sheetHeight)
+        }
+        .onChange(of: sheetHeight) { _, newH in
+            ControlCenterController.shared.updateHeight(to: newH)
+        }
+        .onChange(of: isEditingLayout) { _, _ in
+            ControlCenterController.shared.updateHeight(to: sheetHeight)
+        }
+        .onChange(of: activePage) { _, _ in
+            ControlCenterController.shared.updateHeight(to: sheetHeight)
         }
         .onReceive(timer) { _ in
             updateUptime()
         }
     }
 
-    // MARK: - Root Dashboard View (Matches cc.png 1:1)
+    // MARK: - Root Dashboard View (Matches cc.png 1:1 and M3 Expressive)
     private var rootDashboardView: some View {
-        VStack(spacing: 8) {
-            // 1. Header Row: User Avatar, Name, Uptime, Quick Action Buttons (Lock, Power, Settings, Edit)
+        let layout = currentLayout
+
+        return VStack(spacing: 8) {
+            // 1. Header Row: User Avatar (12 shapes), Name, Uptime, Quick Action Buttons (Lock, Power, Settings, Edit)
             headerBar
 
             // 2. Dual Sliders: Master Volume & Display Brightness
             dualSlidersRow
 
-            // 3. 2-Column Hardware Tiles Grid (4 Rows: Wi-Fi, BT, Audio Out, Audio In, Battery, Disk, Color Picker, Keep Awake)
-            hardwareGrid
+            // 3. Dynamic Interactive Hardware Grid (Wi-Fi, Bluetooth, Audio Out, Audio In, Battery, Storage, Color Picker, Keep Awake)
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                    .frame(width: CGFloat(layout.width), height: CGFloat(layout.totalHeight))
 
-            // 4. Bottom Row: Do Not Disturb pill + Night Shift/Dark Mode circle + Theme/Contrast circle
-            bottomActionsRow
+                ForEach(layout.slots) { slot in
+                    if let widget = gridWidgets.first(where: { $0.id == slot.id }) {
+                        let isDragging = (draggingWidgetID == widget.id)
+                        let xPos = slot.x + (isDragging ? dragOffset.width : 0)
+                        let yPos = slot.y + (isDragging ? dragOffset.height : 0)
+
+                        tileView(for: widget, slot: slot)
+                            .frame(width: CGFloat(slot.w), height: CGFloat(slot.h))
+                            .offset(x: CGFloat(xPos), y: CGFloat(yPos))
+                            .zIndex(isDragging ? 50 : 1)
+                            .overlay(
+                                isEditingLayout ? editControlsOverlay(for: widget, slot: slot) : nil
+                            )
+                            .gesture(
+                                isEditingLayout ? tileDragGesture(for: widget, layout: layout) : nil
+                            )
+                    }
+                }
+            }
+            .frame(width: CGFloat(layout.width), height: CGFloat(layout.totalHeight), alignment: .topLeading)
+
+            // 4. Bottom Row / Edit Chrome
+            if isEditingLayout {
+                CcEditChrome(
+                    canUndo: undoStack.canUndo,
+                    canRedo: undoStack.canRedo,
+                    onAddTile: {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            showTileLibrary = true
+                        }
+                    },
+                    onUndo: {
+                        if let snap = undoStack.undo() {
+                            applySnapshot(snap)
+                        }
+                    },
+                    onRedo: {
+                        if let snap = undoStack.redo() {
+                            applySnapshot(snap)
+                        }
+                    },
+                    onReset: {
+                        resetToDefaults()
+                    },
+                    onDone: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            isEditingLayout = false
+                        }
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                bottomActionsRow
+            }
         }
         .padding(CcMetrics.sheetPadding)
     }
@@ -92,14 +244,14 @@ public struct ControlCenterView: View {
     // MARK: - Header Bar
     private var headerBar: some View {
         HStack(spacing: 10) {
-            // User Avatar
+            // User Avatar (Clipped by Geometric Avatar Mask)
             Button {
                 if isEditingLayout {
                     cycleAvatarShape()
                 }
             } label: {
                 ZStack {
-                    Circle()
+                    GeometricAvatarShape(shapeName: configStore.config.controlCenterAvatarShape)
                         .fill(theme.surfaceContainerHighest)
                         .frame(width: 36, height: 36)
 
@@ -108,13 +260,23 @@ public struct ControlCenterView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 36, height: 36)
-                            .clipShape(Circle())
+                            .clipShape(GeometricAvatarShape(shapeName: configStore.config.controlCenterAvatarShape))
                     } else {
                         Image(systemName: "person.crop.circle.fill")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .foregroundColor(theme.primary)
                             .frame(width: 34, height: 34)
+                            .clipShape(GeometricAvatarShape(shapeName: configStore.config.controlCenterAvatarShape))
+                    }
+
+                    if isEditingLayout {
+                        Circle()
+                            .fill(Color.black.opacity(0.45))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "shuffle")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
                     }
                 }
             }
@@ -190,138 +352,34 @@ public struct ControlCenterView: View {
         .padding(.vertical, 2)
     }
 
-    // MARK: - 2-Column Hardware Grid (Matches cc.png 1:1)
-    private var hardwareGrid: some View {
-        VStack(spacing: CcMetrics.gridGap) {
-            // Row 1: Wi-Fi & Bluetooth
-            HStack(spacing: CcMetrics.gridGap) {
-                ControlCenterTile(
-                    icon: wifi.symbolName,
-                    title: wifi.ssid ?? (wifi.isConnected ? "Wi-Fi" : "Disconnected"),
-                    subtitle: wifi.isConnected ? "\(wifi.currentRssiPercent)%" : "Off",
-                    isActive: wifi.isPowerOn && wifi.isConnected,
-                    hasDetail: true,
-                    isPillIcon: true,
-                    onTap: { wifi.togglePower() },
-                    onDetailTap: { pushPage(.network) }
-                )
-
-                ControlCenterTile(
-                    icon: "antenna.radiowaves.left.and.right",
-                    title: bluetooth.isOn ? "Enabled" : "Disabled",
-                    subtitle: bluetooth.connectedDevicesSummary,
-                    isActive: bluetooth.isOn,
-                    hasDetail: true,
-                    isPillIcon: true,
-                    onTap: { bluetooth.toggle() },
-                    onDetailTap: { pushPage(.bluetooth) }
-                )
-            }
-
-            // Row 2: Audio Output & Audio Input
-            HStack(spacing: CcMetrics.gridGap) {
-                ControlCenterTile(
-                    icon: "speaker.wave.2.fill",
-                    title: audio.currentOutputName,
-                    subtitle: "\(Int(audio.volume * 100))%",
-                    isActive: !audio.isMuted && audio.volume > 0,
-                    hasDetail: true,
-                    isPillIcon: true,
-                    onTap: { audio.toggleMute() },
-                    onDetailTap: { pushPage(.audio) }
-                )
-
-                ControlCenterTile(
-                    icon: "mic.fill",
-                    title: audio.currentInputName,
-                    subtitle: "\(Int(audio.inputVolume * 100))%",
-                    isActive: audio.inputVolume > 0,
-                    hasDetail: true,
-                    isPillIcon: true,
-                    onTap: { audio.setInputVolume(audio.inputVolume > 0 ? 0 : 0.75) },
-                    onDetailTap: { pushPage(.audio) }
-                )
-            }
-
-            // Row 3: Battery & Storage (Disk Usage)
-            HStack(spacing: CcMetrics.gridGap) {
-                ControlCenterTile(
-                    icon: (battery.status?.isCharging ?? false) ? "bolt.batteryblock.fill" : "battery.100",
-                    title: "Battery",
-                    subtitle: "\(battery.status?.capacity ?? 100)%\(battery.status?.isCharging == true ? " • Charging" : "")",
-                    isActive: (battery.status?.isCharging ?? false) || (battery.status?.onACPower ?? false),
-                    hasDetail: true,
-                    isPillIcon: true,
-                    onTap: { pushPage(.battery) },
-                    onDetailTap: { pushPage(.battery) }
-                )
-
-                let diskInfo = readDiskUsage()
-                ControlCenterTile(
-                    icon: "internaldrive",
-                    title: "/",
-                    subtitle: diskInfo.formatted,
-                    isActive: true,
-                    hasDetail: false,
-                    isPillIcon: true,
-                    onTap: {
-                        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.DiskUtility") {
-                            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-                        }
-                    }
-                )
-            }
-
-            // Row 4: Color Picker & Keep Awake
-            HStack(spacing: CcMetrics.gridGap) {
-                ControlCenterTile(
-                    icon: "paintpalette.fill",
-                    title: "Color Picker",
-                    subtitle: "Choose a color",
-                    isActive: true,
-                    hasDetail: false,
-                    isPillIcon: true,
-                    onTap: {
-                        ColorPickerController.shared.show()
-                    }
-                )
-
-                ControlCenterTile(
-                    icon: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer",
-                    title: "Keep Awake",
-                    subtitle: "",
-                    isActive: inhibit.isInhibited,
-                    hasDetail: false,
-                    isPillIcon: inhibit.isInhibited,
-                    onTap: {
-                        inhibit.toggle()
-                    }
-                )
-            }
-        }
-    }
-
     // MARK: - Bottom Actions Row (Matches cc.png 1:1)
-    // Column 1: Do Not Disturb squircle (length = Column 1)
-    // Column 2: Light Mode squircle + Theme/Contrast squircle (split Column 2 equally)
     private var bottomActionsRow: some View {
         HStack(spacing: CcMetrics.gridGap) {
             // Column 1: Do Not Disturb Button (matches Column 1 width)
             Button {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.Focus-Settings.extension") {
-                    NSWorkspace.shared.open(url)
-                }
+                pushPage(.doNotDisturb)
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "bell.slash")
+                    Image(systemName: dnd.isEnabled ? "bell.slash.fill" : "bell.slash")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(theme.onSurface)
+                        .foregroundColor(dnd.isEnabled ? theme.primary : theme.onSurface)
 
-                    Text("Do Not Disturb")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.onSurface)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Do Not Disturb")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundColor(theme.onSurface)
+                        if dnd.isEnabled {
+                            Text(dnd.remainingSeconds != nil ? WellbeingFormatter.formatDuration(seconds: dnd.remainingSeconds!) : "Active")
+                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                .foregroundColor(theme.primary)
+                        }
+                    }
 
                     Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(theme.onSurfaceVariant)
                 }
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
@@ -334,16 +392,16 @@ public struct ControlCenterView: View {
             }
             .buttonStyle(.plain)
 
-            // Column 2: Two squircle buttons (Light Mode & Theme/Contrast)
+            // Column 2: Two squircle buttons (Dark Mode & Theme/Contrast)
             HStack(spacing: CcMetrics.gridGap) {
                 // Dark Mode / Light Mode Squircle Button
                 Button {
                     theme.toggleLightMode()
                     ConfigStore.shared.update { $0.isLightMode = theme.isLightMode }
                 } label: {
-                    Image(systemName: "moon")
+                    Image(systemName: theme.isLightMode ? "sun.max.fill" : "moon.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(theme.onSurface)
+                        .foregroundColor(theme.isLightMode ? theme.primary : theme.onSurface)
                         .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
                         .background(theme.surfaceContainerHigh)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -371,7 +429,507 @@ public struct ControlCenterView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: - Tile Content Dispatcher
+    @ViewBuilder
+    private func tileView(for widget: ControlCenterWidgetConfig, slot: GridPackingSolver.GridSlot) -> some View {
+        switch widget.id {
+        case "user":
+            userHeaderCard
+
+        case "lock":
+            HeaderActionButton(icon: "lock") {
+                Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["displaysleepnow"])
+                ControlCenterController.shared.hide()
+            }
+
+        case "power":
+            HeaderActionButton(icon: "power") {
+                PowerPopoutController.shared.toggle(anchorToControlCenter: true)
+            }
+
+        case "settings":
+            HeaderActionButton(icon: "gearshape") {
+                ControlCenterController.shared.hide()
+                SettingsController.shared.show()
+            }
+
+        case "edit":
+            HeaderActionButton(icon: isEditingLayout ? "checkmark" : "pencil") {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isEditingLayout.toggle()
+                }
+            }
+
+        case "volumeSlider":
+            ControlCenterPillSlider(
+                icon: audio.currentOutputIcon,
+                value: audio.isMuted ? 0.0 : audio.volume,
+                onIconTap: { audio.toggleMute() },
+                onValueChanged: { audio.setVolume($0) }
+            )
+
+        case "brightnessSlider":
+            ControlCenterPillSlider(
+                icon: "sun.max",
+                value: brightness.isAvailable ? brightness.value : 0.5,
+                onIconTap: {
+                    if brightness.isAvailable {
+                        brightness.set(brightness.value > 0.05 ? 0.0 : 0.8)
+                    }
+                },
+                onValueChanged: {
+                    if brightness.isAvailable {
+                        brightness.set($0)
+                    }
+                }
+            )
+
+        case "wifi", "network":
+            ControlCenterTile(
+                icon: wifi.symbolName,
+                title: wifi.ssid ?? (wifi.isConnected ? "Wi-Fi" : "Disconnected"),
+                subtitle: widget.w > 1 ? (wifi.isConnected ? "\(wifi.currentRssiPercent)%" : "Off") : "",
+                isActive: wifi.isPowerOn && wifi.isConnected,
+                hasDetail: widget.w > 1,
+                isPillIcon: true,
+                onTap: { wifi.togglePower() },
+                onDetailTap: { pushPage(.network) }
+            )
+
+        case "bluetooth":
+            ControlCenterTile(
+                icon: "antenna.radiowaves.left.and.right",
+                title: bluetooth.isOn ? "Enabled" : "Disabled",
+                subtitle: widget.w > 1 ? bluetooth.connectedDevicesSummary : "",
+                isActive: bluetooth.isOn,
+                hasDetail: widget.w > 1,
+                isPillIcon: true,
+                onTap: { bluetooth.toggle() },
+                onDetailTap: { pushPage(.bluetooth) }
+            )
+
+        case "audioOutput", "audioDevice":
+            ControlCenterTile(
+                icon: "speaker.wave.2.fill",
+                title: audio.currentOutputName,
+                subtitle: widget.w > 1 ? "\(Int(audio.volume * 100))%" : "",
+                isActive: !audio.isMuted && audio.volume > 0,
+                hasDetail: widget.w > 1,
+                isPillIcon: true,
+                onTap: { audio.toggleMute() },
+                onDetailTap: { pushPage(.audio) }
+            )
+
+        case "audioInput":
+            ControlCenterTile(
+                icon: "mic.fill",
+                title: audio.currentInputName,
+                subtitle: widget.w > 1 ? "\(Int(audio.inputVolume * 100))%" : "",
+                isActive: audio.inputVolume > 0,
+                hasDetail: widget.w > 1,
+                isPillIcon: true,
+                onTap: { audio.setInputVolume(audio.inputVolume > 0 ? 0 : 0.75) },
+                onDetailTap: { pushPage(.audio) }
+            )
+
+        case "battery":
+            ControlCenterTile(
+                icon: (battery.status?.isCharging ?? false) ? "bolt.batteryblock.fill" : "battery.100",
+                title: "Battery",
+                subtitle: widget.w > 1 ? "\(battery.status?.capacity ?? 100)%\(battery.status?.isCharging == true ? " • Charging" : "")" : "",
+                isActive: (battery.status?.isCharging ?? false) || (battery.status?.onACPower ?? false),
+                hasDetail: widget.w > 1,
+                isPillIcon: true,
+                onTap: { pushPage(.battery) },
+                onDetailTap: { pushPage(.battery) }
+            )
+
+        case "diskUsage":
+            let diskInfo = readDiskUsage()
+            ControlCenterTile(
+                icon: "internaldrive",
+                title: "/",
+                subtitle: widget.w > 1 ? diskInfo.formatted : "",
+                isActive: true,
+                hasDetail: false,
+                isPillIcon: true,
+                onTap: {
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.DiskUtility") {
+                        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+                    }
+                }
+            )
+
+        case "colorPicker":
+            ControlCenterTile(
+                icon: "paintpalette.fill",
+                title: "Color Picker",
+                subtitle: widget.w > 1 ? "Choose a color" : "",
+                isActive: true,
+                hasDetail: false,
+                isPillIcon: true,
+                onTap: { ColorPickerController.shared.show() }
+            )
+
+        case "idleInhibitor", "caffeine":
+            ControlCenterTile(
+                icon: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer",
+                title: "Keep Awake",
+                subtitle: widget.w > 1 ? (inhibit.isInhibited ? (inhibit.remainingSeconds != nil ? IdleInhibitCountdown.formatRemainingShort(seconds: inhibit.remainingSeconds!) : "Indefinite") : "Off") : "",
+                isActive: inhibit.isInhibited,
+                hasDetail: widget.w > 1,
+                isPillIcon: inhibit.isInhibited,
+                onTap: { inhibit.toggle() },
+                onDetailTap: { pushPage(.idleInhibitor) }
+            )
+
+        case "doNotDisturb", "dnd":
+            ControlCenterTile(
+                icon: dnd.isEnabled ? "bell.slash.fill" : "bell.slash",
+                title: "Do Not Disturb",
+                subtitle: widget.w > 1 ? (dnd.isEnabled ? (dnd.remainingSeconds != nil ? WellbeingFormatter.formatDuration(seconds: dnd.remainingSeconds!) : "On") : "Off") : "",
+                isActive: dnd.isEnabled,
+                hasDetail: widget.w > 1,
+                isPillIcon: dnd.isEnabled,
+                onTap: { dnd.toggle() },
+                onDetailTap: { pushPage(.doNotDisturb) }
+            )
+
+        case "quickTiles":
+            QuickTilesGroup()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case "media":
+            mediaTileView(widget: widget)
+
+        case "nightMode":
+            Button {
+                NightShiftService.shared.toggle()
+            } label: {
+                Image(systemName: "sun.max.trianglebadge.exclamationmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.onSurface)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(theme.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+
+        case "darkMode":
+            Button {
+                theme.toggleLightMode()
+                ConfigStore.shared.update { $0.isLightMode = theme.isLightMode }
+            } label: {
+                Image(systemName: "moon")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.onSurface)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(theme.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+
+        case "theme":
+            Button {
+                cycleTheme()
+            } label: {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.onSurface)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(theme.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+
+        default:
+            ControlCenterTile(
+                icon: ControlCenterUtils.icon(for: widget.id),
+                title: ControlCenterUtils.title(for: widget.id),
+                subtitle: widget.w > 1 ? ControlCenterUtils.subtitle(for: widget.id) : "",
+                isActive: widget.enabled,
+                hasDetail: false,
+                isPillIcon: true,
+                onTap: {}
+            )
+        }
+    }
+
+    // MARK: - User Header Card with 12 Geometric Avatar Shapes
+    private var userHeaderCard: some View {
+        let shapeName = configStore.config.controlCenterAvatarShape
+
+        return HStack(spacing: 10) {
+            // User Avatar (Clipped by Geometric Avatar Mask)
+            Button {
+                if isEditingLayout {
+                    cycleAvatarShape()
+                }
+            } label: {
+                ZStack {
+                    GeometricAvatarShape(shapeName: shapeName)
+                        .fill(theme.surfaceContainerHighest)
+                        .frame(width: 36, height: 36)
+
+                    if let avatarImg = loadAvatarImage() {
+                        Image(nsImage: avatarImg)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 36, height: 36)
+                            .clipShape(GeometricAvatarShape(shapeName: shapeName))
+                    } else {
+                        Image(systemName: "person.crop.circle.fill")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .foregroundColor(theme.primary)
+                            .frame(width: 34, height: 34)
+                            .clipShape(GeometricAvatarShape(shapeName: shapeName))
+                    }
+
+                    if isEditingLayout {
+                        Circle()
+                            .fill(Color.black.opacity(0.45))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "shuffle")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            // User Name & System Uptime
+            VStack(alignment: .leading, spacing: 2) {
+                Text(NSUserName().isEmpty ? "User" : NSUserName())
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.onSurface)
+                    .lineLimit(1)
+
+                Text(uptimeText.isEmpty ? "up 7 hours, 47 minutes" : uptimeText)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundColor(theme.onSurfaceVariant)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+        }
+        .frame(maxHeight: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Edit Controls Overlay
+    private func editControlsOverlay(for widget: ControlCenterWidgetConfig, slot: GridPackingSolver.GridSlot) -> some View {
+        let isRemovable = ControlCenterUtils.isRemovable(widget)
+        let canShrink = ControlCenterUtils.canShrink(widget.id)
+
+        return ZStack(alignment: .topTrailing) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color(hex: theme.palette.primary.hex), style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+
+            HStack(spacing: 3) {
+                // Resize Span Button
+                if canShrink {
+                    Button {
+                        resizeWidget(widget)
+                    } label: {
+                        Image(systemName: "arrow.left.and.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 18, height: 18)
+                            .background(Color(hex: theme.palette.primary.hex))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Delete Button
+                if isRemovable {
+                    Button {
+                        removeWidget(widget)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 18, height: 18)
+                            .background(Color(hex: theme.palette.error.hex))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(4)
+        }
+    }
+
+    // MARK: - Drag-and-Drop Gesture
+    private func tileDragGesture(for widget: ControlCenterWidgetConfig, layout: GridPackingSolver.LayoutResult) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                if draggingWidgetID == nil {
+                    draggingWidgetID = widget.id
+                }
+                dragOffset = value.translation
+
+                if let currentSlot = layout.slots.first(where: { $0.id == widget.id }) {
+                    let destX = currentSlot.x + Double(value.translation.width)
+                    let destY = currentSlot.y + Double(value.translation.height)
+                    let (targetCol, targetRow) = GridPackingSolver.cellAt(
+                        layout: layout,
+                        x: destX,
+                        y: destY,
+                        cols: Double(widget.w),
+                        rows: Double(widget.h)
+                    )
+
+                    var updated = gridWidgets
+                    if let idx = updated.firstIndex(where: { $0.id == widget.id }) {
+                        updated[idx].col = Int(targetCol)
+                        updated[idx].row = Int(targetRow)
+                        previewWidgets = updated
+                    }
+                }
+            }
+            .onEnded { _ in
+                if let finalWidgets = previewWidgets {
+                    recordAndSaveWidgets(finalWidgets)
+                }
+                draggingWidgetID = nil
+                dragOffset = .zero
+                previewWidgets = nil
+            }
+    }
+
+    // MARK: - Grid Modification Actions
+    private func resizeWidget(_ widget: ControlCenterWidgetConfig) {
+        let (newW, newH) = ControlCenterUtils.nextSpan(for: widget, columns: currentColumns)
+        var updated = gridWidgets
+        if let idx = updated.firstIndex(where: { $0.id == widget.id }) {
+            updated[idx].w = newW
+            updated[idx].h = newH
+            updated[idx].small = (newW == 1)
+            recordAndSaveWidgets(updated)
+        }
+    }
+
+    private func removeWidget(_ widget: ControlCenterWidgetConfig) {
+        guard ControlCenterUtils.isRemovable(widget) else { return }
+        let updated = gridWidgets.filter { $0.id != widget.id }
+        recordAndSaveWidgets(updated)
+        ToastCenter.shared.show(icon: "trash", message: "Removed \(ControlCenterUtils.title(for: widget.id))")
+    }
+
+    private func addWidget(_ tile: ControlCenterWidgetConfig) {
+        var updated = gridWidgets
+        var toAdd = tile
+        toAdd.col = 0
+        toAdd.row = 100 // Gravity will pack it to first fit
+        toAdd.enabled = true
+        updated.append(toAdd)
+        recordAndSaveWidgets(updated)
+        ToastCenter.shared.show(icon: "plus.circle.fill", message: "Added \(ControlCenterUtils.title(for: tile.id))")
+    }
+
+    private func resetToDefaults() {
+        let defaults = ControlCenterUtils.canonicalHardwareTiles
+        recordAndSaveWidgets(defaults)
+        ToastCenter.shared.show(icon: "arrow.counterclockwise", message: "Reset Control Center to defaults")
+    }
+
+    private func recordAndSaveWidgets(_ widgets: [ControlCenterWidgetConfig]) {
+        undoStack.record(widgets: widgets, columns: currentColumns)
+        configStore.update { $0.controlCenterWidgets = widgets }
+        previewWidgets = nil
+    }
+
+    private func applySnapshot(_ snapshot: ControlCenterUndoStack.Snapshot) {
+        configStore.update {
+            $0.controlCenterWidgets = snapshot.widgets
+            $0.controlCenterColumns = snapshot.columns
+        }
+        previewWidgets = nil
+    }
+
+    private func cycleAvatarShape() {
+        let current = configStore.config.controlCenterAvatarShape
+        let nextShape = ControlCenterUtils.nextUserShape(current)
+        configStore.update { $0.controlCenterAvatarShape = nextShape }
+        ToastCenter.shared.show(icon: "shuffle", message: "Avatar Shape: \(nextShape)")
+    }
+
+    // MARK: - Media Tile View
+    private func mediaTileView(widget: ControlCenterWidgetConfig) -> some View {
+        let track = nowPlaying.currentTrack
+        return HStack(spacing: 8) {
+            Button {
+                nowPlaying.playPause()
+            } label: {
+                ZStack {
+                    if track.isPlaying {
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .fill(theme.primary)
+                            .frame(width: 58, height: 32)
+                        Image(systemName: "pause.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(theme.onPrimary)
+                    } else {
+                        Color.clear
+                            .frame(width: 58, height: 32)
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(theme.onSurfaceVariant)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(track.title.isEmpty ? "No Media Playing" : track.title)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.onSurface)
+                    .lineLimit(1)
+                if !track.artist.isEmpty {
+                    Text(track.artist)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundColor(theme.onSurfaceVariant)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, 8)
+        .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
+        .background(theme.surfaceContainerHigh)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private func pageSectionName(_ page: ControlCenterPage) -> String {
+        switch page {
+        case .network: return "wifi"
+        case .bluetooth: return "bluetooth"
+        case .audio: return "audioOutput"
+        case .battery: return "battery"
+        case .doNotDisturb: return "doNotDisturb"
+        case .idleInhibitor: return "idleInhibitor"
+        case .root: return ""
         }
     }
 
@@ -411,6 +969,22 @@ public struct ControlCenterView: View {
             ) {
                 BatteryDetailPage()
             }
+        case .doNotDisturb:
+            CcDetailPage(
+                title: "Do Not Disturb",
+                onBack: { popPage() },
+                onClose: { ControlCenterController.shared.hide(); popToRoot() }
+            ) {
+                DoNotDisturbDetailPage()
+            }
+        case .idleInhibitor:
+            CcDetailPage(
+                title: "Keep Awake",
+                onBack: { popPage() },
+                onClose: { ControlCenterController.shared.hide(); popToRoot() }
+            ) {
+                IdleInhibitorDetailPage()
+            }
         case .root:
             EmptyView()
         }
@@ -420,12 +994,6 @@ public struct ControlCenterView: View {
     private func updateUptime() {
         let seconds = ProcessInfo.processInfo.systemUptime
         uptimeText = UptimeFormatter.format(seconds: seconds)
-    }
-
-    private func cycleAvatarShape() {
-        avatarShapeIndex = (avatarShapeIndex + 1) % ControlCenterUtils.userShapes.count
-        let shape = ControlCenterUtils.userShapes[avatarShapeIndex]
-        ToastCenter.shared.show(icon: "shuffle", message: "Avatar Shape: \(shape)")
     }
 
     private func cycleTheme() {
@@ -546,17 +1114,14 @@ public struct ControlCenterPillSlider: View {
                 let fillWidth = width * CGFloat(clampedVal)
 
                 ZStack(alignment: .leading) {
-                    // Dark track capsule
                     Capsule()
                         .fill(theme.surfaceContainerHighest.opacity(0.85))
                         .frame(height: 10)
 
-                    // Filled lavender progress
                     Capsule()
                         .fill(theme.primary.opacity(0.85))
                         .frame(width: max(0, fillWidth), height: 10)
 
-                    // Pill thumb indicator at the end of progress
                     Capsule()
                         .fill(theme.onPrimary)
                         .frame(width: 4, height: 16)
@@ -612,7 +1177,6 @@ public struct ControlCenterTile: View {
 
     public var body: some View {
         HStack(spacing: 8) {
-            // Icon Container (Lavender squircle when active, transparent when inactive)
             Button {
                 onTap()
             } label: {
@@ -637,7 +1201,6 @@ public struct ControlCenterTile: View {
             }
             .buttonStyle(.plain)
 
-            // Tile Label Stack (Title and Subtitle)
             Button {
                 if hasDetail {
                     onDetailTap()
@@ -671,72 +1234,5 @@ public struct ControlCenterTile: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
         )
-    }
-}
-
-// MARK: - Compatibility Structs
-public struct ThemeChip: View {
-    public let name: String
-    public let label: String
-    public var icon: String? = nil
-    public var colorHex: String? = nil
-    public let isSelected: Bool
-
-    @ObservedObject private var theme = ThemeStore.shared
-
-    public init(name: String, label: String, icon: String? = nil, colorHex: String? = nil, isSelected: Bool) {
-        self.name = name
-        self.label = label
-        self.icon = icon
-        self.colorHex = colorHex
-        self.isSelected = isSelected
-    }
-
-    public var body: some View {
-        Button {
-            theme.apply(theme: name, lightMode: theme.isLightMode)
-            ConfigStore.shared.update { $0.theme = name }
-        } label: {
-            HStack(spacing: 6) {
-                if let icon {
-                    Image(systemName: icon)
-                } else if let colorHex {
-                    Circle().fill(Color(hex: colorHex)).frame(width: 8, height: 8)
-                }
-                Text(label)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-            }
-            .foregroundColor(isSelected ? theme.onPrimary : theme.onSurface)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(isSelected ? theme.primary : theme.surfaceContainer)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-public struct PowerActionButton: View {
-    public let icon: String
-    public let label: String
-    public let action: () -> Void
-
-    @ObservedObject private var theme = ThemeStore.shared
-
-    public init(icon: String, label: String, action: @escaping () -> Void) {
-        self.icon = icon
-        self.label = label
-        self.action = action
-    }
-
-    public var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .foregroundColor(theme.onSurface)
-                .frame(width: 32, height: 32)
-                .background(theme.surfaceContainerHigh)
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
     }
 }

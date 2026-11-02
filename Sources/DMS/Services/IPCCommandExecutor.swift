@@ -468,6 +468,76 @@ public enum IPCCommandExecutor {
             )
             return "Light mode: \(ThemeStore.shared.isLightMode)"
 
+        case .wallpaper(let action, let path):
+            switch action.lowercased() {
+            case "set":
+                guard let p = path, !p.isEmpty else {
+                    return "Error: wallpaper set requires valid path"
+                }
+                let expanded = (p as NSString).expandingTildeInPath
+                let item = WallpaperItem(id: expanded, name: (expanded as NSString).lastPathComponent, path: expanded)
+                WallpaperService.shared.applyWallpaper(item)
+                return "Desktop wallpaper set to \(expanded)"
+            case "list":
+                let paths = WallpaperService.shared.wallpapers.compactMap(\.path)
+                return paths.joined(separator: "\n")
+            case "get", "status":
+                let current = WallpaperService.shared.currentDesktopPath
+                return current.isEmpty ? "No custom desktop wallpaper configured" : current
+            default:
+                if let p = path, !p.isEmpty {
+                    let expanded = (p as NSString).expandingTildeInPath
+                    let item = WallpaperItem(id: expanded, name: (expanded as NSString).lastPathComponent, path: expanded)
+                    WallpaperService.shared.applyWallpaper(item)
+                    return "Desktop wallpaper set to \(expanded)"
+                }
+                let current = WallpaperService.shared.currentDesktopPath
+                return current.isEmpty ? "No custom desktop wallpaper configured" : current
+            }
+
+        case .omniwmTheme(let action, let arg):
+            switch action.lowercased() {
+            case "sync":
+                let ok = OmniWMThemeSyncService.shared.syncTheme(palette: ThemeStore.shared.palette, force: true)
+                return ok ? "Successfully synchronized active theme '\(ThemeStore.shared.palette.name)' to OmniWM" : "Failed to synchronize to OmniWM"
+            case "mode":
+                if let raw = arg, let mode = OmniWMGradientMode(rawValue: raw.lowercased()) {
+                    ConfigStore.shared.update { $0.omniwmGradientMode = mode }
+                    OmniWMThemeSyncService.shared.syncTheme(palette: ThemeStore.shared.palette, force: true)
+                    return "OmniWM gradient mode set to \(mode.rawValue)"
+                }
+                return "Invalid mode. Valid modes: \(OmniWMGradientMode.allCases.map(\.rawValue).joined(separator: ", "))"
+            case "direction":
+                if let raw = arg, let dir = OmniWMGradientDirection(rawValue: raw) {
+                    ConfigStore.shared.update { $0.omniwmGradientDirection = dir }
+                    OmniWMThemeSyncService.shared.syncTheme(palette: ThemeStore.shared.palette, force: true)
+                    return "OmniWM gradient direction set to \(dir.rawValue)"
+                }
+                return "Invalid direction. Valid directions: topLeftToBottomRight, topRightToBottomLeft"
+            case "toggle":
+                let now = !ConfigStore.shared.config.autoThemeOmniWM
+                ConfigStore.shared.update { $0.autoThemeOmniWM = now }
+                if now {
+                    OmniWMThemeSyncService.shared.syncTheme(palette: ThemeStore.shared.palette, force: true)
+                }
+                return "OmniWM auto-theming is now \(now ? "enabled" : "disabled")"
+            case "get", "status":
+                let cfg = ConfigStore.shared.config
+                let (start, end, solid, isGrad) = OmniWMThemeUpdater.resolveColors(palette: ThemeStore.shared.palette, mode: cfg.omniwmGradientMode)
+                return """
+                OmniWM Auto-Theming: \(cfg.autoThemeOmniWM ? "Enabled" : "Disabled")
+                Gradient Mode: \(cfg.omniwmGradientMode.displayName)
+                Direction: \(cfg.omniwmGradientDirection.displayName)
+                Gradient Enabled: \(isGrad)
+                Border Start: \(start.hex)
+                Border End: \(end.hex)
+                Solid Fallback: \(solid.hex)
+                Settings Path: \(OmniWMThemeSyncService.settingsURL.path)
+                """
+            default:
+                return "Unknown omniwm action: \(action). Use: get, sync, mode, direction, toggle"
+            }
+
         case .screenshot:
             let task = Process()
             task.launchPath = "/usr/sbin/screencapture"

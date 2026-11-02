@@ -110,15 +110,13 @@ if [ "$LAUNCH" -eq 1 ]; then
         sleep 0.1
     done
     sleep 0.2
-    nohup "$APP/Contents/MacOS/DankMaterialShell" >/dev/null 2>&1 &
+    open "$APP"
     # Verify launch
     sleep 0.5
     if pgrep -x DankMacShell >/dev/null 2>&1 || pgrep -x DankMaterialShell >/dev/null 2>&1; then
         echo "==> Installed and started: $APP (PID $(pgrep -x DankMacShell || pgrep -x DankMaterialShell))"
     else
-        open "$APP"
-        sleep 0.5
-        echo "==> Installed and started: $APP (PID $(pgrep -x DankMacShell || pgrep -x DankMaterialShell || echo 'running'))"
+        echo "==> Installed: $APP"
     fi
 else
     echo "==> Installed: $APP"

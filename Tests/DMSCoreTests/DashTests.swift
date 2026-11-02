@@ -8,7 +8,7 @@ struct DashTests {
     // MARK: - DASH-TAB: Tab Enum and Parsing
     @Test("DashTab Enumeration, Labels, and Symbols")
     func testDashTabProperties() {
-        #expect(DashTab.allCases.count == 5)
+        #expect(DashTab.allCases.count == 6)
         
         #expect(DashTab.overview.rawValue == "overview")
         #expect(DashTab.overview.title == "Overview")
@@ -25,6 +25,10 @@ struct DashTests {
         #expect(DashTab.weather.rawValue == "weather")
         #expect(DashTab.weather.title == "Weather")
         #expect(DashTab.weather.sfSymbol == "sun.max")
+
+        #expect(DashTab.wellbeing.rawValue == "wellbeing")
+        #expect(DashTab.wellbeing.title == "Wellbeing")
+        #expect(DashTab.wellbeing.sfSymbol == "hourglass")
         
         #expect(DashTab.settings.rawValue == "settings")
         #expect(DashTab.settings.title == "Settings")
@@ -46,6 +50,10 @@ struct DashTests {
         
         #expect(DashTab(fromString: "weather") == .weather)
         #expect(DashTab(fromString: "forecast") == .weather)
+
+        #expect(DashTab(fromString: "wellbeing") == .wellbeing)
+        #expect(DashTab(fromString: "focus") == .wellbeing)
+        #expect(DashTab(fromString: "screentime") == .wellbeing)
         
         #expect(DashTab(fromString: "settings") == .settings)
         #expect(DashTab(fromString: "config") == .settings)

@@ -65,6 +65,7 @@ public final class ThemeStore: ObservableObject {
 
     private var isBatchUpdating = false
     private var dynamicSeedColor: M3Color?
+    private var dynamicSecondarySeedColor: M3Color?
     private var lastWallpaperURL: URL?
 
     // MARK: - Cached SwiftUI Colors (Eliminates per-render hex string parsing)
@@ -225,7 +226,27 @@ public final class ThemeStore: ObservableObject {
 
     public func setDynamicWallpaper() {
         self.themeName = "dynamic"
+        ConfigStore.shared.update { $0.theme = "dynamic" }
         extractWallpaperSeed(force: true)
+    }
+
+    /// Automatically sets theme to dynamic and extracts dominant colors from the specified wallpaper image URL.
+    public func applyDynamicWallpaper(url: URL) {
+        self.themeName = "dynamic"
+        ConfigStore.shared.update { $0.theme = "dynamic" }
+        self.lastWallpaperURL = url
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let seeds = Self.extractPaletteSeedsOffMainThread(from: url)
+            let primarySeed = seeds?.primary ?? Self.extractDominantColorOffMainThread(from: url)
+            guard let seedColor = primarySeed else { return }
+            await MainActor.run {
+                guard let self = self else { return }
+                self.dynamicSeedColor = seedColor
+                self.dynamicSecondarySeedColor = seeds?.secondary
+                self.refreshTheme()
+            }
+        }
     }
 
     public func toggleLightMode() {
@@ -291,6 +312,9 @@ public final class ThemeStore: ObservableObject {
         if let app = NSApp, app.appearance?.name != targetAppearanceName {
             app.appearance = NSAppearance(named: targetAppearanceName)
         }
+
+        // Auto-theme OmniWM window borders and UI if enabled
+        OmniWMThemeSyncService.shared.syncThemeIfEnabled(palette: self.palette, secondarySeed: dynamicSecondarySeedColor)
     }
 
     // MARK: - Adaptive Surface, Glass & Light Mode Helpers
@@ -410,10 +434,16 @@ public final class ThemeStore: ObservableObject {
         }
     }
 
-    public func extractWallpaperSeed(force: Bool = false) {
-        guard let screen = NSScreen.main,
-              let url = NSWorkspace.shared.desktopImageURL(for: screen) else {
-            return
+    public func extractWallpaperSeed(from customURL: URL? = nil, force: Bool = false) {
+        let url: URL
+        if let customURL = customURL {
+            url = customURL
+        } else {
+            guard let screen = NSScreen.main,
+                  let desktopURL = NSWorkspace.shared.desktopImageURL(for: screen) else {
+                return
+            }
+            url = desktopURL
         }
         if !force, url == lastWallpaperURL, dynamicSeedColor != nil {
             return
@@ -483,6 +513,77 @@ public final class ThemeStore: ObservableObject {
         }
 
         return M3Color.from(r: totalR / count, g: totalG / count, b: totalB / count)
+    }
+
+    /// Extracts both primary dominant color and contrasting secondary chromatic cluster from wallpaper pixels.
+    nonisolated public static func extractPaletteSeedsOffMainThread(from url: URL) -> (primary: M3Color, secondary: M3Color)? {
+        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+            return nil
+        }
+        let width = 32
+        let height = 32
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        var rawData = [UInt8](repeating: 0, count: width * height * 4)
+
+        guard let context = CGContext(
+            data: &rawData,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var validColors: [(r: Double, g: Double, b: Double)] = []
+        var totalR: Double = 0
+        var totalG: Double = 0
+        var totalB: Double = 0
+
+        for i in stride(from: 0, to: rawData.count, by: 4) {
+            let a = Double(rawData[i + 3]) / 255.0
+            guard a > 0.5 else { continue }
+
+            let r = Double(rawData[i]) / 255.0
+            let g = Double(rawData[i + 1]) / 255.0
+            let b = Double(rawData[i + 2]) / 255.0
+            let l = (r + g + b) / 3.0
+
+            if l > 0.12 && l < 0.88 {
+                validColors.append((r, g, b))
+                totalR += r
+                totalG += g
+                totalB += b
+            }
+        }
+
+        guard !validColors.isEmpty else { return nil }
+
+        let count = Double(validColors.count)
+        let primary = M3Color.from(r: totalR / count, g: totalG / count, b: totalB / count)
+
+        // Find the color that has the greatest Euclidean distance in RGB color space from primary
+        var maxDist: Double = -1.0
+        var secondaryRGB = (r: totalR / count, g: totalG / count, b: totalB / count)
+
+        for c in validColors {
+            let dr = c.r - primary.red
+            let dg = c.g - primary.green
+            let db = c.b - primary.blue
+            let dist = dr * dr + dg * dg + db * db
+            if dist > maxDist {
+                maxDist = dist
+                secondaryRGB = c
+            }
+        }
+
+        let secondary = M3Color.from(r: secondaryRGB.r, g: secondaryRGB.g, b: secondaryRGB.b)
+        return (primary: primary, secondary: secondary)
     }
 }
 

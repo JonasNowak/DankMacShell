@@ -88,11 +88,13 @@ public enum IPCCommand: Sendable, Equatable {
     case inhibit(action: String)
     case mpris(action: String)
 
-    // Theming
+    // Theming & Wallpaper
     case setTheme(name: String)
     case getTheme
     case listThemes
     case toggleThemeMode
+    case wallpaper(action: String, path: String? = nil)
+    case omniwmTheme(action: String, arg: String? = nil)
 
     // System / Diagnostics
     case screenshot
@@ -297,6 +299,16 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "togglethememode":
             return .toggleThemeMode
+
+        case "wallpaper", "wallpapers":
+            let act = subPath.isEmpty ? (param("action") ?? "get") : subPath
+            let path = param("path") ?? param("value")
+            return .wallpaper(action: act, path: path)
+
+        case "omniwm", "omniwmtheme":
+            let act = subPath.isEmpty ? (param("action") ?? "get") : subPath
+            let arg = param("arg") ?? param("mode") ?? param("value")
+            return .omniwmTheme(action: act, arg: arg)
 
         case "screenshot":
             if let mode = param("mode") ?? (subPath.isEmpty ? nil : subPath), !mode.isEmpty {
@@ -535,6 +547,41 @@ public enum IPCCommand: Sendable, Equatable {
             case "list": return .listThemes
             case "toggle", "togglemode": return .toggleThemeMode
             default: return .getTheme
+            }
+
+        case "wallpaper", "wallpapers":
+            switch action {
+            case "get", "status":
+                return .wallpaper(action: "get")
+            case "set":
+                if !extra.isEmpty {
+                    return .wallpaper(action: "set", path: extra.joined(separator: " "))
+                }
+                return .unknown("wallpaper set requires image path")
+            case "list":
+                return .wallpaper(action: "list")
+            default:
+                if !action.isEmpty {
+                    let pathArgs = ([action] + extra).joined(separator: " ")
+                    return .wallpaper(action: "set", path: pathArgs)
+                }
+                return .wallpaper(action: "get")
+            }
+
+        case "omniwm", "omniwmtheme":
+            switch action {
+            case "sync":
+                return .omniwmTheme(action: "sync")
+            case "mode":
+                return .omniwmTheme(action: "mode", arg: extra.first)
+            case "direction":
+                return .omniwmTheme(action: "direction", arg: extra.first)
+            case "toggle":
+                return .omniwmTheme(action: "toggle")
+            case "get", "status":
+                fallthrough
+            default:
+                return .omniwmTheme(action: "get")
             }
 
         case "screenshot":

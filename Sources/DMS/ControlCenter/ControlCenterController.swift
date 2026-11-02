@@ -5,9 +5,11 @@ import DMSCore
 @MainActor
 public final class ControlCenterController {
     public static let shared = ControlCenterController()
+    public static let standardSheetHeight: CGFloat = 368.0
 
     public let panel: ShellPanel
     public private(set) var isVisible = false
+    public private(set) var currentSheetHeight: CGFloat = standardSheetHeight
 
     private var globalClickMonitor: Any?
 
@@ -46,9 +48,10 @@ public final class ControlCenterController {
 
         let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
         let bodyWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
+        currentSheetHeight = Self.standardSheetHeight
         let targetFrame = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
-            bodyHeight: 348,
+            bodyHeight: Self.standardSheetHeight,
             screen: targetScreen,
             isControlCenter: true
         )
@@ -77,11 +80,30 @@ public final class ControlCenterController {
         let bodyWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
         let frame = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
-            bodyHeight: 348,
+            bodyHeight: currentSheetHeight,
             screen: screen,
             isControlCenter: true
         )
         panel.setFrame(frame, display: true)
+    }
+
+    public func updateHeight(to newHeight: CGFloat) {
+        guard isVisible else {
+            currentSheetHeight = newHeight
+            return
+        }
+        guard abs(currentSheetHeight - newHeight) > 1.0 else { return }
+        currentSheetHeight = newHeight
+        let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first!
+        let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
+        let bodyWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
+        let frame = PopoutLayoutHelper.frame(
+            bodyWidth: bodyWidth,
+            bodyHeight: newHeight,
+            screen: screen,
+            isControlCenter: true
+        )
+        panel.setFrame(frame, display: true, animate: true)
     }
 
     private func installClickMonitor() {

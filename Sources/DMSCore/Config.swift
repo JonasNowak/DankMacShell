@@ -19,6 +19,15 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var dockConfigs: [DockConfig]
     public var controlCenterWidgets: [ControlCenterWidgetConfig]
     public var controlCenterColumns: Int
+    public var controlCenterAvatarShape: String
+    public var wallpaperPath: String
+    public var wallpaperFolders: [String]
+    public var autoGenerateWallpaperColors: Bool
+    public var autoThemeOmniWM: Bool
+    public var omniwmGradientMode: OmniWMGradientMode
+    public var omniwmGradientDirection: OmniWMGradientDirection
+    public var omniwmSyncOverview: Bool
+    public var omniwmSyncWorkspaceBar: Bool
 
     // MARK: - Legacy / Direct Accessors (Backward Compatibility)
     public var barPosition: String {
@@ -176,6 +185,15 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             "com.apple.finder"
         ],
         apps: AppOverrides = AppOverrides(),
+        controlCenterAvatarShape: String = "circle",
+        wallpaperPath: String = "",
+        wallpaperFolders: [String] = [],
+        autoGenerateWallpaperColors: Bool = true,
+        autoThemeOmniWM: Bool = true,
+        omniwmGradientMode: OmniWMGradientMode = .expressive,
+        omniwmGradientDirection: OmniWMGradientDirection = .topLeftToBottomRight,
+        omniwmSyncOverview: Bool = true,
+        omniwmSyncWorkspaceBar: Bool = true,
         rawSettings: [String: AnyCodable] = [:],
         includes: [String] = []
     ) {
@@ -196,6 +214,15 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.dockConfigs = docks
         self.controlCenterWidgets = controlCenterWidgets
         self.controlCenterColumns = max(6, controlCenterColumns)
+        self.controlCenterAvatarShape = controlCenterAvatarShape
+        self.wallpaperPath = wallpaperPath
+        self.wallpaperFolders = wallpaperFolders
+        self.autoGenerateWallpaperColors = autoGenerateWallpaperColors
+        self.autoThemeOmniWM = autoThemeOmniWM
+        self.omniwmGradientMode = omniwmGradientMode
+        self.omniwmGradientDirection = omniwmGradientDirection
+        self.omniwmSyncOverview = omniwmSyncOverview
+        self.omniwmSyncWorkspaceBar = omniwmSyncWorkspaceBar
         self.barMarginX = barMarginX
         self.showTelemetry = showTelemetry
         self.showWeather = showWeather
@@ -235,6 +262,15 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case dockConfigs
         case controlCenterWidgets
         case controlCenterColumns
+        case controlCenterAvatarShape
+        case wallpaperPath
+        case wallpaperFolders
+        case autoGenerateWallpaperColors
+        case autoThemeOmniWM
+        case omniwmGradientMode
+        case omniwmGradientDirection
+        case omniwmSyncOverview
+        case omniwmSyncWorkspaceBar
         case barPosition
         case barAutoHide
         case barTransparent
@@ -315,6 +351,15 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.apps = try container.decodeIfPresent(AppOverrides.self, forKey: .apps) ?? AppOverrides()
         self.controlCenterWidgets = try container.decodeIfPresent([ControlCenterWidgetConfig].self, forKey: .controlCenterWidgets) ?? ControlCenterWidgetConfig.defaultWidgets
         self.controlCenterColumns = try container.decodeIfPresent(Int.self, forKey: .controlCenterColumns) ?? 8
+        self.controlCenterAvatarShape = try container.decodeIfPresent(String.self, forKey: .controlCenterAvatarShape) ?? "circle"
+        self.wallpaperPath = try container.decodeIfPresent(String.self, forKey: .wallpaperPath) ?? ""
+        self.wallpaperFolders = try container.decodeIfPresent([String].self, forKey: .wallpaperFolders) ?? []
+        self.autoGenerateWallpaperColors = try container.decodeIfPresent(Bool.self, forKey: .autoGenerateWallpaperColors) ?? true
+        self.autoThemeOmniWM = try container.decodeIfPresent(Bool.self, forKey: .autoThemeOmniWM) ?? true
+        self.omniwmGradientMode = try container.decodeIfPresent(OmniWMGradientMode.self, forKey: .omniwmGradientMode) ?? .expressive
+        self.omniwmGradientDirection = try container.decodeIfPresent(OmniWMGradientDirection.self, forKey: .omniwmGradientDirection) ?? .topLeftToBottomRight
+        self.omniwmSyncOverview = try container.decodeIfPresent(Bool.self, forKey: .omniwmSyncOverview) ?? true
+        self.omniwmSyncWorkspaceBar = try container.decodeIfPresent(Bool.self, forKey: .omniwmSyncWorkspaceBar) ?? true
         if let arr = try? container.decodeIfPresent([String].self, forKey: .includes) {
             self.includes = arr
         } else if let single = try? container.decodeIfPresent(String.self, forKey: .includes) {
@@ -328,7 +373,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         if let dynamicContainer = try? decoder.container(keyedBy: AnyKey.self) {
             let knownKeys = Set([
                 "version", "theme", "isLightMode", "barConfigs", "dockConfigs",
-                "controlCenterWidgets", "controlCenterColumns", "barPosition",
+                "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
+                "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
+                "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
+                "barPosition",
                 "barAutoHide", "barTransparent", "barMarginX", "showDock",
                 "showTelemetry", "showWeather", "showMedia", "showSpaces",
                 "showWorkspaceApps", "showLauncher", "showClock", "showInhibit",
@@ -415,6 +463,15 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(dockConfigs, forKey: .dockConfigs)
         try container.encode(controlCenterWidgets, forKey: .controlCenterWidgets)
         try container.encode(controlCenterColumns, forKey: .controlCenterColumns)
+        try container.encode(controlCenterAvatarShape, forKey: .controlCenterAvatarShape)
+        try container.encode(wallpaperPath, forKey: .wallpaperPath)
+        try container.encode(wallpaperFolders, forKey: .wallpaperFolders)
+        try container.encode(autoGenerateWallpaperColors, forKey: .autoGenerateWallpaperColors)
+        try container.encode(autoThemeOmniWM, forKey: .autoThemeOmniWM)
+        try container.encode(omniwmGradientMode, forKey: .omniwmGradientMode)
+        try container.encode(omniwmGradientDirection, forKey: .omniwmGradientDirection)
+        try container.encode(omniwmSyncOverview, forKey: .omniwmSyncOverview)
+        try container.encode(omniwmSyncWorkspaceBar, forKey: .omniwmSyncWorkspaceBar)
         try container.encode(barMarginX, forKey: .barMarginX)
         try container.encode(showTelemetry, forKey: .showTelemetry)
         try container.encode(showWeather, forKey: .showWeather)
@@ -451,7 +508,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             var dynamicContainer = encoder.container(keyedBy: AnyKey.self)
             let knownKeys = Set([
                 "version", "theme", "isLightMode", "barConfigs", "dockConfigs",
-                "controlCenterWidgets", "controlCenterColumns", "barPosition",
+                "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
+                "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
+                "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
+                "barPosition",
                 "barAutoHide", "barTransparent", "barMarginX", "showDock",
                 "showTelemetry", "showWeather", "showMedia", "showSpaces",
                 "showWorkspaceApps", "showLauncher", "showClock", "showInhibit",
@@ -576,6 +636,11 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case "webSearchProvider": return AnyCodable(webSearchProvider)
         case "pinnedApps": return AnyCodable(pinnedApps.map { AnyCodable($0) })
         case "controlCenterColumns": return AnyCodable(controlCenterColumns)
+        case "autoThemeOmniWM": return AnyCodable(autoThemeOmniWM)
+        case "omniwmGradientMode": return AnyCodable(omniwmGradientMode.rawValue)
+        case "omniwmGradientDirection": return AnyCodable(omniwmGradientDirection.rawValue)
+        case "omniwmSyncOverview": return AnyCodable(omniwmSyncOverview)
+        case "omniwmSyncWorkspaceBar": return AnyCodable(omniwmSyncWorkspaceBar)
         default:
             return rawSettings[key]
         }
@@ -612,6 +677,16 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if let b = value.boolValue { self.showWorkspaceApps = b }
         case "showLauncher":
             if let b = value.boolValue { self.showLauncher = b }
+        case "autoThemeOmniWM":
+            if let b = value.boolValue { self.autoThemeOmniWM = b }
+        case "omniwmGradientMode":
+            if let s = value.stringValue, let m = OmniWMGradientMode(rawValue: s) { self.omniwmGradientMode = m }
+        case "omniwmGradientDirection":
+            if let s = value.stringValue, let d = OmniWMGradientDirection(rawValue: s) { self.omniwmGradientDirection = d }
+        case "omniwmSyncOverview":
+            if let b = value.boolValue { self.omniwmSyncOverview = b }
+        case "omniwmSyncWorkspaceBar":
+            if let b = value.boolValue { self.omniwmSyncWorkspaceBar = b }
         case "showClock":
             if let b = value.boolValue { self.showClock = b }
         case "showInhibit":

@@ -20,7 +20,8 @@ public final class DankBarController {
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Smart Auto-Hide State (Ported from Tralphium)
-    private var fullscreenScreens: Set<Int> = []
+    public private(set) var fullscreenScreens: Set<Int> = []
+    public private(set) var obstructedBarKeys: Set<String> = []
     private var fullscreenTimer: Timer?
 
     public static let barHeight: CGFloat = 48
@@ -44,6 +45,7 @@ public final class DankBarController {
         setupFullscreenObservers()
         setupScreenChangeObserver()
         setupConfigObserver()
+        checkFullscreenState()
         reposition()
         scheduleFullscreenChecks()
     }
@@ -51,13 +53,15 @@ public final class DankBarController {
     public func show() {
         isVisible = true
         let configs = ConfigStore.shared.config.barConfigs
-        let hasSmartAutoHide = configs.contains { $0.smartAutoHide }
         for (key, panel) in panels {
             let screenIndex = Int(key.split(separator: "_").first ?? "") ?? 0
-            if hasSmartAutoHide && fullscreenScreens.contains(screenIndex) {
+            let isScreenFS = fullscreenScreens.contains(screenIndex)
+            let isObstructed = obstructedBarKeys.contains(key) || isScreenFS
+            let barConfig = configs.first(where: { key.contains($0.id) }) ?? .default
+            if (barConfig.smartAutoHide && isObstructed) || isScreenFS {
                 continue
             }
-            panel.orderFront(nil)
+            panel.orderFrontRegardless()
         }
     }
 
@@ -187,7 +191,8 @@ public final class DankBarController {
                 }
 
                 let isScreenFS = fullscreenScreens.contains(screenIndex)
-                if barConfig.smartAutoHide && isScreenFS {
+                let isObstructed = obstructedBarKeys.contains(key) || isScreenFS
+                if (barConfig.smartAutoHide && isObstructed) || isScreenFS {
                     panel.orderOut(nil)
                     continue
                 }
@@ -195,7 +200,7 @@ public final class DankBarController {
                 panel.alphaValue = isRevealed ? 1.0 : 0.02
                 panel.setFrame(frame, display: true)
                 if isVisible {
-                    panel.orderFront(nil)
+                    panel.orderFrontRegardless()
                 }
             }
         }
@@ -255,7 +260,7 @@ public final class DankBarController {
             }
         }
 
-        // Periodic heartbeat check to guarantee bar reappears when exiting fullscreen
+        // Periodic heartbeat check to guarantee bar reappears when exiting fullscreen or windows move
         let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.checkFullscreenState()
@@ -277,35 +282,224 @@ public final class DankBarController {
 
     public func checkFullscreenState() {
         let screens = NSScreen.screens
+        guard !screens.isEmpty else { return }
+
         var newFullscreenScreens = Set<Int>()
-        for (index, screen) in screens.enumerated() {
-            if isFrontmostAppFullscreen(on: screen) {
-                newFullscreenScreens.insert(index)
+        var newObstructedBarKeys = Set<String>()
+
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        let windowList = (CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]]) ?? []
+
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        var activePIDs = Set<pid_t>()
+
+        if let frontApp = NSWorkspace.shared.frontmostApplication,
+           frontApp.bundleIdentifier != Bundle.main.bundleIdentifier,
+           frontApp.processIdentifier != myPID {
+            activePIDs.insert(frontApp.processIdentifier)
+        } else if let activeApp = NSWorkspace.shared.runningApplications.first(where: {
+            $0.isActive && $0.bundleIdentifier != Bundle.main.bundleIdentifier && $0.processIdentifier != myPID
+        }) {
+            activePIDs.insert(activeApp.processIdentifier)
+        }
+
+        // Fallback: If activePIDs is empty, find the frontmost Layer 0 application window
+        if activePIDs.isEmpty {
+            for win in windowList {
+                guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID != myPID else { continue }
+                guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+                let owner = win[kCGWindowOwnerName as String] as? String ?? ""
+                let lowerOwner = owner.lowercased()
+                if lowerOwner.contains("window server") || lowerOwner.contains("menubaragent") || lowerOwner.contains("dock") {
+                    continue
+                }
+                if let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
+                   let w = bounds["Width"], let h = bounds["Height"],
+                   w > 100 && h > 100 {
+                    activePIDs.insert(winPID)
+                    break
+                }
             }
         }
 
-        let changed = (newFullscreenScreens != fullscreenScreens)
-        if changed {
-            fullscreenScreens = newFullscreenScreens
-            reposition()
-            DockController.shared.reposition()
-        } else {
-            // Even if state flag hasn't changed, ensure panel is front when not fullscreen
-            for (index, _) in screens.enumerated() {
-                if !fullscreenScreens.contains(index) {
-                    let hasHiddenPanel = panels.contains { key, panel in
-                        key.hasPrefix("\(index)_") && !panel.isVisible
+        let configs = ConfigStore.shared.config.barConfigs
+        let primaryScreen = screens.first!
+        let primaryHeight = primaryScreen.frame.height
+
+        for (screenIndex, screen) in screens.enumerated() {
+            let screenCGY = Double(primaryHeight - screen.frame.maxY)
+            let screenCGX = Double(screen.frame.minX)
+            let screenW = Double(screen.frame.width)
+            let screenH = Double(screen.frame.height)
+            let screenVisH = Double(screen.visibleFrame.height)
+
+            var isFS = NSApp.currentSystemPresentationOptions.contains(.fullScreen)
+            if !isFS {
+                for win in windowList {
+                    guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+                    guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID != myPID else { continue }
+                    guard let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
+                          let w = bounds["Width"], let h = bounds["Height"],
+                          let winX = bounds["X"], let winY = bounds["Y"] else { continue }
+
+                    // Any window strictly spanning this physical screen (games, full-screen video players)
+                    if SmartAutoHideSolver.isWindowStrictFullscreen(
+                        windowX: Double(winX),
+                        windowY: Double(winY),
+                        windowWidth: Double(w),
+                        windowHeight: Double(h),
+                        screenWidth: screenW,
+                        screenHeight: screenH,
+                        screenCGX: screenCGX,
+                        screenCGY: screenCGY,
+                        tolerance: 10.0
+                    ) {
+                        isFS = true
+                        break
                     }
-                    if hasHiddenPanel {
-                        reposition()
+
+                    // Active application covering the display (native or maximized under menu bar)
+                    if activePIDs.contains(winPID) {
+                        if SmartAutoHideSolver.isWindowFullscreen(
+                            windowX: Double(winX),
+                            windowY: Double(winY),
+                            windowWidth: Double(w),
+                            windowHeight: Double(h),
+                            screenWidth: screenW,
+                            screenHeight: screenH,
+                            screenVisibleHeight: screenVisH,
+                            screenCGX: screenCGX,
+                            screenCGY: screenCGY,
+                            tolerance: 10.0
+                        ) {
+                            isFS = true
+                            break
+                        }
+
+                        // Tralphium-compatible bottom/screen coverage check
+                        let touchesBottom = (Double(winY) + Double(h)) >= (screenCGY + screenH - 10.0)
+                        let isFullWidth = Double(w) >= (screenW - 10.0)
+                        let isFullHeight = Double(h) >= (screenVisH - 10.0) || Double(h) >= (screenH - 10.0)
+                        if isFullWidth && isFullHeight && touchesBottom {
+                            isFS = true
+                            break
+                        }
+                    }
+                }
+            }
+
+            if isFS {
+                newFullscreenScreens.insert(screenIndex)
+            }
+
+            // Per-bar obstruction evaluation for active configs on this screen
+            let screenName = screen.localizedName
+            let matchingConfigs = configs.filter { config in
+                config.screenPreferences.contains("all") ||
+                config.screenPreferences.contains(screenName) ||
+                (config.screenPreferences.isEmpty && screenIndex == 0)
+            }
+            let activeConfigs = matchingConfigs.isEmpty ? [configs.first ?? .default] : matchingConfigs
+
+            for barConfig in activeConfigs {
+                let key = "\(screenIndex)_\(barConfig.id)_\(barConfig.position)"
+                if isFS {
+                    newObstructedBarKeys.insert(key)
+                    continue
+                }
+
+                let thickness = CGFloat(barConfig.thickness > 0 ? barConfig.thickness : (barConfig.isVertical ? 54 : 48))
+                let margin = CGFloat(barConfig.margin)
+                let barCGX: Double
+                let barCGY: Double
+                let barCGWidth: Double
+                let barCGHeight: Double
+
+                switch barConfig.position.lowercased() {
+                case "top":
+                    barCGX = screenCGX + Double(margin)
+                    barCGY = screenCGY + Double(margin)
+                    barCGWidth = max(100.0, screenW - Double(margin * 2))
+                    barCGHeight = Double(thickness)
+                case "left":
+                    barCGX = screenCGX + Double(margin)
+                    barCGY = screenCGY + Double(margin)
+                    barCGWidth = Double(thickness)
+                    barCGHeight = max(100.0, screenH - Double(margin * 2))
+                case "right":
+                    barCGX = screenCGX + screenW - Double(thickness) - Double(margin)
+                    barCGY = screenCGY + Double(margin)
+                    barCGWidth = Double(thickness)
+                    barCGHeight = max(100.0, screenH - Double(margin * 2))
+                case "bottom":
+                    fallthrough
+                default:
+                    barCGX = screenCGX + Double(margin)
+                    barCGY = screenCGY + screenH - Double(thickness) - Double(margin)
+                    barCGWidth = max(100.0, screenW - Double(margin * 2))
+                    barCGHeight = Double(thickness)
+                }
+
+                for win in windowList {
+                    guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+                    guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID != myPID else { continue }
+                    guard activePIDs.contains(winPID) else { continue }
+                    guard let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
+                          let w = bounds["Width"], let h = bounds["Height"],
+                          let winX = bounds["X"], let winY = bounds["Y"] else { continue }
+
+                    if SmartAutoHideSolver.isWindowObstructing(
+                        windowX: Double(winX),
+                        windowY: Double(winY),
+                        windowWidth: Double(w),
+                        windowHeight: Double(h),
+                        screenWidth: screenW,
+                        screenHeight: screenH,
+                        screenVisibleHeight: screenVisH,
+                        screenCGX: screenCGX,
+                        screenCGY: screenCGY,
+                        barCGX: barCGX,
+                        barCGY: barCGY,
+                        barCGWidth: barCGWidth,
+                        barCGHeight: barCGHeight,
+                        tolerance: 4.0
+                    ) {
+                        newObstructedBarKeys.insert(key)
                         break
                     }
                 }
             }
         }
+
+        let changed = (newFullscreenScreens != fullscreenScreens || newObstructedBarKeys != obstructedBarKeys)
+        if changed {
+            fullscreenScreens = newFullscreenScreens
+            obstructedBarKeys = newObstructedBarKeys
+            reposition()
+            DockController.shared.reposition()
+        } else {
+            // Self-healing synchronization: if panel state disagrees with obstruction state, reposition
+            var needsReposition = false
+            for (key, panel) in panels {
+                let shouldBeHidden = obstructedBarKeys.contains(key)
+                let barConfig = configs.first(where: { key.contains($0.id) }) ?? .default
+                if barConfig.smartAutoHide {
+                    if shouldBeHidden && panel.isVisible {
+                        needsReposition = true
+                        break
+                    } else if !shouldBeHidden && !panel.isVisible && isVisible && !barConfig.autoHide {
+                        needsReposition = true
+                        break
+                    }
+                }
+            }
+            if needsReposition {
+                reposition()
+            }
+        }
     }
 
-    private func isFrontmostAppFullscreen(on targetScreen: NSScreen? = nil) -> Bool {
+    public func isFrontmostAppFullscreen(on targetScreen: NSScreen? = nil) -> Bool {
         if NSApp.currentSystemPresentationOptions.contains(.fullScreen) {
             if let targetScreen, let main = NSScreen.main {
                 if targetScreen == main { return true }
@@ -313,19 +507,43 @@ public final class DankBarController {
                 return true
             }
         }
-        guard let frontApp = NSWorkspace.shared.frontmostApplication,
-              frontApp.bundleIdentifier != Bundle.main.bundleIdentifier,
-              frontApp.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
-            return false
+
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        var activePIDs = Set<pid_t>()
+        if let frontApp = NSWorkspace.shared.frontmostApplication,
+           frontApp.bundleIdentifier != Bundle.main.bundleIdentifier,
+           frontApp.processIdentifier != myPID {
+            activePIDs.insert(frontApp.processIdentifier)
+        } else if let activeApp = NSWorkspace.shared.runningApplications.first(where: {
+            $0.isActive && $0.bundleIdentifier != Bundle.main.bundleIdentifier && $0.processIdentifier != myPID
+        }) {
+            activePIDs.insert(activeApp.processIdentifier)
         }
 
         let screen = targetScreen ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return false }
 
-        let pid = frontApp.processIdentifier
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
             return false
+        }
+
+        if activePIDs.isEmpty {
+            for win in windowList {
+                guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID != myPID else { continue }
+                guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+                let owner = win[kCGWindowOwnerName as String] as? String ?? ""
+                let lower = owner.lowercased()
+                if lower.contains("window server") || lower.contains("menubaragent") || lower.contains("dock") {
+                    continue
+                }
+                if let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
+                   let w = bounds["Width"], let h = bounds["Height"],
+                   w > 100 && h > 100 {
+                    activePIDs.insert(winPID)
+                    break
+                }
+            }
         }
 
         let primaryScreen = NSScreen.screens.first ?? screen
@@ -334,11 +552,27 @@ public final class DankBarController {
         let screenCGX = screen.frame.minX
 
         for win in windowList {
-            guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID == pid else { continue }
             guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
-            if let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
-               let w = bounds["Width"], let h = bounds["Height"],
-               let winX = bounds["X"], let winY = bounds["Y"] {
+            guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID != myPID else { continue }
+            guard let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
+                  let w = bounds["Width"], let h = bounds["Height"],
+                  let winX = bounds["X"], let winY = bounds["Y"] else { continue }
+
+            if SmartAutoHideSolver.isWindowStrictFullscreen(
+                windowX: Double(winX),
+                windowY: Double(winY),
+                windowWidth: Double(w),
+                windowHeight: Double(h),
+                screenWidth: Double(screen.frame.width),
+                screenHeight: Double(screen.frame.height),
+                screenCGX: Double(screenCGX),
+                screenCGY: Double(screenCGY),
+                tolerance: 10.0
+            ) {
+                return true
+            }
+
+            if activePIDs.contains(winPID) {
                 if SmartAutoHideSolver.isWindowFullscreen(
                     windowX: Double(winX),
                     windowY: Double(winY),
@@ -348,10 +582,57 @@ public final class DankBarController {
                     screenHeight: Double(screen.frame.height),
                     screenVisibleHeight: Double(screen.visibleFrame.height),
                     screenCGX: Double(screenCGX),
-                    screenCGY: Double(screenCGY)
+                    screenCGY: Double(screenCGY),
+                    tolerance: 10.0
                 ) {
                     return true
                 }
+
+                let touchesBottom = (Double(winY) + Double(h)) >= (Double(screenCGY) + Double(screen.frame.height) - 10.0)
+                let isFullWidth = Double(w) >= (Double(screen.frame.width) - 10.0)
+                let isFullHeight = Double(h) >= (Double(screen.visibleFrame.height) - 10.0) || Double(h) >= (Double(screen.frame.height) - 10.0)
+                if isFullWidth && isFullHeight && touchesBottom {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    public func isDockObstructed(screenIndex: Int, config: DockConfig, frame: NSRect) -> Bool {
+        if fullscreenScreens.contains(screenIndex) { return true }
+        let screens = NSScreen.screens
+        guard screens.indices.contains(screenIndex) else { return false }
+        let screen = screens[screenIndex]
+        let primaryScreen = screens.first ?? screen
+        let primaryHeight = primaryScreen.frame.height
+        let dockCG = CGRect(x: frame.minX, y: primaryHeight - frame.maxY, width: frame.width, height: frame.height)
+
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return false }
+
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        var activePIDs = Set<pid_t>()
+        if let frontApp = NSWorkspace.shared.frontmostApplication,
+           frontApp.bundleIdentifier != Bundle.main.bundleIdentifier,
+           frontApp.processIdentifier != myPID {
+            activePIDs.insert(frontApp.processIdentifier)
+        } else if let activeApp = NSWorkspace.shared.runningApplications.first(where: {
+            $0.isActive && $0.bundleIdentifier != Bundle.main.bundleIdentifier && $0.processIdentifier != myPID
+        }) {
+            activePIDs.insert(activeApp.processIdentifier)
+        }
+
+        for win in windowList {
+            guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+            guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID != myPID else { continue }
+            if !activePIDs.isEmpty && !activePIDs.contains(winPID) { continue }
+            guard let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
+                  let w = bounds["Width"], let h = bounds["Height"],
+                  let winX = bounds["X"], let winY = bounds["Y"] else { continue }
+            let winRect = CGRect(x: winX, y: winY, width: w, height: h)
+            if SmartAutoHideSolver.isWindowOverlappingBar(windowBounds: winRect, barBounds: dockCG, tolerance: 15.0) {
+                return true
             }
         }
         return false

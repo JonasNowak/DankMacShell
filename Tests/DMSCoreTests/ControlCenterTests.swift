@@ -167,4 +167,87 @@ struct ControlCenterTests {
         #expect(ids.contains("idleInhibitor"))
         #expect(ids.contains("doNotDisturb"))
     }
+
+    @Test("Control Center Undo Stack 50-Step Capacity and Restore")
+    func testControlCenterUndoStack() {
+        let initial = [ControlCenterWidgetConfig(id: "wifi")]
+        let stack = ControlCenterUndoStack(initialWidgets: initial, initialColumns: 8, maxCapacity: 50)
+
+        #expect(!stack.canUndo)
+        #expect(!stack.canRedo)
+
+        // Record a new state
+        let state1 = [ControlCenterWidgetConfig(id: "wifi"), ControlCenterWidgetConfig(id: "bluetooth")]
+        stack.record(widgets: state1, columns: 8)
+
+        #expect(stack.canUndo)
+        #expect(!stack.canRedo)
+
+        // Undo back to initial
+        let undone = stack.undo()
+        #expect(undone?.widgets == initial)
+        #expect(!stack.canUndo)
+        #expect(stack.canRedo)
+
+        // Redo forward to state1
+        let redone = stack.redo()
+        #expect(redone?.widgets == state1)
+        #expect(stack.canUndo)
+        #expect(!stack.canRedo)
+
+        // Capacity clamping at 50
+        for i in 2...60 {
+            stack.record(widgets: [ControlCenterWidgetConfig(id: "tile_\(i)")], columns: 8)
+        }
+        // Undo back through history should not exceed 50
+        var undoCount = 0
+        while stack.canUndo {
+            _ = stack.undo()
+            undoCount += 1
+        }
+        #expect(undoCount <= 50)
+    }
+
+    @Test("AvatarShapeGenerator Paths for All 12 User Shapes")
+    func testAvatarShapeGeneratorAllShapes() {
+        let rect = CGRect(x: 0, y: 0, width: 64, height: 64)
+
+        for shapeName in ControlCenterUtils.userShapes {
+            let path = AvatarShapeGenerator.path(for: shapeName, in: rect)
+            #expect(!path.isEmpty)
+            let bounds = path.boundingBox
+            #expect(bounds.width > 0)
+            #expect(bounds.height > 0)
+        }
+    }
+
+    @Test("Control Center Tile Span Cycling")
+    func testTileSpanCycling() {
+        let wifi = ControlCenterWidgetConfig(id: "wifi", w: 4, h: 1)
+        let (w1, _) = ControlCenterUtils.nextSpan(for: wifi, columns: 8)
+        #expect(w1 == 2) // 4 -> 2
+
+        let halfWifi = ControlCenterWidgetConfig(id: "wifi", w: 2, h: 1)
+        let (w2, _) = ControlCenterUtils.nextSpan(for: halfWifi, columns: 8)
+        #expect(w2 == 1) // 2 -> 1
+
+        let compactWifi = ControlCenterWidgetConfig(id: "wifi", w: 1, h: 1)
+        let (w3, _) = ControlCenterUtils.nextSpan(for: compactWifi, columns: 8)
+        #expect(w3 == 4) // 1 -> 4
+
+        // Non-shrinkable widget stays clamped
+        let userWidget = ControlCenterWidgetConfig(id: "user", w: 5, h: 1)
+        let (userW, _) = ControlCenterUtils.nextSpan(for: userWidget, columns: 8)
+        #expect(userW == 5)
+    }
+
+    @Test("Control Center Catalog Widgets and Titles")
+    func testCatalogWidgets() {
+        #expect(ControlCenterUtils.catalogWidgets.count >= 15)
+        for widget in ControlCenterUtils.catalogWidgets {
+            #expect(!ControlCenterUtils.title(for: widget.id).isEmpty)
+            #expect(!ControlCenterUtils.subtitle(for: widget.id).isEmpty)
+            #expect(!ControlCenterUtils.icon(for: widget.id).isEmpty)
+        }
+    }
 }

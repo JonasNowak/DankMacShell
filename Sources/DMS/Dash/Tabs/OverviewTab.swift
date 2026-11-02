@@ -31,13 +31,16 @@ public struct OverviewTab: View {
                 }
                 .frame(height: 84)
 
-                // Bottom Row: Calendar (left) and Media Overview Player (right, beneath User Tile)
+                // Bottom Row: Calendar (left), Wellbeing card (center), and Media Overview Player (right)
                 HStack(spacing: 10) {
                     CalendarOverviewCard()
                         .frame(maxWidth: .infinity)
 
+                    WellbeingOverviewCard()
+                        .frame(width: 138)
+
                     MediaOverviewCard()
-                        .frame(width: 113)
+                        .frame(width: 110)
                 }
                 .frame(maxHeight: .infinity)
             }
