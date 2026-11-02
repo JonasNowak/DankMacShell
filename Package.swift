@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.0
 import PackageDescription
 
 // DankMacShell (DMS) for macOS: Material Design 3 desktop shell
@@ -6,7 +6,7 @@ import PackageDescription
 // Event-driven native Swift architecture with dynamic wallpaper M3 theming.
 let package = Package(
     name: "DMS",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v14)],
     products: [
         .executable(name: "DankMacShell", targets: ["DMS"]),
         .executable(name: "dms", targets: ["DMSCLI"]),

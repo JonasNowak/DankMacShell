@@ -15,7 +15,7 @@ PLIST="$ROOT/Support/Info.plist"
 CERT_NAME="dms-cert"
 IDENTITY=${SIGN_IDENTITY:-""}
 
-if [ -z "$IDENTITY" ] || [ "$IDENTITY" = "-" ]; then
+if [ -z "$IDENTITY" ]; then
     # Auto-detect or create persistent code-signing identity to preserve macOS permissions
     if security find-identity -p codesigning -v 2>/dev/null | grep -q "\"$CERT_NAME\""; then
         IDENTITY="$CERT_NAME"

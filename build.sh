@@ -96,7 +96,10 @@ ln -sf "DankMacShell.app" "$ALT_APP"
 mkdir -p "$HOME/.local/bin"
 cp "$CLI_BINARY" "$HOME/.local/bin/dms"
 chmod +x "$HOME/.local/bin/dms"
-if security find-identity -p codesigning -v 2>/dev/null | grep -q '"dms-cert"'; then
+CLI_IDENTITY=${SIGN_IDENTITY:-""}
+if [ -n "$CLI_IDENTITY" ]; then
+    codesign --force --sign "$CLI_IDENTITY" "$HOME/.local/bin/dms" 2>/dev/null || true
+elif security find-identity -p codesigning -v 2>/dev/null | grep -q '"dms-cert"'; then
     codesign --force --sign "dms-cert" "$HOME/.local/bin/dms" 2>/dev/null || true
 fi
 echo "==> Installed dms CLI to: $HOME/.local/bin/dms"
