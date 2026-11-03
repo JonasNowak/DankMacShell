@@ -10,6 +10,12 @@ public struct NowPlayingTrack: Sendable, Codable, Equatable {
     public var elapsedSeconds: Double
     public var appName: String
     public var artworkData: Data?
+    /// Playback rate (1.0 = normal speed, 0.0 = paused).
+    public var playbackRate: Double
+    /// Wall-clock time at which `elapsedSeconds` was sampled.
+    public var timestamp: Date
+    /// Remote artwork URL, when the source provides one.
+    public var artworkURL: String?
 
     public var hasArtwork: Bool {
         guard let data = artworkData else { return false }
@@ -37,7 +43,10 @@ public struct NowPlayingTrack: Sendable, Codable, Equatable {
         durationSeconds: Double = 0.0,
         elapsedSeconds: Double = 0.0,
         appName: String = "",
-        artworkData: Data? = nil
+        artworkData: Data? = nil,
+        playbackRate: Double? = nil,
+        timestamp: Date = Date(),
+        artworkURL: String? = nil
     ) {
         self.title = title
         self.artist = artist
@@ -47,6 +56,19 @@ public struct NowPlayingTrack: Sendable, Codable, Equatable {
         self.elapsedSeconds = elapsedSeconds
         self.appName = appName
         self.artworkData = artworkData
+        self.playbackRate = playbackRate ?? (isPlaying ? 1.0 : 0.0)
+        self.timestamp = timestamp
+        self.artworkURL = artworkURL
+    }
+
+    /// Sub-second playback position extrapolated from the last sample (`timestamp`).
+    public func interpolatedElapsed(at date: Date = Date()) -> Double {
+        guard isPlaying else { return elapsedSeconds }
+        let rate = playbackRate > 0 ? playbackRate : 1.0
+        let delta = max(0, date.timeIntervalSince(timestamp))
+        let value = elapsedSeconds + delta * rate
+        if durationSeconds > 0 { return min(durationSeconds, value) }
+        return value
     }
 
     private func formatTime(_ seconds: Double) -> String {
@@ -54,5 +76,19 @@ public struct NowPlayingTrack: Sendable, Codable, Equatable {
         let m = total / 60
         let s = total % 60
         return String(format: "%d:%02d", m, s)
+    }
+}
+
+
+/// Layout style of the DankDash media hub.
+public enum MediaPlayerLayout: String, Codable, CaseIterable, Sendable {
+    case bento
+    case material
+
+    public var displayName: String {
+        switch self {
+        case .bento: return "Bento"
+        case .material: return "Material"
+        }
     }
 }

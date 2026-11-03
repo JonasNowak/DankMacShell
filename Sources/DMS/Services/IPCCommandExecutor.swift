@@ -442,9 +442,43 @@ public enum IPCCommandExecutor {
             case "prev", "previous":
                 NowPlayingService.shared.previous()
                 return "Returned to previous track"
+            case "lyrics":
+                return IPCCommandExecutor.lyricsCurrent()
             default:
+                NowPlayingService.shared.updatePlaybackState()
                 let track = NowPlayingService.shared.currentTrack
                 return "\(track.title) - \(track.artist) (\(track.isPlaying ? "Playing" : "Paused"))"
+            }
+
+        case .mprisSeek(let seconds):
+            let track = NowPlayingService.shared.currentTrack
+            let upper = track.durationSeconds > 0 ? track.durationSeconds : Double.greatestFiniteMagnitude
+            let target = min(upper, max(0, seconds))
+            NowPlayingService.shared.seekToSeconds(target)
+            return String(format: "Seeked to %.1fs", target)
+
+        case .lyrics(let act, let value):
+            let lyrics = LyricsService.shared
+            switch act.lowercased() {
+            case "current", "line":
+                lyrics.ensureLoaded()
+                return IPCCommandExecutor.lyricsCurrent()
+            case "refresh", "reload":
+                lyrics.refresh()
+                return "Lyrics refresh triggered"
+            case "clear-cache", "clearcache", "clear":
+                lyrics.clearCache()
+                return "Lyrics cache cleared"
+            case "offset":
+                guard let raw = value, let ms = Int(raw) else {
+                    return "Lyrics timing offset: \(ConfigStore.shared.config.lyricsOffsetMs) ms"
+                }
+                let clamped = min(10_000, max(-10_000, ms))
+                lyrics.setOffset(ms: clamped)
+                return "Lyrics timing offset set to \(clamped) ms"
+            default:
+                lyrics.ensureLoaded()
+                return lyrics.statusSummary()
             }
 
         case .setTheme(let name):
@@ -773,5 +807,10 @@ public enum IPCCommandExecutor {
         case .unknown(let raw):
             return "Unknown command: \(raw)"
         }
+    }
+
+    private static func lyricsCurrent() -> String {
+        let text = LyricsService.shared.activeLineText
+        return text.isEmpty ? "(no active lyric line)" : text
     }
 }

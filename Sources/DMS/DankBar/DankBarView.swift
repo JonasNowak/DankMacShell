@@ -648,7 +648,7 @@ public struct DankBarView: View {
         case "media", "mediaControls":
             mediaWidget(style: style)
         case "mediaLyricLine":
-            mediaLyricWidget(style: style)
+            MediaLyricLineWidget(isVertical: isVertical, options: options, style: style)
         case "audioVisualization":
             AudioVisualizerWidget(isVertical: isVertical)
         case "cpuMonitor":
@@ -860,11 +860,17 @@ public struct DankBarView: View {
             let hasActiveTrack = track.isPlaying || (!track.title.isEmpty && track.title != "No Track Playing")
             if hasActiveTrack {
                 Button(action: { nowPlaying.playPause() }) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         if style.showIcon {
-                            Image(systemName: track.isPlaying ? "music.note" : "pause.fill")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
+                            // MEDIA-004: 20x20 rounded album art thumbnail
+                            MediaArtThumbnail(
+                                data: track.artworkData,
+                                identity: "\(track.title)|\(track.artist)",
+                                size: 20,
+                                cornerRadius: 4,
+                                tint: resolveWidgetTint(style, defaultColor: theme.primary),
+                                isPlaying: track.isPlaying
+                            )
                         }
                         if !isVertical && style.showLabel && !style.compactMode {
                             Text(track.title)
@@ -873,12 +879,37 @@ public struct DankBarView: View {
                                 .lineLimit(1)
                                 .frame(maxWidth: 160)
                         }
+                        // MEDIA-005: 4-bar mini equalizer while playing
+                        if !isVertical && track.isPlaying {
+                            MiniEqualizerView(isPlaying: true, color: resolveWidgetTint(style, defaultColor: theme.primary))
+                        }
                     }
                     .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
                     .frame(width: isVertical ? 28 : nil, height: 28)
                     .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button(track.isPlaying ? "Pause" : "Play") { nowPlaying.playPause() }
+                    Button("Next Track") { nowPlaying.next() }
+                    Button("Previous Track") { nowPlaying.previous() }
+                    Divider()
+                    Button("Open Media Hub") {
+                        DashController.shared.toggle(tab: .media, fromBar: true)
+                    }
+                    Button("Show Synchronized Lyrics") {
+                        LyricsService.shared.isLyricsOverlayVisible = true
+                        DashController.shared.toggle(tab: .media, fromBar: true)
+                    }
+                    Divider()
+                    Button("Copy Track Title") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(
+                            track.artist.isEmpty ? track.title : "\(track.title) — \(track.artist)",
+                            forType: .string
+                        )
+                    }
+                }
                 .background(
                     GeometryReader { geo in
                         Color.clear
@@ -898,30 +929,8 @@ public struct DankBarView: View {
                 )
             }
         }
-    }
-
-    private func mediaLyricWidget(style: BarWidgetStyleOptions) -> some View {
-        let track = nowPlaying.currentTrack
-        let lyricText = track.artist.isEmpty ? track.title : "\(track.title) — \(track.artist)"
-        return Group {
-            if !track.title.isEmpty {
-                HStack(spacing: 5) {
-                    Image(systemName: "quote.bubble.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
-                    if !isVertical {
-                        Text(lyricText)
-                            .font(theme.font(size: 11, weight: .medium))
-                            .foregroundColor(theme.onSurfaceVariant)
-                            .lineLimit(1)
-                            .frame(maxWidth: 180)
-                    }
-                }
-                .padding(.horizontal, isVertical ? 0 : 8)
-                .frame(width: isVertical ? 28 : nil, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-            }
-        }
+        .onAppear { nowPlaying.addPositionRef("bar.media") }
+        .onDisappear { nowPlaying.removePositionRef("bar.media") }
     }
 
     private func networkMonitorPill(style: BarWidgetStyleOptions) -> some View {

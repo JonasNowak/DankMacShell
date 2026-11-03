@@ -30,6 +30,14 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var omniwmSyncWorkspaceBar: Bool
     public var enableWellbeing: Bool
     public var syncWellbeingWithMacOS: Bool
+    /// Fetch synchronized lyrics automatically from LRCLIB.
+    public var enableLyrics: Bool
+    /// Allow the `mediaLyricLine` DankBar widget to display lyrics.
+    public var showMediaLyricLine: Bool
+    /// DankDash media hub presentation (`bento` or `material`).
+    public var mediaPlayerLayout: MediaPlayerLayout
+    /// Global lyrics timing offset in ms (positive = lyrics appear earlier).
+    public var lyricsOffsetMs: Int
 
     // MARK: - Legacy / Direct Accessors (Backward Compatibility)
     public var barPosition: String {
@@ -198,6 +206,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         omniwmSyncWorkspaceBar: Bool = true,
         enableWellbeing: Bool = true,
         syncWellbeingWithMacOS: Bool = true,
+        enableLyrics: Bool = true,
+        showMediaLyricLine: Bool = true,
+        mediaPlayerLayout: MediaPlayerLayout = .bento,
+        lyricsOffsetMs: Int = 0,
         rawSettings: [String: AnyCodable] = [:],
         includes: [String] = []
     ) {
@@ -229,6 +241,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.omniwmSyncWorkspaceBar = omniwmSyncWorkspaceBar
         self.enableWellbeing = enableWellbeing
         self.syncWellbeingWithMacOS = syncWellbeingWithMacOS
+        self.enableLyrics = enableLyrics
+        self.showMediaLyricLine = showMediaLyricLine
+        self.mediaPlayerLayout = mediaPlayerLayout
+        self.lyricsOffsetMs = min(10_000, max(-10_000, lyricsOffsetMs))
         self.barMarginX = barMarginX
         self.showTelemetry = showTelemetry
         self.showWeather = showWeather
@@ -279,6 +295,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case omniwmSyncWorkspaceBar
         case enableWellbeing
         case syncWellbeingWithMacOS
+        case enableLyrics
+        case showMediaLyricLine
+        case mediaPlayerLayout
+        case lyricsOffsetMs
         case barPosition
         case barAutoHide
         case barTransparent
@@ -370,6 +390,16 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.omniwmSyncWorkspaceBar = try container.decodeIfPresent(Bool.self, forKey: .omniwmSyncWorkspaceBar) ?? true
         self.enableWellbeing = try container.decodeIfPresent(Bool.self, forKey: .enableWellbeing) ?? true
         self.syncWellbeingWithMacOS = try container.decodeIfPresent(Bool.self, forKey: .syncWellbeingWithMacOS) ?? true
+        self.enableLyrics = try container.decodeIfPresent(Bool.self, forKey: .enableLyrics) ?? true
+        self.showMediaLyricLine = try container.decodeIfPresent(Bool.self, forKey: .showMediaLyricLine) ?? true
+        if let layoutStr = try container.decodeIfPresent(String.self, forKey: .mediaPlayerLayout),
+           let layout = MediaPlayerLayout(rawValue: layoutStr) {
+            self.mediaPlayerLayout = layout
+        } else {
+            self.mediaPlayerLayout = .bento
+        }
+        let decodedOffset = try container.decodeIfPresent(Int.self, forKey: .lyricsOffsetMs) ?? 0
+        self.lyricsOffsetMs = min(10_000, max(-10_000, decodedOffset))
         if let arr = try? container.decodeIfPresent([String].self, forKey: .includes) {
             self.includes = arr
         } else if let single = try? container.decodeIfPresent(String.self, forKey: .includes) {
@@ -387,6 +417,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
                 "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
                 "enableWellbeing", "syncWellbeingWithMacOS",
+                "enableLyrics", "showMediaLyricLine", "mediaPlayerLayout", "lyricsOffsetMs",
                 "barPosition",
                 "barAutoHide", "barTransparent", "barMarginX", "showDock",
                 "showTelemetry", "showWeather", "showMedia", "showSpaces",
@@ -485,6 +516,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(omniwmSyncWorkspaceBar, forKey: .omniwmSyncWorkspaceBar)
         try container.encode(enableWellbeing, forKey: .enableWellbeing)
         try container.encode(syncWellbeingWithMacOS, forKey: .syncWellbeingWithMacOS)
+        try container.encode(enableLyrics, forKey: .enableLyrics)
+        try container.encode(showMediaLyricLine, forKey: .showMediaLyricLine)
+        try container.encode(mediaPlayerLayout.rawValue, forKey: .mediaPlayerLayout)
+        try container.encode(lyricsOffsetMs, forKey: .lyricsOffsetMs)
         try container.encode(barMarginX, forKey: .barMarginX)
         try container.encode(showTelemetry, forKey: .showTelemetry)
         try container.encode(showWeather, forKey: .showWeather)
@@ -525,6 +560,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
                 "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
                 "enableWellbeing", "syncWellbeingWithMacOS",
+                "enableLyrics", "showMediaLyricLine", "mediaPlayerLayout", "lyricsOffsetMs",
                 "barPosition",
                 "barAutoHide", "barTransparent", "barMarginX", "showDock",
                 "showTelemetry", "showWeather", "showMedia", "showSpaces",
@@ -657,6 +693,10 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case "omniwmSyncWorkspaceBar": return AnyCodable(omniwmSyncWorkspaceBar)
         case "enableWellbeing", "wellbeingEnabled": return AnyCodable(enableWellbeing)
         case "syncWellbeingWithMacOS", "syncWellbeingWithScreenTime": return AnyCodable(syncWellbeingWithMacOS)
+        case "enableLyrics": return AnyCodable(enableLyrics)
+        case "showMediaLyricLine": return AnyCodable(showMediaLyricLine)
+        case "mediaPlayerLayout": return AnyCodable(mediaPlayerLayout.rawValue)
+        case "lyricsOffsetMs": return AnyCodable(lyricsOffsetMs)
         default:
             return rawSettings[key]
         }
@@ -707,6 +747,14 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if let b = value.boolValue { self.enableWellbeing = b }
         case "syncWellbeingWithMacOS", "syncWellbeingWithScreenTime":
             if let b = value.boolValue { self.syncWellbeingWithMacOS = b }
+        case "enableLyrics":
+            if let b = value.boolValue { self.enableLyrics = b }
+        case "showMediaLyricLine":
+            if let b = value.boolValue { self.showMediaLyricLine = b }
+        case "mediaPlayerLayout":
+            if let s = value.stringValue, let l = MediaPlayerLayout(rawValue: s.lowercased()) { self.mediaPlayerLayout = l }
+        case "lyricsOffsetMs":
+            if let d = value.doubleValue { self.lyricsOffsetMs = min(10_000, max(-10_000, Int(d))) }
         case "showClock":
             if let b = value.boolValue { self.showClock = b }
         case "showInhibit":

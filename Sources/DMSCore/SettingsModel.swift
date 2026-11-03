@@ -180,7 +180,7 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .barWorkspaces: return ["workspaces", "omniwm", "virtual", "spaces", "pager", "icons", "desktop"]
         case .island: return ["island", "dynamic", "beta", "compact", "float", "overlay", "height", "gaps", "offset", "home", "shortcuts", "pill"]
         case .dashboard: return ["dash", "dashboard", "calendar", "overview", "stats", "notes", "cards"]
-        case .mediaPlayer: return ["media", "now playing", "player", "controls", "visualizer", "squiggly", "music"]
+        case .mediaPlayer: return ["media", "now playing", "player", "controls", "visualizer", "squiggly", "music", "lyrics", "lrc", "lrclib", "synced", "bento", "karaoke"]
         case .notifications: return ["notifications", "banner", "timeout", "rules", "dnd", "alert", "popups"]
         case .osd: return ["osd", "hud", "volume", "brightness", "indicator", "fade", "floating"]
         case .desktopWidgets: return ["desktop", "widgets", "clock", "sticky", "monitor", "notes", "canvas"]

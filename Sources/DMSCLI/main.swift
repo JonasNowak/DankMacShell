@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import DMSCore
 
-let version = "0.4.1"
+let version = "0.5.0"
 
 func printHelp() {
     print("""
@@ -44,7 +44,8 @@ func printHelp() {
       dms mic [status|mute|unmute|toggle]
       dms brightness [get|set <0-100>|increment|decrement]
       dms inhibit [toggle|status]       Prevent display and system sleep (caffeinate)
-      dms mpris [status|play|pause|next|prev]   Media playback control
+      dms mpris [status|play|pause|next|prev|seek <sec>|lyrics]   Media playback control
+      dms lyrics [status|current|refresh|clear-cache|offset <ms>] Synchronized LRC lyrics
       dms theme [get|set <name>|list|toggle-mode]
       dms screenshot [region|full|window]
       dms plugins [search|list|install|uninstall|enable|disable|lock|restore]
@@ -153,6 +154,39 @@ func isDMSRunning() -> Bool {
     return task.terminationStatus == 0
 }
 
+func probeMediaRemote() -> String {
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    let candidates = [
+        "\(home)/Applications/DankMacShell.app/Contents/Resources/media-bridge.swift",
+        "/Applications/DankMacShell.app/Contents/Resources/media-bridge.swift",
+        "Support/media-bridge.swift",
+        "\(home)/Library/Application Support/DMS/media-bridge.swift"
+    ]
+    guard let scriptPath = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
+        return "{}"
+    }
+
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
+    task.arguments = [scriptPath, "--once"]
+    let pipe = Pipe()
+    task.standardOutput = pipe
+    task.standardError = FileHandle.nullDevice
+
+    do {
+        try task.run()
+        task.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !output.isEmpty {
+            return output
+        }
+    } catch {
+        return "{}"
+    }
+    return "{}"
+}
+
 let args = Array(CommandLine.arguments.dropFirst())
 guard let command = args.first?.lowercased() else {
     printHelp()
@@ -165,6 +199,9 @@ case "help", "-h", "--help":
 
 case "version", "-v", "--version":
     print("DankMaterialShell (DMS) for macOS v\(version)")
+
+case "media-probe":
+    print(probeMediaRemote())
 
 case "start", "run":
     if isDMSRunning() {

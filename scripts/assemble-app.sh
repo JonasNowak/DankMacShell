@@ -63,6 +63,11 @@ if [ -d "$BIN_DIR/DMS_DMS.bundle" ]; then
     cp -R "$BIN_DIR/DMS_DMS.bundle" "$APP/Contents/Resources/"
 fi
 
+# Copy media-bridge helper script to Resources
+if [ -f "$ROOT/Support/media-bridge.swift" ]; then
+    cp "$ROOT/Support/media-bridge.swift" "$APP/Contents/Resources/media-bridge.swift"
+fi
+
 # Ensure icon is up-to-date from repository assets
 if [ -x "$ROOT/scripts/generate-icon.sh" ]; then
     "$ROOT/scripts/generate-icon.sh"

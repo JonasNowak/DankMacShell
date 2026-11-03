@@ -2317,6 +2317,77 @@ public struct SettingsView: View {
                 ),
                 palette: palette
             )
+
+            SettingsToggleRow(
+                title: "Synchronized Lyrics Bar Widget",
+                subtitle: "Allow the Synchronized Lyrics widget to show the live lyric line in DankBar",
+                isOn: Binding(
+                    get: { configStore.config.showMediaLyricLine },
+                    set: { val in configStore.update { $0.showMediaLyricLine = val } }
+                ),
+                palette: palette
+            )
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Media Hub Layout")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                    Text("Bento card grid or Material centered artwork in DankDash")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(hex: palette.outline.hex))
+                }
+                Spacer()
+                SettingsSegmentedControl(
+                    options: [("Bento", MediaPlayerLayout.bento), ("Material", MediaPlayerLayout.material)],
+                    selection: Binding(
+                        get: { configStore.config.mediaPlayerLayout },
+                        set: { val in configStore.update { $0.mediaPlayerLayout = val } }
+                    ),
+                    palette: palette
+                )
+            }
+        }
+
+        SettingsCard(icon: "quote.bubble.fill", title: "Synchronized Lyrics", subtitle: "LRC lyrics from LRCLIB", palette: palette) {
+            SettingsToggleRow(
+                title: "Enable Automatic Lyrics (LRCLIB)",
+                subtitle: "Fetch synchronized lyrics for the playing track from lrclib.net and cache them locally",
+                isOn: Binding(
+                    get: { configStore.config.enableLyrics },
+                    set: { val in configStore.update { $0.enableLyrics = val } }
+                ),
+                palette: palette
+            )
+
+            SettingsSliderRow(
+                title: "Lyrics Timing Offset",
+                valueFormatted: "\(configStore.config.lyricsOffsetMs >= 0 ? "+" : "")\(configStore.config.lyricsOffsetMs) ms",
+                value: Binding(
+                    get: { Double(configStore.config.lyricsOffsetMs) },
+                    set: { val in configStore.update(immediate: false) { $0.lyricsOffsetMs = Int(val) } }
+                ),
+                range: -5000...5000,
+                step: 50,
+                helper: "Positive values show lyrics earlier, negative values later.",
+                palette: palette
+            )
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Lyrics Cache")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                    Text("Stored in ~/Library/Application Support/DMS/lyrics_cache")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(hex: palette.outline.hex))
+                }
+                Spacer()
+                Button("Clear Lyrics Cache") {
+                    LyricsService.shared.clearCache()
+                    ToastCenter.shared.show(icon: "trash", message: "Lyrics cache cleared")
+                }
+            }
         }
     }
 

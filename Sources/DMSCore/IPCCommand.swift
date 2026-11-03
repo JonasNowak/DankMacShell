@@ -87,6 +87,8 @@ public enum IPCCommand: Sendable, Equatable {
     case brightness(action: String, value: String? = nil)
     case inhibit(action: String)
     case mpris(action: String)
+    case mprisSeek(seconds: Double)
+    case lyrics(action: String, value: String? = nil)
 
     // Theming & Wallpaper
     case setTheme(name: String)
@@ -287,7 +289,18 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "mpris":
             let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
+            if act == "seek" {
+                if let raw = param("value") ?? param("seconds") ?? param("sec"), let sec = Double(raw), sec.isFinite {
+                    return .mprisSeek(seconds: sec)
+                }
+                return .unknown("mpris seek requires seconds")
+            }
+            if act == "lyrics" { return .lyrics(action: "current") }
             return .mpris(action: act)
+
+        case "lyrics":
+            let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
+            return .lyrics(action: act, value: param("value") ?? param("offset") ?? param("ms"))
 
         case "settheme":
             if let name = param("name") { return .setTheme(name: name) }
@@ -544,7 +557,17 @@ public enum IPCCommand: Sendable, Equatable {
             return .inhibit(action: action.isEmpty ? "toggle" : action)
 
         case "mpris":
+            if action == "seek" {
+                if let raw = extra.first, let sec = Double(raw), sec.isFinite {
+                    return .mprisSeek(seconds: sec)
+                }
+                return .unknown("mpris seek requires seconds")
+            }
+            if action == "lyrics" { return .lyrics(action: "current") }
             return .mpris(action: action.isEmpty ? "status" : action)
+
+        case "lyrics":
+            return .lyrics(action: action.isEmpty ? "status" : action, value: extra.first)
 
         case "theme":
             switch action {

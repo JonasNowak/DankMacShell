@@ -132,6 +132,7 @@ public struct DIslandView: View {
     @ObservedObject private var theme = ThemeStore.shared
     @ObservedObject private var configStore = ConfigStore.shared
     @ObservedObject private var nowPlaying = NowPlayingService.shared
+    @ObservedObject private var lyrics = LyricsService.shared
     @ObservedObject private var weather = WeatherService.shared
     @ObservedObject private var inhibit = IdleInhibitService.shared
     @ObservedObject private var clipboard = ClipboardService.shared
@@ -480,7 +481,21 @@ public struct DIslandView: View {
                         .font(theme.font(size: 11, weight: .medium))
                         .foregroundColor(theme.onSurfaceVariant)
                         .lineLimit(1)
+
+                    // Live synchronized lyric line (LyricsService)
+                    if !lyrics.activeLineText.isEmpty {
+                        Text(lyrics.activeLineText)
+                            .font(theme.font(size: 11, weight: .semibold))
+                            .foregroundColor(theme.primary)
+                            .lineLimit(1)
+                            .id(lyrics.activeLineIndex ?? -1)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                    }
                 }
+                .animation(.easeInOut(duration: 0.25), value: lyrics.activeLineIndex)
 
                 Spacer()
 
@@ -535,6 +550,8 @@ public struct DIslandView: View {
             }
         }
         .padding(.top, 4)
+        .onAppear { lyrics.addConsumer("island.media") }
+        .onDisappear { lyrics.removeConsumer("island.media") }
     }
 
     private var expandedOSDView: some View {
