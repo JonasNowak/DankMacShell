@@ -1,7 +1,7 @@
 <h1 align="center">DankMacShell</h1>
 
 <p align="center">
-  <em>A Material 3 shell for macOS — the tiling window-manager experience, natively on your Mac.</em>
+  <em>A Material 3 shell for macOS — the tiling window-manager adjacent shell experience, natively on your Mac.</em>
 </p>
 
 <p align="center">
