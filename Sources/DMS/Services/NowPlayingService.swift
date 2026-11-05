@@ -5,7 +5,7 @@ import Darwin
 import DMSCore
 
 @_silgen_name("proc_pidpath")
-private func dms_proc_pidpath(_ pid: Int32, _ buffer: UnsafeMutableRawPointer, _ buffersize: UInt32) -> Int32
+func dms_proc_pidpath(_ pid: Int32, _ buffer: UnsafeMutableRawPointer, _ buffersize: UInt32) -> Int32
 
 /// Service that monitors and controls media playback across macOS universally:
 /// Apple Music, Spotify, VLC, and all MediaRemote / Web sources (Safari, Google Chrome,

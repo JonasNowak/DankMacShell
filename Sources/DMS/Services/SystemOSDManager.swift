@@ -108,7 +108,7 @@ public final class SystemOSDManager: @unchecked Sendable {
             let pid = pids[i]
             guard pid > 0 else { continue }
             var buffer = [CChar](repeating: 0, count: 4096)
-            let len = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+            let len = dms_proc_pidpath(pid, &buffer, UInt32(buffer.count))
             if len > 0 {
                 let path = buffer.withUnsafeBufferPointer { ptr in
                     ptr.baseAddress.map { String(cString: $0) } ?? ""
