@@ -16,7 +16,7 @@ public struct SymbianAppInstallTab: View {
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             // Drag and Drop Zone
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
@@ -56,7 +56,7 @@ public struct SymbianAppInstallTab: View {
                 }
                 .padding(14)
             }
-            .frame(height: 110)
+            .frame(height: 92)
             .onDrop(of: ["public.file-url"], isTargeted: $isTargetedForDrop) { providers in
                 handleDrop(providers: providers)
             }
@@ -98,7 +98,7 @@ public struct SymbianAppInstallTab: View {
                             }
                         }
                     }
-                    .frame(maxHeight: 140)
+                    .frame(maxHeight: 120)
                     .background(Color(hex: palette.surfaceContainerLowest.hex))
                     .cornerRadius(8)
                 }
@@ -217,25 +217,22 @@ public struct SymbianAppInstallTab: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
                     Text(package.appName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
+                        .lineLimit(1)
 
                     Text(package.version)
                         .font(.system(size: 8, design: .monospaced))
                         .foregroundColor(Color(hex: palette.outline.hex))
                 }
 
-                Text(package.fileName)
-                    .font(.system(size: 9))
+                Text("\(package.fileName) · UID \(package.uid) · \(package.formattedSize)")
+                    .font(.system(size: 8))
                     .foregroundColor(Color(hex: palette.outline.hex))
                     .lineLimit(1)
             }
 
             Spacer()
-
-            Text(package.formattedSize)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(Color(hex: palette.outline.hex))
 
             Button(action: { syncService.removeStagedPackage(package) }) {
                 Image(systemName: "trash")
@@ -246,7 +243,7 @@ public struct SymbianAppInstallTab: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
         .background(Color(hex: palette.surfaceContainerLow.hex))
         .cornerRadius(6)
     }

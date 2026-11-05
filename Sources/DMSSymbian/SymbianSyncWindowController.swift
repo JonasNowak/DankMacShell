@@ -36,6 +36,7 @@ public final class SymbianSyncWindowController: NSObject, ObservableObject, NSWi
     }
 
     public func show() {
+        SymbianThemeStore.shared.refresh()
         if !SymbianSyncService.shared.isRunning {
             SymbianSyncService.shared.start()
         }
@@ -47,8 +48,8 @@ public final class SymbianSyncWindowController: NSObject, ObservableObject, NSWi
             return
         }
 
-        let width: CGFloat = 720
-        let height: CGFloat = 560
+        let width: CGFloat = 600
+        let height: CGFloat = 420
 
         let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 100, y: 100, width: 1200, height: 800)

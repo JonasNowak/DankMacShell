@@ -31,6 +31,7 @@ public final class DurationPopoutController: ObservableObject {
         AudioPopoutController.shared.hide()
         BatteryPopoutController.shared.hide()
         ColorPickerPopoutController.shared.hide()
+        SymbianPopoutController.shared.hide()
         PowerPopoutController.shared.hide()
         ProcessListController.shared.hide()
         ControlCenterController.shared.hide()

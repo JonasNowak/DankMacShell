@@ -56,7 +56,8 @@ final class SymbianBarStatus: ObservableObject {
 }
 
 /// Nokia Belle Sync bar pill for the DankBar (symbian plugin's own bar addition).
-/// Shows the real Nokia C7 photo plus live connection state; clicking opens the dms-symbian companion.
+/// Shows the real Nokia C7 photo plus live connection state; clicking opens a small
+/// popout with device status, storage overview, and a link to the dms-symbian companion plugin.
 /// Registered as the `symbianApplet` widget in `SettingsWidgetCatalog` and the `symbian` applet.
 public struct SymbianBarWidget: View {
     public var isVertical: Bool
@@ -77,8 +78,14 @@ public struct SymbianBarWidget: View {
     }
 
     /// Bundled product photo of the Nokia C7 (CC BY-SA 3.0, see Resources/NokiaC7-Photo-Attribution.txt).
-    private static var nokiaImage: NSImage? {
-        Bundle.module.image(forResource: "nokia-c7.jpg")
+    /// Resolved defensively via `SafeResourceBundle` so a missing `DMS_DMS.bundle` falls back
+    /// to the SF Symbol instead of crashing like the generated `Bundle.module` accessor.
+    static var nokiaImage: NSImage? {
+        guard let bundle = SafeResourceBundle.bundle(named: "DMS_DMS"),
+              let url = bundle.url(forResource: "nokia-c7", withExtension: "jpg") else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
     }
 
     private var tintColor: Color {
@@ -105,7 +112,7 @@ public struct SymbianBarWidget: View {
 
     public var body: some View {
         Button {
-            _ = SymbianClient.shared.launchCompanion()
+            SymbianPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x)
         } label: {
             if isVertical {
                 VStack(spacing: 2) {
@@ -136,8 +143,8 @@ public struct SymbianBarWidget: View {
         }
         .buttonStyle(.plain)
         .help(status.device != nil
-              ? "Nokia Belle Sync: \(status.device!.name) — \(status.device!.formattedFreeSpace) of \(status.device!.formattedTotalSpace) free. Click to open sync companion."
-              : "Nokia Belle Sync: no Nokia C7 / Symbian device connected. Click to open sync companion.")
+              ? "Nokia Belle Sync: \(status.device!.name) — \(status.device!.formattedFreeSpace) of \(status.device!.formattedTotalSpace) free. Click for status & plugin link."
+              : "Nokia Belle Sync: no Nokia C7 / Symbian device connected. Click for status & plugin link.")
     }
 
     @ViewBuilder

@@ -42,7 +42,7 @@ public struct SymbianMusicSyncTab: View {
     }
 
     public var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             // Control Header
             HStack(spacing: 8) {
                 // View Mode Picker (Mac vs Phone)
@@ -131,6 +131,10 @@ public struct SymbianMusicSyncTab: View {
                             .foregroundColor(Color(hex: palette.secondary.hex))
                     }
                     .buttonStyle(.plain)
+
+                    Text("\(syncService.localTracks.filter { $0.isSyncedToDevice }.count) of \(syncService.localTracks.count) on phone")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(Color(hex: palette.outline.hex))
 
                     Spacer()
 
@@ -299,7 +303,7 @@ public struct SymbianMusicSyncTab: View {
                 .frame(width: 48, alignment: .trailing)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.vertical, 4)
         .background(isSelected ? Color(hex: palette.primaryContainer.hex).opacity(0.3) : Color(hex: palette.surfaceContainerLow.hex))
         .cornerRadius(6)
     }

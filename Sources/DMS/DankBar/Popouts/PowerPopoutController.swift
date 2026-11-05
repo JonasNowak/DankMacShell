@@ -33,6 +33,7 @@ public final class PowerPopoutController: ObservableObject {
         BatteryPopoutController.shared.hide()
         DurationPopoutController.shared.hide()
         ColorPickerPopoutController.shared.hide()
+        SymbianPopoutController.shared.hide()
         ProcessListController.shared.hide()
         if !anchorToControlCenter {
             ControlCenterController.shared.hide()

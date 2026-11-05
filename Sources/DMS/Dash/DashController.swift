@@ -67,6 +67,7 @@ public final class DashController: ObservableObject {
         BatteryPopoutController.shared.hide()
         DurationPopoutController.shared.hide()
         ColorPickerPopoutController.shared.hide()
+        SymbianPopoutController.shared.hide()
         PowerPopoutController.shared.hide()
         ProcessListController.shared.hide()
         ControlCenterController.shared.hide()
