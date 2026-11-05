@@ -221,4 +221,98 @@ struct ConfigAndIncludeTests {
         let decoded = try JSONDecoder().decode(DMSConfig.AppOverrides.self, from: data)
         #expect(decoded == custom)
     }
+
+    @Test("All DMS Global Hotkeys Serialization and Dynamic Settings")
+    func testAllGlobalHotkeysConfig() throws {
+        var cfg = DMSConfig()
+
+        // 1. Defaults verification
+        #expect(cfg.launcherHotkey == true)
+        #expect(cfg.launcherHotkeyKey == "space")
+        #expect(cfg.launcherHotkeyModifiers == "option")
+
+        #expect(cfg.dashHotkey == true)
+        #expect(cfg.dashHotkeyKey == "d")
+        #expect(cfg.dashHotkeyModifiers == "option")
+
+        #expect(cfg.notepadHotkey == true)
+        #expect(cfg.notepadHotkeyKey == "n")
+        #expect(cfg.notepadHotkeyModifiers == "option")
+
+        #expect(cfg.clipboardHotkey == true)
+        #expect(cfg.clipboardHotkeyKey == "v")
+        #expect(cfg.clipboardHotkeyModifiers == "option")
+
+        #expect(cfg.wallpaperPickerHotkey == true)
+        #expect(cfg.wallpaperPickerHotkeyKey == "w")
+        #expect(cfg.wallpaperPickerHotkeyModifiers == "hyper")
+
+        // 2. Custom assignment & serialization roundtrip
+        cfg.launcherHotkey = false
+        cfg.launcherHotkeyKey = "k"
+        cfg.launcherHotkeyModifiers = "cmd+opt"
+
+        cfg.dashHotkey = false
+        cfg.dashHotkeyKey = "o"
+        cfg.dashHotkeyModifiers = "ctrl+opt"
+
+        cfg.notepadHotkey = false
+        cfg.notepadHotkeyKey = "m"
+        cfg.notepadHotkeyModifiers = "meh"
+
+        cfg.clipboardHotkey = false
+        cfg.clipboardHotkeyKey = "c"
+        cfg.clipboardHotkeyModifiers = "cmd+shift"
+
+        cfg.wallpaperPickerHotkey = false
+        cfg.wallpaperPickerHotkeyKey = "p"
+        cfg.wallpaperPickerHotkeyModifiers = "hyper"
+
+        let data = try JSONEncoder().encode(cfg)
+        let decoded = try JSONDecoder().decode(DMSConfig.self, from: data)
+
+        #expect(decoded.launcherHotkey == false)
+        #expect(decoded.launcherHotkeyKey == "k")
+        #expect(decoded.launcherHotkeyModifiers == "cmd+opt")
+
+        #expect(decoded.dashHotkey == false)
+        #expect(decoded.dashHotkeyKey == "o")
+        #expect(decoded.dashHotkeyModifiers == "ctrl+opt")
+
+        #expect(decoded.notepadHotkey == false)
+        #expect(decoded.notepadHotkeyKey == "m")
+        #expect(decoded.notepadHotkeyModifiers == "meh")
+
+        #expect(decoded.clipboardHotkey == false)
+        #expect(decoded.clipboardHotkeyKey == "c")
+        #expect(decoded.clipboardHotkeyModifiers == "cmd+shift")
+
+        #expect(decoded.wallpaperPickerHotkey == false)
+        #expect(decoded.wallpaperPickerHotkeyKey == "p")
+        #expect(decoded.wallpaperPickerHotkeyModifiers == "hyper")
+
+        // 3. Dynamic getSetting & setSetting
+        var dynamicCfg = DMSConfig()
+        dynamicCfg.setSetting("launcherHotkey", value: AnyCodable(false))
+        dynamicCfg.setSetting("launcherHotkeyKey", value: AnyCodable("space"))
+        dynamicCfg.setSetting("launcherHotkeyModifiers", value: AnyCodable("hyper"))
+        #expect(dynamicCfg.launcherHotkey == false)
+        #expect(dynamicCfg.launcherHotkeyKey == "space")
+        #expect(dynamicCfg.launcherHotkeyModifiers == "hyper")
+        #expect(dynamicCfg.getSetting("launcherHotkey")?.boolValue == false)
+        #expect(dynamicCfg.getSetting("launcherHotkeyKey")?.stringValue == "space")
+        #expect(dynamicCfg.getSetting("launcherHotkeyModifiers")?.stringValue == "hyper")
+
+        dynamicCfg.setSetting("dashHotkeyKey", value: AnyCodable("tab"))
+        #expect(dynamicCfg.dashHotkeyKey == "tab")
+        #expect(dynamicCfg.getSetting("dashHotkeyKey")?.stringValue == "tab")
+
+        dynamicCfg.setSetting("notepadHotkeyModifiers", value: AnyCodable("ctrl+shift"))
+        #expect(dynamicCfg.notepadHotkeyModifiers == "ctrl+shift")
+        #expect(dynamicCfg.getSetting("notepadHotkeyModifiers")?.stringValue == "ctrl+shift")
+
+        dynamicCfg.setSetting("clipboardHotkeyKey", value: AnyCodable("v"))
+        #expect(dynamicCfg.clipboardHotkeyKey == "v")
+        #expect(dynamicCfg.getSetting("clipboardHotkeyKey")?.stringValue == "v")
+    }
 }

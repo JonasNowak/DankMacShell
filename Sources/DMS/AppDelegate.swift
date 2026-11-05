@@ -5,6 +5,24 @@ import Carbon.HIToolbox
 import Darwin
 import DMSCore
 
+private struct HotkeyConfig: Equatable {
+    let launcher: Bool
+    let launcherKey: String
+    let launcherMods: String
+    let dash: Bool
+    let dashKey: String
+    let dashMods: String
+    let notepad: Bool
+    let notepadKey: String
+    let notepadMods: String
+    let clipboard: Bool
+    let clipboardKey: String
+    let clipboardMods: String
+    let picker: Bool
+    let pickerKey: String
+    let pickerMods: String
+}
+
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
@@ -70,6 +88,34 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
+
+        ConfigStore.shared.$config
+            .map { cfg -> HotkeyConfig in
+                HotkeyConfig(
+                    launcher: cfg.launcherHotkey,
+                    launcherKey: cfg.launcherHotkeyKey,
+                    launcherMods: cfg.launcherHotkeyModifiers,
+                    dash: cfg.dashHotkey,
+                    dashKey: cfg.dashHotkeyKey,
+                    dashMods: cfg.dashHotkeyModifiers,
+                    notepad: cfg.notepadHotkey,
+                    notepadKey: cfg.notepadHotkeyKey,
+                    notepadMods: cfg.notepadHotkeyModifiers,
+                    clipboard: cfg.clipboardHotkey,
+                    clipboardKey: cfg.clipboardHotkeyKey,
+                    clipboardMods: cfg.clipboardHotkeyModifiers,
+                    picker: cfg.wallpaperPickerHotkey,
+                    pickerKey: cfg.wallpaperPickerHotkeyKey,
+                    pickerMods: cfg.wallpaperPickerHotkeyModifiers
+                )
+            }
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.setupHotkeys()
+            }
+            .store(in: &cancellables)
         _ = ClipboardService.shared
         _ = NowPlayingService.shared
         _ = WeatherService.shared
@@ -110,33 +156,61 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupHotkeys() {
+        HotkeyService.shared.unregisterAll()
         let config = ConfigStore.shared.config
 
-        // ⌥Space: Spotlight Launcher
+        // 1: Spotlight Launcher
         if config.launcherHotkey {
-            HotkeyService.shared.register(id: 1, keyCode: kVK_Space, modifiers: optionKey) {
+            let (keyCode, mods) = HotkeyHelper.parse(
+                key: config.launcherHotkeyKey,
+                modifiers: config.launcherHotkeyModifiers
+            )
+            HotkeyService.shared.register(id: 1, keyCode: keyCode, modifiers: mods) {
                 LauncherController.shared.toggle()
             }
         }
 
-        // ⌥D: DankDash Overview
+        // 2: DankDash Overview
         if config.dashHotkey {
-            HotkeyService.shared.register(id: 2, keyCode: kVK_ANSI_D, modifiers: optionKey) {
+            let (keyCode, mods) = HotkeyHelper.parse(
+                key: config.dashHotkeyKey,
+                modifiers: config.dashHotkeyModifiers
+            )
+            HotkeyService.shared.register(id: 2, keyCode: keyCode, modifiers: mods) {
                 DashController.shared.toggle()
             }
         }
 
-        // ⌥N: Notepad Scratchpad
+        // 3: Notepad Scratchpad
         if config.notepadHotkey {
-            HotkeyService.shared.register(id: 3, keyCode: kVK_ANSI_N, modifiers: optionKey) {
+            let (keyCode, mods) = HotkeyHelper.parse(
+                key: config.notepadHotkeyKey,
+                modifiers: config.notepadHotkeyModifiers
+            )
+            HotkeyService.shared.register(id: 3, keyCode: keyCode, modifiers: mods) {
                 NotepadController.shared.toggle()
             }
         }
 
-        // ⌥V: Clipboard History
+        // 4: Clipboard History
         if config.clipboardHotkey {
-            HotkeyService.shared.register(id: 4, keyCode: kVK_ANSI_V, modifiers: optionKey) {
+            let (keyCode, mods) = HotkeyHelper.parse(
+                key: config.clipboardHotkeyKey,
+                modifiers: config.clipboardHotkeyModifiers
+            )
+            HotkeyService.shared.register(id: 4, keyCode: keyCode, modifiers: mods) {
                 ClipboardController.shared.toggle()
+            }
+        }
+
+        // 5: Slanted Wallpaper Picker (with Hyper Key / customizable hotkey)
+        if config.wallpaperPickerHotkey {
+            let (keyCode, mods) = HotkeyHelper.parse(
+                key: config.wallpaperPickerHotkeyKey,
+                modifiers: config.wallpaperPickerHotkeyModifiers
+            )
+            HotkeyService.shared.register(id: 5, keyCode: keyCode, modifiers: mods) {
+                SlantedWallpaperPickerController.shared.triggerShortcut()
             }
         }
     }

@@ -47,6 +47,7 @@ public final class PluginService: ObservableObject {
         }
 
         self.plugins = catalog
+        updatePluginLifecycles(enabledIDs: Set(catalog.filter { $0.isInstalled && $0.isEnabled }.map { $0.id }))
     }
 
     public func loadApplets() {
@@ -71,6 +72,7 @@ public final class PluginService: ObservableObject {
             case "notepad": list[idx].isEnabled = config.showNotepadApplet
             case "clipboard": list[idx].isEnabled = config.showClipboardApplet
             case "colorPicker": list[idx].isEnabled = config.showColorPickerApplet
+            case "symbian": list[idx].isEnabled = config.showSymbianApplet
             default: break
             }
         }
@@ -100,6 +102,7 @@ public final class PluginService: ObservableObject {
             case "notepad": cfg.showNotepadApplet = newState
             case "clipboard": cfg.showClipboardApplet = newState
             case "colorPicker": cfg.showColorPickerApplet = newState
+            case "symbian": cfg.showSymbianApplet = newState
             default: break
             }
 
@@ -122,6 +125,7 @@ public final class PluginService: ObservableObject {
             case "notepad": targetWidgetIds = ["notepad"]
             case "clipboard": targetWidgetIds = ["clipboard"]
             case "colorPicker": targetWidgetIds = ["colorPicker"]
+            case "symbian": targetWidgetIds = ["symbianApplet", "symbianButton", "symbian"]
             default: targetWidgetIds = [id]
             }
 
@@ -211,5 +215,10 @@ public final class PluginService: ObservableObject {
     private func syncConfig() {
         let enabled = plugins.filter { $0.isInstalled && $0.isEnabled }.map { $0.id }
         ConfigStore.shared.update { $0.enabledPlugins = enabled }
+        updatePluginLifecycles(enabledIDs: Set(enabled))
+    }
+
+    public func updatePluginLifecycles(enabledIDs: Set<String>) {
+        // Standalone plugins (e.g. symbian-belle-sync) run as isolated companion processes (dms-symbian)
     }
 }

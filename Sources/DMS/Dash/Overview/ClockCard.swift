@@ -5,18 +5,38 @@ import DMSCore
 /// Stacked large-digit clock card matching DankDash design.
 public struct ClockCard: View {
     @ObservedObject var themeStore = ThemeStore.shared
-    @State private var currentTime = Date()
+    @ObservedObject private var clock = ClockService.shared
 
-    private let timer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
+    private static let hour24Formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH"
+        return f
+    }()
+    private static let hour12Formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "hh"
+        return f
+    }()
+    private static let minFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "mm"
+        return f
+    }()
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
 
     public init() {}
 
     public var body: some View {
         let p = themeStore.palette
+        let currentTime = clock.currentDate
         let is24h = ConfigStore.shared.config.getSetting("timeFormat")?.stringValue == "24h"
-        let hourStr = formatDigits(currentTime, format: is24h ? "HH" : "hh")
-        let minStr = formatDigits(currentTime, format: "mm")
-        let dateStr = formatDate(currentTime)
+        let hourStr = (is24h ? Self.hour24Formatter : Self.hour12Formatter).string(from: currentTime)
+        let minStr = Self.minFormatter.string(from: currentTime)
+        let dateStr = Self.dateFormatter.string(from: currentTime)
 
         VStack(alignment: .center, spacing: 0) {
             Text(hourStr)
@@ -39,21 +59,5 @@ public struct ClockCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .background(Color(hex: p.surfaceContainerHigh.hex))
         .cornerRadius(12)
-
-        .onReceive(timer) { input in
-            currentTime = input
-        }
-    }
-
-    private func formatDigits(_ date: Date, format: String) -> String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = format
-        return fmt.string(from: date)
-    }
-
-    private func formatDate(_ date: Date) -> String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "MMM d"
-        return fmt.string(from: date)
     }
 }

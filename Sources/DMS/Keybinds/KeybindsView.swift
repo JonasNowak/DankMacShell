@@ -19,6 +19,7 @@ public struct ShortcutEntry: Identifiable, Sendable {
 /// Material 3 Keybinds Cheatsheet modal view.
 public struct KeybindsView: View {
     @ObservedObject var themeStore = ThemeStore.shared
+    @ObservedObject var configStore = ConfigStore.shared
     @State private var searchText: String = ""
 
     let onClose: () -> Void
@@ -27,29 +28,53 @@ public struct KeybindsView: View {
         self.onClose = onClose
     }
 
-    private let shortcuts: [ShortcutEntry] = [
-        // DMS Shell
-        ShortcutEntry(category: "DankMaterialShell", title: "Spotlight / App Launcher", keys: "⌥ Space"),
-        ShortcutEntry(category: "DankMaterialShell", title: "DankDash Overview", keys: "⌥ D"),
-        ShortcutEntry(category: "DankMaterialShell", title: "Notepad Scratchpad", keys: "⌥ N"),
-        ShortcutEntry(category: "DankMaterialShell", title: "Clipboard History", keys: "⌥ V"),
-        ShortcutEntry(category: "DankMaterialShell", title: "Control Center", keys: "⌥ C"),
-        ShortcutEntry(category: "DankMaterialShell", title: "Power & Session Menu", keys: "⌥ P"),
+    private var shortcuts: [ShortcutEntry] {
+        let cfg = configStore.config
+        return [
+            // DMS Shell
+            ShortcutEntry(
+                category: "DankMaterialShell",
+                title: "Spotlight / App Launcher",
+                keys: cfg.launcherHotkey ? HotkeyHelper.displayString(key: cfg.launcherHotkeyKey, modifiers: cfg.launcherHotkeyModifiers) : "Disabled"
+            ),
+            ShortcutEntry(
+                category: "DankMaterialShell",
+                title: "DankDash Overview",
+                keys: cfg.dashHotkey ? HotkeyHelper.displayString(key: cfg.dashHotkeyKey, modifiers: cfg.dashHotkeyModifiers) : "Disabled"
+            ),
+            ShortcutEntry(
+                category: "DankMaterialShell",
+                title: "Notepad Scratchpad",
+                keys: cfg.notepadHotkey ? HotkeyHelper.displayString(key: cfg.notepadHotkeyKey, modifiers: cfg.notepadHotkeyModifiers) : "Disabled"
+            ),
+            ShortcutEntry(
+                category: "DankMaterialShell",
+                title: "Clipboard History",
+                keys: cfg.clipboardHotkey ? HotkeyHelper.displayString(key: cfg.clipboardHotkeyKey, modifiers: cfg.clipboardHotkeyModifiers) : "Disabled"
+            ),
+            ShortcutEntry(
+                category: "DankMaterialShell",
+                title: "Slanted Wallpaper Picker",
+                keys: cfg.wallpaperPickerHotkey ? HotkeyHelper.displayString(key: cfg.wallpaperPickerHotkeyKey, modifiers: cfg.wallpaperPickerHotkeyModifiers) : "Disabled"
+            ),
+            ShortcutEntry(category: "DankMaterialShell", title: "Control Center", keys: "⌥ C"),
+            ShortcutEntry(category: "DankMaterialShell", title: "Power & Session Menu", keys: "⌥ P"),
 
-        // Navigation
-        ShortcutEntry(category: "Navigation & Windows", title: "Switch Space Left", keys: "^ ←"),
-        ShortcutEntry(category: "Navigation & Windows", title: "Switch Space Right", keys: "^ →"),
-        ShortcutEntry(category: "Navigation & Windows", title: "Mission Control / Overview", keys: "^ ↑"),
-        ShortcutEntry(category: "Navigation & Windows", title: "Application Windows", keys: "^ ↓"),
-        ShortcutEntry(category: "Navigation & Windows", title: "Toggle Fullscreen", keys: "^ ⌘ F"),
-        ShortcutEntry(category: "Navigation & Windows", title: "Application Switcher", keys: "⌘ Tab"),
+            // Navigation
+            ShortcutEntry(category: "Navigation & Windows", title: "Switch Space Left", keys: "^ ←"),
+            ShortcutEntry(category: "Navigation & Windows", title: "Switch Space Right", keys: "^ →"),
+            ShortcutEntry(category: "Navigation & Windows", title: "Mission Control / Overview", keys: "^ ↑"),
+            ShortcutEntry(category: "Navigation & Windows", title: "Application Windows", keys: "^ ↓"),
+            ShortcutEntry(category: "Navigation & Windows", title: "Toggle Fullscreen", keys: "^ ⌘ F"),
+            ShortcutEntry(category: "Navigation & Windows", title: "Application Switcher", keys: "⌘ Tab"),
 
-        // System
-        ShortcutEntry(category: "System Actions", title: "Lock Screen", keys: "^ ⌘ Q"),
-        ShortcutEntry(category: "System Actions", title: "Sleep Screen", keys: "⌥ ⌘ Power"),
-        ShortcutEntry(category: "System Actions", title: "Interactive Screen Capture", keys: "⇧ ⌘ 4"),
-        ShortcutEntry(category: "System Actions", title: "Force Quit Applications", keys: "⌥ ⌘ Esc")
-    ]
+            // System
+            ShortcutEntry(category: "System Actions", title: "Lock Screen", keys: "^ ⌘ Q"),
+            ShortcutEntry(category: "System Actions", title: "Sleep Screen", keys: "⌥ ⌘ Power"),
+            ShortcutEntry(category: "System Actions", title: "Interactive Screen Capture", keys: "⇧ ⌘ 4"),
+            ShortcutEntry(category: "System Actions", title: "Force Quit Applications", keys: "⌥ ⌘ Esc")
+        ]
+    }
 
     private var filteredCategories: [String] {
         let matching = shortcuts.filter {
@@ -150,12 +175,30 @@ public struct KeybindsView: View {
             Divider().background(Color(hex: p.outlineVariant.hex).opacity(0.5))
 
             // Footer
-            HStack {
+            HStack(spacing: 8) {
                 Text("\(shortcuts.count) shortcuts available")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: p.outline.hex))
                 Spacer()
-                Text("Press Esc to close")
+                Button(action: {
+                    SettingsController.shared.show(tab: "shortcuts")
+                    onClose()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 10))
+                        Text("Configure Shortcuts")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(Color(hex: p.primary.hex))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: p.primaryContainer.hex).opacity(0.4))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+
+                Text("• Press Esc to close")
                     .font(.system(size: 11))
                     .foregroundColor(Color(hex: p.outline.hex))
             }

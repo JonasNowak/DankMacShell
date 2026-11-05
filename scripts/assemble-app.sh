@@ -59,6 +59,10 @@ cp "$PLIST" "$APP/Contents/Info.plist"
 
 # Copy SPM resource bundle if present
 BIN_DIR=$(dirname "$BINARY")
+if [ -f "$BIN_DIR/dms-symbian" ]; then
+    cp "$BIN_DIR/dms-symbian" "$APP/Contents/MacOS/dms-symbian"
+    chmod +x "$APP/Contents/MacOS/dms-symbian"
+fi
 if [ -d "$BIN_DIR/DMS_DMS.bundle" ]; then
     cp -R "$BIN_DIR/DMS_DMS.bundle" "$APP/Contents/Resources/"
 fi

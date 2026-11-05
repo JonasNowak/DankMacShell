@@ -186,7 +186,7 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .desktopWidgets: return ["desktop", "widgets", "clock", "sticky", "monitor", "notes", "canvas"]
         case .dock: return ["dock", "icons", "magnification", "size", "auto-hide", "trash", "taskbar", "pinned"]
         case .launcher: return ["launcher", "hotkey", "frecency", "search", "math", "google", "tile", "list", "dlauncher"]
-        case .shortcuts: return ["keyboard", "shortcuts", "hotkeys", "keybinds", "carbon", "option", "space"]
+        case .shortcuts: return ["keyboard", "shortcuts", "hotkeys", "keybinds", "carbon", "option", "space", "hyper", "hyperkey", "launcher", "dash", "notepad", "clipboard", "wallpaper"]
         case .power: return ["power", "sleep", "caffeinate", "idle", "inhibit", "battery", "display", "timeout"]
         case .plugins: return ["plugins", "registry", "official", "3rd party", "install", "browse", "lockfile"]
         case .about: return ["about", "version", "diagnostics", "build", "github", "docs", "license", "doctor"]
@@ -433,6 +433,12 @@ public struct SettingsWidgetCatalog {
             name: "Color Eyedropper",
             description: "Color picker eyedropper tool",
             icon: "eyedropper.halffull"
+        ),
+        BarWidgetMeta(
+            id: "symbianApplet",
+            name: "Nokia Belle Sync",
+            description: "Nokia C7 USB sync status pill; opens the Belle sync companion",
+            icon: "phone.and.waveform"
         ),
         BarWidgetMeta(
             id: "focusedApp",

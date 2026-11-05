@@ -49,10 +49,23 @@ public final class AppCatalogService {
         let math = AppSearch.evaluateMath(query: query)
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        var catalog = apps
+        if ConfigStore.shared.config.enabledPlugins.contains("symbian-belle-sync") {
+            let binPath = SymbianClient.shared.resolveExecutablePath() ?? "/usr/local/bin/dms-symbian"
+            catalog.append(AppItem(
+                id: "io.dms.plugin.symbian-belle-sync",
+                name: "Nokia Belle USB Sync",
+                bundleID: "io.dms.plugin.symbian-belle-sync",
+                path: binPath,
+                subtitle: "USB sync for Nokia C7: MP3 music & SISX apps",
+                category: "Utilities"
+            ))
+        }
+
         if trimmed.isEmpty {
             // Return installed apps prioritized by frecency, then alphabetical
             let now = Date()
-            let scored: [(app: AppItem, frecency: Int)] = apps.map { app in
+            let scored: [(app: AppItem, frecency: Int)] = catalog.map { app in
                 (app, LauncherScorer.calculateFrecency(launchCount: app.launchCount, lastLaunch: app.lastLaunchedAt, now: now))
             }
             let sortedApps = scored.sorted { a1, a2 in
@@ -67,7 +80,7 @@ public final class AppCatalogService {
 
         var matches: [SearchResult] = []
         let now = Date()
-        for app in apps {
+        for app in catalog {
             let candidate = LauncherCandidate(app: app)
             if let score = LauncherScorer.score(candidate: candidate, query: trimmed, now: now) {
                 matches.append(SearchResult(app: app, score: score))

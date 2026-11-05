@@ -809,7 +809,213 @@ public struct SettingsView: View {
                 }
             }
 
-            // Card 2: Wallpaper Gallery & Desktop Switcher
+            // Card 2: Slanted Wallpaper Picker & Hotkeys (skwd)
+            SettingsCard(
+                icon: "photo.stack.fill",
+                title: "Slanted Wallpaper Picker & Hotkeys",
+                subtitle: "skwd-inspired slanted slice carousel, custom folder iteration, and hotkeys",
+                palette: palette
+            ) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Hotkey configuration
+                    HotkeyPickerRow(
+                        title: "Slanted Wallpaper Picker Hotkey",
+                        subtitle: "Global shortcut to open the slanted wallpaper carousel HUD and test wallpapers",
+                        icon: "photo.stack.fill",
+                        isEnabled: Binding(
+                            get: { configStore.config.wallpaperPickerHotkey },
+                            set: { val in configStore.update { $0.wallpaperPickerHotkey = val } }
+                        ),
+                        key: Binding(
+                            get: { configStore.config.wallpaperPickerHotkeyKey },
+                            set: { val in configStore.update { $0.wallpaperPickerHotkeyKey = val } }
+                        ),
+                        modifiers: Binding(
+                            get: { configStore.config.wallpaperPickerHotkeyModifiers },
+                            set: { val in configStore.update { $0.wallpaperPickerHotkeyModifiers = val } }
+                        ),
+                        palette: palette,
+                        onTest: { SlantedWallpaperPickerController.shared.triggerShortcut() }
+                    )
+
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            controller.currentTab = .shortcuts
+                        }) {
+                            HStack(spacing: 4) {
+                                Text("Configure All System Keybinds in One Place")
+                                Image(systemName: "arrow.right")
+                            }
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(hex: palette.primary.hex))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Divider().opacity(0.3)
+
+                    // Folder restriction toggle
+                    SettingsToggleRow(
+                        title: "Iterate Specific Folder Only",
+                        subtitle: "Restrict slanted wallpaper picker and desktop changer to cycle within a designated folder",
+                        isOn: Binding(
+                            get: { configStore.config.wallpaperPickerOnlyFolder },
+                            set: { val in configStore.update { $0.wallpaperPickerOnlyFolder = val } }
+                        ),
+                        palette: palette
+                    )
+
+                    if configStore.config.wallpaperPickerOnlyFolder {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Target Wallpaper Folder:")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+
+                            HStack(spacing: 8) {
+                                Image(systemName: "folder.fill")
+                                    .foregroundColor(Color(hex: palette.primary.hex))
+
+                                Text(configStore.config.wallpaperPickerFolder.isEmpty ? "No specific folder chosen (Using all)" : configStore.config.wallpaperPickerFolder)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .lineLimit(1)
+                                    .foregroundColor(Color(hex: palette.onSurface.hex))
+
+                                Spacer()
+
+                                Button("Choose Folder…") {
+                                    pickWallpaperPickerFolder()
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+
+                                if !configStore.config.wallpaperPickerFolder.isEmpty {
+                                    Button {
+                                        configStore.update { $0.wallpaperPickerFolder = "" }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(Color(hex: palette.outline.hex))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(8)
+                            .background(Color(hex: palette.surfaceContainerHigh.hex))
+                            .cornerRadius(8)
+
+                            // Quick selection pills from indexed folders
+                            if !configStore.config.wallpaperFolders.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        Text("Quick Select:")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(Color(hex: palette.outline.hex))
+
+                                        ForEach(configStore.config.wallpaperFolders, id: \.self) { folder in
+                                            let isSel = configStore.config.wallpaperPickerFolder == folder
+                                            Button {
+                                                configStore.update { $0.wallpaperPickerFolder = folder }
+                                            } label: {
+                                                Text((folder as NSString).lastPathComponent)
+                                                    .font(.system(size: 10, weight: isSel ? .bold : .regular))
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 3)
+                                                    .background(isSel ? Color(hex: palette.primaryContainer.hex) : Color(hex: palette.surfaceContainerLow.hex))
+                                                    .foregroundColor(isSel ? Color(hex: palette.onPrimaryContainer.hex) : Color(hex: palette.onSurfaceVariant.hex))
+                                                    .clipShape(Capsule())
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+
+                    Divider().opacity(0.3)
+
+                    // Slant / Skew Angle Slider
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Slant Skew Offset")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                            Spacer()
+                            Text("\(Int(configStore.config.wallpaperPickerSkew)) px")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color(hex: palette.primary.hex))
+                        }
+
+                        Slider(
+                            value: Binding(
+                                get: { configStore.config.wallpaperPickerSkew },
+                                set: { val in configStore.update { $0.wallpaperPickerSkew = val } }
+                            ),
+                            in: 12...48,
+                            step: 2
+                        )
+                    }
+                    .padding(.horizontal, 4)
+
+                    Divider().opacity(0.3)
+
+                    // Quick Actions
+                    HStack(spacing: 8) {
+                        Button {
+                            SlantedWallpaperPickerController.shared.show()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "photo.stack.fill")
+                                Text("Launch Slanted Wallpaper Picker")
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(Color(hex: palette.primary.hex))
+                            .foregroundColor(Color(hex: palette.onPrimary.hex))
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            WallpaperService.shared.nextWallpaper()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.forward.circle")
+                                Text("Next Wallpaper")
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color(hex: palette.surfaceContainerHigh.hex))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            WallpaperService.shared.randomWallpaper()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "dice.fill")
+                                Text("Random Wallpaper")
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color(hex: palette.surfaceContainerHigh.hex))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+                    }
+                }
+            }
+
+            // Card 3: Wallpaper Gallery & Desktop Switcher
             SettingsCard(
                 icon: "photo.stack",
                 title: "Wallpaper Gallery & Switcher",
@@ -1042,6 +1248,23 @@ public struct SettingsView: View {
         panel.message = "Choose a directory containing wallpaper images"
 
         if panel.runModal() == .OK, let url = panel.url {
+            wallpaperService.addFolder(path: url.path)
+        }
+    }
+
+    private func pickWallpaperPickerFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select Wallpaper Folder"
+        panel.message = "Choose a directory for the slanted wallpaper picker to iterate"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            configStore.update {
+                $0.wallpaperPickerFolder = url.path
+                $0.wallpaperPickerOnlyFolder = true
+            }
             wallpaperService.addFolder(path: url.path)
         }
     }
@@ -2650,16 +2873,43 @@ public struct SettingsView: View {
     // MARK: - 17. Dock & Launcher - Launcher Tab
     @ViewBuilder
     private func launcherTab(palette: DMSPalette) -> some View {
-        SettingsCard(icon: "sparkle.magnifyingglass", title: "DLauncherV2 Shortcuts", palette: palette) {
-            SettingsToggleRow(
-                title: "Global Launcher Hotkey (⌥Space)",
-                subtitle: "Instant Spotlight-like application launcher",
-                isOn: Binding(
-                    get: { configStore.config.launcherHotkey },
-                    set: { val in configStore.update { $0.launcherHotkey = val } }
-                ),
-                palette: palette
-            )
+        SettingsCard(icon: "sparkle.magnifyingglass", title: "DLauncherV2 Hotkey", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                HotkeyPickerRow(
+                    title: "Spotlight / App Launcher Hotkey",
+                    subtitle: "Instant keystroke trigger for Spotlight-style launcher, math & app search",
+                    icon: "sparkle.magnifyingglass",
+                    isEnabled: Binding(
+                        get: { configStore.config.launcherHotkey },
+                        set: { val in configStore.update { $0.launcherHotkey = val } }
+                    ),
+                    key: Binding(
+                        get: { configStore.config.launcherHotkeyKey },
+                        set: { val in configStore.update { $0.launcherHotkeyKey = val } }
+                    ),
+                    modifiers: Binding(
+                        get: { configStore.config.launcherHotkeyModifiers },
+                        set: { val in configStore.update { $0.launcherHotkeyModifiers = val } }
+                    ),
+                    palette: palette,
+                    onTest: { LauncherController.shared.toggle() }
+                )
+
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        controller.currentTab = .shortcuts
+                    }) {
+                        HStack(spacing: 4) {
+                            Text("Configure All System Keybinds in One Place")
+                            Image(systemName: "arrow.right")
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: palette.primary.hex))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
 
         SettingsCard(icon: "globe", title: "Web Search Fallback", subtitle: "Default query provider", palette: palette) {
@@ -2677,53 +2927,242 @@ public struct SettingsView: View {
     // MARK: - 18. Keyboard Shortcuts Tab
     @ViewBuilder
     private func shortcutsTab(palette: DMSPalette) -> some View {
-        SettingsCard(icon: "keyboard.fill", title: "System Hotkeys", subtitle: "Global Carbon keystroke triggers", palette: palette) {
-            VStack(spacing: 6) {
-                hotkeyRow(name: "DLauncherV2", shortcut: "⌥ Space", isOn: Binding(
-                    get: { configStore.config.launcherHotkey },
-                    set: { val in configStore.update { $0.launcherHotkey = val } }
-                ), palette: palette)
+        VStack(spacing: 12) {
+            // Preset Banner & Hyper Key Guide Card
+            SettingsCard(
+                icon: "sparkles",
+                title: "macOS Hyper Key (⌃⌥⇧⌘) & Quick Presets",
+                subtitle: "Non-conflicting global shortcut presets for power users",
+                palette: palette
+            ) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "command.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(hex: palette.primary.hex))
 
-                hotkeyRow(name: "DankDash Overview", shortcut: "⌥ D", isOn: Binding(
-                    get: { configStore.config.dashHotkey },
-                    set: { val in configStore.update { $0.dashHotkey = val } }
-                ), palette: palette)
+                        Text("Hyper Key maps to ⌃⌥⇧⌘ (Control + Option + Shift + Command). It provides lightning-fast system-wide activation without conflicting with standard macOS app shortcuts. Fully compatible with Karabiner-Elements, BetterTouchTool, and the Hyperkey app.")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(hex: palette.outline.hex))
+                    }
+                    .padding(10)
+                    .background(Color(hex: palette.surfaceContainerLow.hex))
+                    .cornerRadius(8)
 
-                hotkeyRow(name: "Quick Scratchpad", shortcut: "⌥ N", isOn: Binding(
-                    get: { configStore.config.notepadHotkey },
-                    set: { val in configStore.update { $0.notepadHotkey = val } }
-                ), palette: palette)
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            configStore.update {
+                                $0.launcherHotkey = true
+                                $0.launcherHotkeyModifiers = "hyper"
+                                $0.launcherHotkeyKey = "space"
 
-                hotkeyRow(name: "Clipboard History", shortcut: "⌥ V", isOn: Binding(
-                    get: { configStore.config.clipboardHotkey },
-                    set: { val in configStore.update { $0.clipboardHotkey = val } }
-                ), palette: palette)
+                                $0.dashHotkey = true
+                                $0.dashHotkeyModifiers = "hyper"
+                                $0.dashHotkeyKey = "d"
+
+                                $0.notepadHotkey = true
+                                $0.notepadHotkeyModifiers = "hyper"
+                                $0.notepadHotkeyKey = "n"
+
+                                $0.clipboardHotkey = true
+                                $0.clipboardHotkeyModifiers = "hyper"
+                                $0.clipboardHotkeyKey = "v"
+
+                                $0.wallpaperPickerHotkey = true
+                                $0.wallpaperPickerHotkeyModifiers = "hyper"
+                                $0.wallpaperPickerHotkeyKey = "w"
+                            }
+                            ToastCenter.shared.show(icon: "sparkles", message: "All Shortcuts Set to Hyper Key (⌃⌥⇧⌘)")
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 11))
+                                Text("Set All to Hyper Key")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: palette.primary.hex))
+                            .foregroundColor(Color(hex: palette.onPrimary.hex))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: {
+                            configStore.update {
+                                $0.launcherHotkey = true
+                                $0.launcherHotkeyModifiers = "option"
+                                $0.launcherHotkeyKey = "space"
+
+                                $0.dashHotkey = true
+                                $0.dashHotkeyModifiers = "option"
+                                $0.dashHotkeyKey = "d"
+
+                                $0.notepadHotkey = true
+                                $0.notepadHotkeyModifiers = "option"
+                                $0.notepadHotkeyKey = "n"
+
+                                $0.clipboardHotkey = true
+                                $0.clipboardHotkeyModifiers = "option"
+                                $0.clipboardHotkeyKey = "v"
+
+                                $0.wallpaperPickerHotkey = true
+                                $0.wallpaperPickerHotkeyModifiers = "hyper"
+                                $0.wallpaperPickerHotkeyKey = "w"
+                            }
+                            ToastCenter.shared.show(icon: "arrow.counterclockwise", message: "Restored Default Shortcuts")
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 11))
+                                Text("Restore Defaults")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: palette.surfaceContainerHigh.hex))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+
+                        Button(action: {
+                            KeybindsController.shared.toggle()
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "command")
+                                    .font(.system(size: 11))
+                                Text("Keybinds Cheatsheet HUD")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: palette.secondaryContainer.hex))
+                            .foregroundColor(Color(hex: palette.onSecondaryContainer.hex))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Centralized Hotkeys Card
+            SettingsCard(
+                icon: "keyboard.fill",
+                title: "All DMS System Hotkeys",
+                subtitle: "Centralized Carbon keystroke triggers with customizable modifiers, keys, and live testing",
+                palette: palette
+            ) {
+                VStack(spacing: 8) {
+                    // 1. Spotlight / App Launcher
+                    HotkeyPickerRow(
+                        title: "DLauncherV2 (App Launcher)",
+                        subtitle: "Spotlight-style instant app launcher, math evaluator, and quick search",
+                        icon: "sparkle.magnifyingglass",
+                        isEnabled: Binding(
+                            get: { configStore.config.launcherHotkey },
+                            set: { val in configStore.update { $0.launcherHotkey = val } }
+                        ),
+                        key: Binding(
+                            get: { configStore.config.launcherHotkeyKey },
+                            set: { val in configStore.update { $0.launcherHotkeyKey = val } }
+                        ),
+                        modifiers: Binding(
+                            get: { configStore.config.launcherHotkeyModifiers },
+                            set: { val in configStore.update { $0.launcherHotkeyModifiers = val } }
+                        ),
+                        palette: palette,
+                        onTest: { LauncherController.shared.toggle() }
+                    )
+
+                    // 2. DankDash Overview
+                    HotkeyPickerRow(
+                        title: "DankDash Overview",
+                        subtitle: "Dashboard HUD with system telemetry stats, calendar, and media widgets",
+                        icon: "gauge",
+                        isEnabled: Binding(
+                            get: { configStore.config.dashHotkey },
+                            set: { val in configStore.update { $0.dashHotkey = val } }
+                        ),
+                        key: Binding(
+                            get: { configStore.config.dashHotkeyKey },
+                            set: { val in configStore.update { $0.dashHotkeyKey = val } }
+                        ),
+                        modifiers: Binding(
+                            get: { configStore.config.dashHotkeyModifiers },
+                            set: { val in configStore.update { $0.dashHotkeyModifiers = val } }
+                        ),
+                        palette: palette,
+                        onTest: { DashController.shared.toggle() }
+                    )
+
+                    // 3. Quick Scratchpad
+                    HotkeyPickerRow(
+                        title: "Quick Notepad Scratchpad",
+                        subtitle: "Floating scratchpad notes overlay for fast note-taking",
+                        icon: "note.text",
+                        isEnabled: Binding(
+                            get: { configStore.config.notepadHotkey },
+                            set: { val in configStore.update { $0.notepadHotkey = val } }
+                        ),
+                        key: Binding(
+                            get: { configStore.config.notepadHotkeyKey },
+                            set: { val in configStore.update { $0.notepadHotkeyKey = val } }
+                        ),
+                        modifiers: Binding(
+                            get: { configStore.config.notepadHotkeyModifiers },
+                            set: { val in configStore.update { $0.notepadHotkeyModifiers = val } }
+                        ),
+                        palette: palette,
+                        onTest: { NotepadController.shared.toggle() }
+                    )
+
+                    // 4. Clipboard History
+                    HotkeyPickerRow(
+                        title: "Clipboard History Manager",
+                        subtitle: "Multi-item clipboard history viewer with search and quick paste",
+                        icon: "doc.on.clipboard.fill",
+                        isEnabled: Binding(
+                            get: { configStore.config.clipboardHotkey },
+                            set: { val in configStore.update { $0.clipboardHotkey = val } }
+                        ),
+                        key: Binding(
+                            get: { configStore.config.clipboardHotkeyKey },
+                            set: { val in configStore.update { $0.clipboardHotkeyKey = val } }
+                        ),
+                        modifiers: Binding(
+                            get: { configStore.config.clipboardHotkeyModifiers },
+                            set: { val in configStore.update { $0.clipboardHotkeyModifiers = val } }
+                        ),
+                        palette: palette,
+                        onTest: { ClipboardController.shared.toggle() }
+                    )
+
+                    // 5. Slanted Wallpaper Picker (skwd)
+                    HotkeyPickerRow(
+                        title: "Slanted Wallpaper Picker (skwd)",
+                        subtitle: "Slanted parallelogram slice carousel with desktop preview testing & rapid cycling",
+                        icon: "photo.stack.fill",
+                        isEnabled: Binding(
+                            get: { configStore.config.wallpaperPickerHotkey },
+                            set: { val in configStore.update { $0.wallpaperPickerHotkey = val } }
+                        ),
+                        key: Binding(
+                            get: { configStore.config.wallpaperPickerHotkeyKey },
+                            set: { val in configStore.update { $0.wallpaperPickerHotkeyKey = val } }
+                        ),
+                        modifiers: Binding(
+                            get: { configStore.config.wallpaperPickerHotkeyModifiers },
+                            set: { val in configStore.update { $0.wallpaperPickerHotkeyModifiers = val } }
+                        ),
+                        palette: palette,
+                        onTest: { SlantedWallpaperPickerController.shared.triggerShortcut() }
+                    )
+                }
             }
         }
-    }
-
-    @ViewBuilder
-    private func hotkeyRow(name: String, shortcut: String, isOn: Binding<Bool>, palette: DMSPalette) -> some View {
-        HStack {
-            Text(name)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color(hex: palette.onSurface.hex))
-            Spacer()
-            Text(shortcut)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color(hex: palette.primaryContainer.hex))
-                .foregroundColor(Color(hex: palette.onPrimaryContainer.hex))
-                .cornerRadius(4)
-            Toggle("", isOn: isOn)
-                .toggleStyle(.switch)
-                .labelsHidden()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color(hex: palette.surfaceContainerLow.hex))
-        .cornerRadius(6)
     }
 
     // MARK: - 19. Power & Sleep Tab
@@ -2809,6 +3248,22 @@ public struct SettingsView: View {
                             }
 
                             Spacer()
+
+                            if plugin.id == "symbian-belle-sync" && plugin.isEnabled {
+                                Button(action: { _ = SymbianClient.shared.launchCompanion() }) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "arrow.up.forward.app")
+                                        Text("Open Sync")
+                                    }
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(Color(hex: palette.onPrimary.hex))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Color(hex: palette.primary.hex))
+                                    .cornerRadius(5)
+                                }
+                                .buttonStyle(.plain)
+                            }
 
                             Toggle("", isOn: Binding(
                                 get: { plugin.isEnabled },

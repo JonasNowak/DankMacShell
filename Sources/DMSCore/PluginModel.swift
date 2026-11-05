@@ -149,7 +149,8 @@ public enum StandardApplets {
         DMSApplet(id: "powerMenu", name: "Power Menu", description: "Lock, sleep, restart, shutdown dialog", icon: "power", isEnabled: true, position: .right),
         DMSApplet(id: "notepad", name: "Quick Scratchpad", description: "Instant note editor toggle", icon: "square.and.pencil", isEnabled: false, position: .right),
         DMSApplet(id: "clipboard", name: "Clipboard History", description: "Pasteboard history drawer", icon: "doc.on.clipboard", isEnabled: false, position: .right),
-        DMSApplet(id: "colorPicker", name: "Color Eyedropper", description: "Screen pixel color sampler", icon: "eyedropper", isEnabled: false, position: .right)
+        DMSApplet(id: "colorPicker", name: "Color Eyedropper", description: "Screen pixel color sampler", icon: "eyedropper", isEnabled: false, position: .right),
+        DMSApplet(id: "symbian", name: "Nokia Belle Sync", description: "Nokia C7 USB sync status pill in the bar", icon: "phone.and.waveform", isEnabled: false, position: .right)
     ]
 }
 
@@ -251,6 +252,20 @@ public enum DMSPluginRegistry {
             isEnabled: false,
             icon: "dollarsign.circle",
             repoURL: "https://github.com/dms-community/dms-currency"
+        ),
+        DMSPlugin(
+            id: "symbian-belle-sync",
+            name: "Nokia Belle USB Sync",
+            description: "USB sync companion for Nokia C7 and Symbian Belle devices. Syncs MP3 music, stages SIS/SISX apps, and manages internal mass memory.",
+            author: "DankMacShell",
+            version: "1.0.0",
+            type: .desktop,
+            isInstalled: false,
+            isEnabled: false,
+            icon: "phone.and.waveform",
+            repoURL: "https://github.com/AvengeMedia/dms-plugin-symbian-sync",
+            tags: ["nokia", "symbian", "c7", "belle", "usb", "sync", "sisx", "mp3"],
+            isOfficial: true
         )
     ]
 }

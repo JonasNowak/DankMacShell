@@ -755,6 +755,11 @@ public struct LauncherView: View {
     }
 
     private func launchApp(_ app: AppItem) {
+        if app.bundleID == "io.dms.plugin.symbian-belle-sync" {
+            _ = SymbianClient.shared.launchCompanion()
+            onClose()
+            return
+        }
         AppCatalogService.shared.recordLaunch(app: app)
         RunningAppsService.shared.activate(app: app)
         onClose()

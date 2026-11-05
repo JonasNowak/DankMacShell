@@ -64,6 +64,23 @@ struct WallpaperTests {
         let cmdList = IPCCommand.parseCLI(args: ["wallpaper", "list"])
         #expect(cmdList == .wallpaper(action: "list", path: nil))
 
+        // dms wallpaper picker / slanted
+        let cmdPicker = IPCCommand.parseCLI(args: ["wallpaper", "picker"])
+        #expect(cmdPicker == .wallpaper(action: "picker", path: nil))
+
+        let cmdSlanted = IPCCommand.parseCLI(args: ["wallpaper", "slanted", "show"])
+        #expect(cmdSlanted == .wallpaper(action: "picker", path: "show"))
+
+        // dms wallpaper next / prev / random
+        let cmdNext = IPCCommand.parseCLI(args: ["wallpaper", "next"])
+        #expect(cmdNext == .wallpaper(action: "next", path: nil))
+
+        let cmdPrev = IPCCommand.parseCLI(args: ["wallpaper", "prev"])
+        #expect(cmdPrev == .wallpaper(action: "prev", path: nil))
+
+        let cmdRandom = IPCCommand.parseCLI(args: ["wallpaper", "random"])
+        #expect(cmdRandom == .wallpaper(action: "random", path: nil))
+
         // URL scheme parsing: dms://wallpaper/set?path=/Users/me/pic.png
         let url = URL(string: "dms://wallpaper/set?path=/Users/me/pic.png")!
         let cmdURL = IPCCommand.parse(url: url)
@@ -88,5 +105,107 @@ struct WallpaperTests {
         #expect(decoded.autoGenerateWallpaperColors == false)
         #expect(decoded.wallpaperPath == "/Library/Desktop Pictures/Ventura.heic")
         #expect(decoded.wallpaperFolders == ["/Users/test/Wallpapers"])
+    }
+
+    @Test("Slanted Wallpaper Picker & Hotkey Configuration Settings")
+    func testSlantedWallpaperPickerConfig() throws {
+        var cfg = DMSConfig()
+        // Defaults
+        #expect(cfg.wallpaperPickerHotkey == true)
+        #expect(cfg.wallpaperPickerHotkeyKey == "w")
+        #expect(cfg.wallpaperPickerHotkeyModifiers == "hyper")
+        #expect(cfg.wallpaperPickerFolder == "")
+        #expect(cfg.wallpaperPickerOnlyFolder == false)
+        #expect(cfg.wallpaperPickerSkew == 32.0)
+
+        // Custom config round-trip
+        cfg.wallpaperPickerHotkey = false
+        cfg.wallpaperPickerHotkeyKey = "p"
+        cfg.wallpaperPickerHotkeyModifiers = "cmd+opt"
+        cfg.wallpaperPickerFolder = "/Users/test/Wallpapers/Anime"
+        cfg.wallpaperPickerOnlyFolder = true
+        cfg.wallpaperPickerSkew = 24.0
+
+        let data = try JSONEncoder().encode(cfg)
+        let decoded = try JSONDecoder().decode(DMSConfig.self, from: data)
+
+        #expect(decoded.wallpaperPickerHotkey == false)
+        #expect(decoded.wallpaperPickerHotkeyKey == "p")
+        #expect(decoded.wallpaperPickerHotkeyModifiers == "cmd+opt")
+        #expect(decoded.wallpaperPickerFolder == "/Users/test/Wallpapers/Anime")
+        #expect(decoded.wallpaperPickerOnlyFolder == true)
+        #expect(decoded.wallpaperPickerSkew == 24.0)
+
+        // Dynamic getSetting / setSetting
+        var dynamicCfg = DMSConfig()
+        dynamicCfg.setSetting("wallpaperPickerFolder", value: AnyCodable("/Custom/Path"))
+        #expect(dynamicCfg.wallpaperPickerFolder == "/Custom/Path")
+        #expect(dynamicCfg.getSetting("wallpaperPickerFolder")?.stringValue == "/Custom/Path")
+
+        dynamicCfg.setSetting("wallpaperPickerOnlyFolder", value: AnyCodable(true))
+        #expect(dynamicCfg.wallpaperPickerOnlyFolder == true)
+
+        dynamicCfg.setSetting("wallpaperPickerHotkeyModifiers", value: AnyCodable("hyper"))
+        #expect(dynamicCfg.wallpaperPickerHotkeyModifiers == "hyper")
+
+        dynamicCfg.setSetting("wallpaperPickerSkew", value: AnyCodable(28.5))
+        #expect(dynamicCfg.wallpaperPickerSkew == 28.5)
+    }
+
+    @Test("HotkeyHelper Hyper Key and Modifier Parsing")
+    func testHotkeyHelper() {
+        // Hyper key is ⌃⌥⇧⌘ (Control + Option + Shift + Command) = 6912
+        let hyperMask = HotkeyHelper.parseModifiers("hyper")
+        #expect(hyperMask == 6912)
+        #expect(hyperMask == (HotkeyHelper.controlModifier | HotkeyHelper.optionModifier | HotkeyHelper.shiftModifier | HotkeyHelper.cmdModifier))
+
+        // Preset match
+        #expect(HotkeyModifierPreset.hyper.carbonModifiers == 6912)
+        #expect(HotkeyModifierPreset.meh.carbonModifiers == (HotkeyHelper.controlModifier | HotkeyHelper.optionModifier | HotkeyHelper.shiftModifier))
+        #expect(HotkeyModifierPreset.option.carbonModifiers == HotkeyHelper.optionModifier)
+
+        // Composite string parsing
+        let cmdOpt = HotkeyHelper.parseModifiers("cmd+opt")
+        #expect(cmdOpt == (HotkeyHelper.cmdModifier | HotkeyHelper.optionModifier))
+
+        let ctrlShift = HotkeyHelper.parseModifiers("ctrl+shift")
+        #expect(ctrlShift == (HotkeyHelper.controlModifier | HotkeyHelper.shiftModifier))
+
+        // Key code parsing
+        #expect(HotkeyHelper.parseKeyCode("w") == 13)
+        #expect(HotkeyHelper.parseKeyCode("p") == 35)
+        #expect(HotkeyHelper.parseKeyCode("space") == 49)
+        #expect(HotkeyHelper.parseKeyCode("return") == 36)
+        #expect(HotkeyHelper.parseKeyCode("d") == 2)
+        #expect(HotkeyHelper.parseKeyCode("n") == 45)
+        #expect(HotkeyHelper.parseKeyCode("v") == 9)
+
+        // Display string formatting
+        let hyperDisplay = HotkeyHelper.displayString(key: "w", modifiers: "hyper")
+        #expect(hyperDisplay.contains("Hyper"))
+        #expect(hyperDisplay.contains("W"))
+        #expect(hyperDisplay.contains("⌃⌥⇧⌘"))
+
+        let optDisplay = HotkeyHelper.displayString(key: "w", modifiers: "option")
+        #expect(optDisplay == "⌥ W")
+    }
+
+    @Test("Wallpaper Folder Path Filtering")
+    func testWallpaperFolderFiltering() {
+        let items: [WallpaperItem] = [
+            WallpaperItem(id: "1", name: "Anime 1", path: "/Users/test/Wallpapers/Anime/1.png", source: .custom),
+            WallpaperItem(id: "2", name: "Anime 2", path: "/Users/test/Wallpapers/Anime/2.jpg", source: .custom),
+            WallpaperItem(id: "3", name: "Nature 1", path: "/Users/test/Wallpapers/Nature/1.heic", source: .custom),
+            WallpaperItem(id: "4", name: "System Sonoma", path: "/System/Library/Desktop Pictures/sonoma.heic", source: .system)
+        ]
+
+        let folderTarget = "/Users/test/Wallpapers/Anime"
+        let filtered = items.filter { item in
+            guard let p = item.path else { return false }
+            return p.hasPrefix(folderTarget)
+        }
+
+        #expect(filtered.count == 2)
+        #expect(filtered.map(\.name) == ["Anime 1", "Anime 2"])
     }
 }
