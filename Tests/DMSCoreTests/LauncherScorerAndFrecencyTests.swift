@@ -235,6 +235,9 @@ struct LauncherScorerAndFrecencyTests {
         let milliTime = Double(nanoTime) / 1_000_000.0
 
         #expect(matchCount > 0)
-        #expect(milliTime < 35.0) // Well within interactive frame budget for debug execution
+        // Shared GitHub-hosted runners are slower than a local machine; keep the
+        // strict budget locally but allow headroom on CI so the benchmark stays stable.
+        let budgetMs = ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" ? 150.0 : 35.0
+        #expect(milliTime < budgetMs)
     }
 }
