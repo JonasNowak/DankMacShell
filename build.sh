@@ -101,6 +101,12 @@ chmod +x "$HOME/.local/bin/dms"
 if [ -f "$SYMBIAN_BINARY" ]; then
     cp "$SYMBIAN_BINARY" "$HOME/.local/bin/dms-symbian"
     chmod +x "$HOME/.local/bin/dms-symbian"
+    # Ship the companion's resource bundle next to the binary; without it the
+    # standalone dms-symbian crashes on launch ("unable to find bundle named DMS_DMSSymbian").
+    if [ -d "$BIN_PATH/DMS_DMSSymbian.bundle" ]; then
+        rm -rf "$HOME/.local/bin/DMS_DMSSymbian.bundle"
+        cp -R "$BIN_PATH/DMS_DMSSymbian.bundle" "$HOME/.local/bin/DMS_DMSSymbian.bundle"
+    fi
 fi
 CLI_IDENTITY=${SIGN_IDENTITY:-""}
 if [ -n "$CLI_IDENTITY" ]; then

@@ -30,7 +30,7 @@ public struct SymbianStorageExplorerTab: View {
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             // Maintenance Toolbar
             HStack(spacing: 8) {
                 Button(action: { syncService.cleanDeviceDotfiles() }) {
@@ -143,7 +143,7 @@ public struct SymbianStorageExplorerTab: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.vertical, 4)
         .background(Color(hex: palette.surfaceContainerLow.hex))
         .cornerRadius(6)
     }

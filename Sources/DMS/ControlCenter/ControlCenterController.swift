@@ -39,6 +39,7 @@ public final class ControlCenterController {
         BatteryPopoutController.shared.hide()
         DurationPopoutController.shared.hide()
         ColorPickerPopoutController.shared.hide()
+        SymbianPopoutController.shared.hide()
         PowerPopoutController.shared.hide()
 
         let mouseLoc = NSEvent.mouseLocation

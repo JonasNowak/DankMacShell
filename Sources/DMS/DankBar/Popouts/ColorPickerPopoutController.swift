@@ -32,6 +32,7 @@ public final class ColorPickerPopoutController: ObservableObject {
         BatteryPopoutController.shared.hide()
         DurationPopoutController.shared.hide()
         PowerPopoutController.shared.hide()
+        SymbianPopoutController.shared.hide()
         ProcessListController.shared.hide()
         ControlCenterController.shared.hide()
 

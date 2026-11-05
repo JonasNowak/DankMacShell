@@ -40,6 +40,7 @@ public final class ProcessListController: ObservableObject {
         BatteryPopoutController.shared.hide()
         DurationPopoutController.shared.hide()
         ColorPickerPopoutController.shared.hide()
+        SymbianPopoutController.shared.hide()
         PowerPopoutController.shared.hide()
         ControlCenterController.shared.hide()
 

@@ -1,7 +1,10 @@
-nokia-c7.jpg — photograph of the Nokia C7 running Nokia Belle.
+nokia-c7.jpg — reference photo of the real Nokia C7-00 (RM-675) running Nokia Belle,
+cropped tightly to the device (portrait 960x1339) so it reads as a product reference
+in the companion hero card.
 Source: Wikimedia Commons, "File:Nokia C7 with Nokia Belle.jpg"
 URL: https://commons.wikimedia.org/wiki/File:Nokia_C7_with_Nokia_Belle.jpg
 Author: Seqtre
 License: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
 License URL: https://creativecommons.org/licenses/by-sa/3.0/
-The image was resized to 960px width; no other modifications.
+Modifications: cropped to 2180x3040+380+20 from the 4320x3240 original, resized to
+960px width, metadata stripped. No other modifications.

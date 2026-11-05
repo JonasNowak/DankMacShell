@@ -67,6 +67,13 @@ if [ -d "$BIN_DIR/DMS_DMS.bundle" ]; then
     cp -R "$BIN_DIR/DMS_DMS.bundle" "$APP/Contents/Resources/"
 fi
 
+# The app-embedded dms-symbian companion resolves its own resources via
+# Bundle.main.resourceURL (Contents/Resources) — ship its bundle too,
+# otherwise the companion crashes on launch with "unable to find bundle".
+if [ -d "$BIN_DIR/DMS_DMSSymbian.bundle" ]; then
+    cp -R "$BIN_DIR/DMS_DMSSymbian.bundle" "$APP/Contents/Resources/"
+fi
+
 # Copy media-bridge helper script to Resources
 if [ -f "$ROOT/Support/media-bridge.swift" ]; then
     cp "$ROOT/Support/media-bridge.swift" "$APP/Contents/Resources/media-bridge.swift"

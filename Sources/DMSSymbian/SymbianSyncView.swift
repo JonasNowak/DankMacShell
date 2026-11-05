@@ -40,9 +40,9 @@ public struct SymbianSyncView: View {
 
             // Segmented Tab Picker
             tabPicker(palette: palette)
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
+                .padding(.horizontal, 14)
+                .padding(.top, 7)
+                .padding(.bottom, 4)
 
             // Feedback Banner (if any)
             if let feedback = syncService.userToastMessage {
@@ -50,16 +50,16 @@ public struct SymbianSyncView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(Color.green)
                     Text(feedback)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                     Spacer()
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
                 .background(Color.green.opacity(0.12))
                 .cornerRadius(6)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 4)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 3)
             }
 
             // Tab Content
@@ -81,8 +81,8 @@ public struct SymbianSyncView: View {
                     SymbianStorageExplorerTab(palette: palette)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Divider().opacity(0.3)
@@ -90,7 +90,7 @@ public struct SymbianSyncView: View {
             // Footer
             footerBar(palette: palette)
         }
-        .frame(width: 720, height: 560)
+        .frame(width: 600, height: 420)
         .background(Color(hex: palette.surface.hex))
         .cornerRadius(12)
         .overlay(
@@ -180,24 +180,24 @@ public struct SymbianSyncView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
     }
 
     private func tabPicker(palette: DMSPalette) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             ForEach(SyncTab.allCases, id: \.self) { tab in
                 let isSelected = currentTab == tab
                 Button(action: { currentTab = tab }) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 4) {
                         Image(systemName: tab.icon)
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                         Text(tab.rawValue)
-                            .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                            .font(.system(size: 10, weight: isSelected ? .bold : .medium))
                     }
                     .foregroundColor(isSelected ? Color(hex: palette.onPrimary.hex) : Color(hex: palette.onSurfaceVariant.hex))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
                     .background(isSelected ? Color(hex: palette.primary.hex) : Color(hex: palette.surfaceContainerLow.hex))
                     .cornerRadius(7)
                 }
@@ -221,8 +221,8 @@ public struct SymbianSyncView: View {
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
         .background(Color(hex: palette.surfaceContainerLowest.hex))
     }
 }
