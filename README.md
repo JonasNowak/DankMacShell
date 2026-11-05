@@ -23,6 +23,7 @@
 
 - [What is DankMacShell?](#what-is-dankmacshell)
 - [Features](#features)
+- [SymbianOS Plugin (WIP)](#symbianos-plugin-wip)
 - [Quick Start](#quick-start)
 - [Global Hotkeys](#global-hotkeys)
 - [DMS CLI (`dms`)](#dms-cli)
@@ -160,6 +161,29 @@ At a glance:
 - Automatically samples the current desktop wallpaper using `CoreImage`.
 - Mathematically generates full Material 3 tonal palettes (Primary, Secondary, Tertiary, Surface, Container, Outline, Error tones) for both Dark and Light modes.
 - Updates the shell in real time whenever the wallpaper or display appearance changes.
+
+<a id="symbianos-plugin-wip"></a>
+
+## 📱 SymbianOS Plugin — Nokia Belle USB Sync (WIP)
+
+DankMacShell ships a standalone, crash-isolated companion app — `dms-symbian` — for syncing Nokia Belle / Symbian OS phones (like the Nokia C7-00) over USB Mass Storage mode. This shipped with **v0.5.1, the "hello hello belle update"**.
+
+Quick feature overview:
+
+- **Device Overview:** Live device hero card with the real Nokia C7 photo, firmware (Symbian OS v9.5 / Belle Refresh), drive letter, 8 GB mass memory, 3.5" AMOLED display and USB 2.0 High Speed badges.
+- **MP3 Sync:** Scan local music folders and push tracks to the phone over USB mass storage, with live on-phone track counts.
+- **App Installer:** Stage `.sis` / `.sisx` packages onto the phone's install drive for one-tap installation on the device.
+- **Storage & Tools:** Storage overview by category (Music, Photos & Video, Apps (SISX), System, Other), dotfile cleanup, and safe eject.
+- **DankBar Widget:** Dedicated Symbian pill in DankBar showing connection state and opening the sync window.
+
+<p align="center">
+  <img src="docs/symbian-usb-sync.png" width="1100" alt="Nokia Belle USB Sync window on macOS">
+</p>
+
+> [!NOTE]
+> The SymbianOS plugin is a work in progress (WIP) — expect rough edges while it matures.
+>
+> For all future releases, i plan to improve the symbianOS support for mac
 
 <a id="quick-start"></a>
 
