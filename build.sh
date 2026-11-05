@@ -56,14 +56,16 @@ chmod +x scripts/generate-icon.sh
 scripts/generate-icon.sh
 xattr -cr Sources Support scripts "$SCRATCH" 2>/dev/null || true
 
-echo "==> Building DankMacShell and dms CLI in $BUILD_CONFIG mode..."
+echo "==> Building DankMacShell, dms CLI, and dms-symbian in $BUILD_CONFIG mode..."
 APP_PRODUCT="DankMacShell"
 swift build -c "$BUILD_CONFIG" --product DankMacShell --scratch-path "$SCRATCH"
 swift build -c "$BUILD_CONFIG" --product dms --scratch-path "$SCRATCH"
+swift build -c "$BUILD_CONFIG" --product dms-symbian --scratch-path "$SCRATCH"
 
 BIN_PATH=$(swift build -c "$BUILD_CONFIG" --scratch-path "$SCRATCH" --show-bin-path)
 APP_BINARY="$BIN_PATH/$APP_PRODUCT"
 CLI_BINARY="$BIN_PATH/dms"
+SYMBIAN_BINARY="$BIN_PATH/dms-symbian"
 
 APP="$HOME/Applications/DankMacShell.app"
 ALT_APP="$HOME/Applications/DankMaterialShell.app"
@@ -92,17 +94,28 @@ scripts/assemble-app.sh "$APP_BINARY" "$APP"
 rm -rf "$ALT_APP"
 ln -sf "DankMacShell.app" "$ALT_APP"
 
-# Install dms CLI to ~/.local/bin and sign it
+# Install dms CLI and dms-symbian to ~/.local/bin and sign them
 mkdir -p "$HOME/.local/bin"
 cp "$CLI_BINARY" "$HOME/.local/bin/dms"
 chmod +x "$HOME/.local/bin/dms"
+if [ -f "$SYMBIAN_BINARY" ]; then
+    cp "$SYMBIAN_BINARY" "$HOME/.local/bin/dms-symbian"
+    chmod +x "$HOME/.local/bin/dms-symbian"
+fi
 CLI_IDENTITY=${SIGN_IDENTITY:-""}
 if [ -n "$CLI_IDENTITY" ]; then
     codesign --force --sign "$CLI_IDENTITY" "$HOME/.local/bin/dms" 2>/dev/null || true
+    if [ -f "$HOME/.local/bin/dms-symbian" ]; then
+        codesign --force --sign "$CLI_IDENTITY" "$HOME/.local/bin/dms-symbian" 2>/dev/null || true
+    fi
 elif security find-identity -p codesigning -v 2>/dev/null | grep -q '"dms-cert"'; then
     codesign --force --sign "dms-cert" "$HOME/.local/bin/dms" 2>/dev/null || true
+    if [ -f "$HOME/.local/bin/dms-symbian" ]; then
+        codesign --force --sign "dms-cert" "$HOME/.local/bin/dms-symbian" 2>/dev/null || true
+    fi
 fi
 echo "==> Installed dms CLI to: $HOME/.local/bin/dms"
+echo "==> Installed dms-symbian to: $HOME/.local/bin/dms-symbian"
 
 if [ "$LAUNCH" -eq 1 ]; then
     # Terminate any running instance before launching newly built app

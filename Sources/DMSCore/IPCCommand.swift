@@ -132,6 +132,9 @@ public enum IPCCommand: Sendable, Equatable {
     // Digital Wellbeing & Screen Time Sync
     case wellbeing(action: String, arg: String? = nil)
 
+    // Symbian Belle USB Sync (Plugin)
+    case symbian(action: String, path: String? = nil, query: String? = nil)
+
     case unknown(String)
 
     // MARK: - URL Parser (dms:// scheme)
@@ -383,6 +386,10 @@ public enum IPCCommand: Sendable, Equatable {
             let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
             return .wellbeing(action: act, arg: param("arg") ?? param("value"))
 
+        case "symbian", "symbian-sync", "nokia":
+            let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
+            return .symbian(action: act, path: param("path") ?? param("file"), query: param("q") ?? param("query"))
+
         default:
             return .unknown(url.absoluteString)
         }
@@ -590,6 +597,14 @@ public enum IPCCommand: Sendable, Equatable {
                 return .unknown("wallpaper set requires image path")
             case "list":
                 return .wallpaper(action: "list")
+            case "picker", "slanted", "ui":
+                return .wallpaper(action: "picker", path: extra.first)
+            case "next":
+                return .wallpaper(action: "next")
+            case "prev", "previous":
+                return .wallpaper(action: "prev")
+            case "random", "shuffle":
+                return .wallpaper(action: "random")
             default:
                 if !action.isEmpty {
                     let pathArgs = ([action] + extra).joined(separator: " ")
@@ -699,6 +714,13 @@ public enum IPCCommand: Sendable, Equatable {
             return .wellbeing(
                 action: action.isEmpty ? "status" : action,
                 arg: extra.first
+            )
+
+        case "symbian", "symbian-sync", "nokia":
+            return .symbian(
+                action: action.isEmpty ? "status" : action,
+                path: extra.first,
+                query: extra.count > 1 ? extra.dropFirst().joined(separator: " ") : nil
             )
 
         default:

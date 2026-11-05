@@ -515,6 +515,27 @@ public enum IPCCommandExecutor {
             case "list":
                 let paths = WallpaperService.shared.wallpapers.compactMap(\.path)
                 return paths.joined(separator: "\n")
+            case "next":
+                WallpaperService.shared.nextWallpaper()
+                return "Desktop wallpaper cycled to next: \(WallpaperService.shared.currentDesktopPath)"
+            case "prev", "previous":
+                WallpaperService.shared.previousWallpaper()
+                return "Desktop wallpaper cycled to previous: \(WallpaperService.shared.currentDesktopPath)"
+            case "random", "shuffle":
+                WallpaperService.shared.randomWallpaper()
+                return "Desktop wallpaper randomized to: \(WallpaperService.shared.currentDesktopPath)"
+            case "picker", "slanted", "ui":
+                if let p = path?.lowercased() {
+                    if p == "show" || p == "open" {
+                        SlantedWallpaperPickerController.shared.show()
+                        return "Slanted wallpaper picker opened"
+                    } else if p == "hide" || p == "close" {
+                        SlantedWallpaperPickerController.shared.hide()
+                        return "Slanted wallpaper picker hidden"
+                    }
+                }
+                SlantedWallpaperPickerController.shared.toggle()
+                return "Toggled slanted wallpaper picker"
             case "get", "status":
                 let current = WallpaperService.shared.currentDesktopPath
                 return current.isEmpty ? "No custom desktop wallpaper configured" : current
@@ -802,6 +823,75 @@ public enum IPCCommandExecutor {
 
             default:
                 return "Unknown wellbeing action '\(act)'. Valid actions: status, enable, disable, toggle, sync [true|false], open-system, check."
+            }
+
+        case .symbian(let action, let path, _):
+            switch action.lowercased() {
+            case "open", "show", "launch", "gui":
+                switch SymbianClient.shared.launchCompanion() {
+                case .success:
+                    return "Launched Nokia Belle USB Sync companion application."
+                case .failure(let err):
+                    return "Failed to launch Nokia Belle USB Sync: \(err.description)"
+                }
+
+            case "close", "hide":
+                let proc = Process()
+                proc.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+                proc.arguments = ["-x", "dms-symbian"]
+                try? proc.run()
+                return "Closed Nokia Belle USB Sync."
+
+            case "toggle":
+                let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "io.dms.symbian-sync").isEmpty
+                if isRunning {
+                    let proc = Process()
+                    proc.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+                    proc.arguments = ["-x", "dms-symbian"]
+                    try? proc.run()
+                    return "Closed Nokia Belle USB Sync."
+                } else {
+                    switch SymbianClient.shared.launchCompanion() {
+                    case .success: return "Opened Nokia Belle USB Sync."
+                    case .failure(let err): return "Failed to open Nokia Belle USB Sync: \(err.description)"
+                    }
+                }
+
+            case "status", "devices", "list":
+                switch SymbianClient.shared.runAction("status") {
+                case .success(let out): return out
+                case .failure(let err): return "Status failed: \(err.description)"
+                }
+
+            case "clean":
+                switch SymbianClient.shared.runAction("clean") {
+                case .success(let out): return out
+                case .failure(let err): return "Clean failed: \(err.description)"
+                }
+
+            case "eject":
+                switch SymbianClient.shared.runAction("eject") {
+                case .success(let out): return out
+                case .failure(let err): return "Eject failed: \(err.description)"
+                }
+
+            case "install":
+                guard let p = path else {
+                    return "Error: symbian install requires path to .sis/.sisx/.jar file"
+                }
+                switch SymbianClient.shared.runAction("install", arguments: [p]) {
+                case .success(let out): return out
+                case .failure(let err): return "Install failed: \(err.description)"
+                }
+
+            case "sync":
+                switch SymbianClient.shared.runAction("sync", timeout: 300.0) {
+                case .success(let out): return out
+                case .failure(let err): return "Sync failed: \(err.description)"
+                }
+
+            default:
+                return "Unknown symbian action '\(action)'. Valid actions: open, close, toggle, status, clean, eject, install, sync."
             }
 
         case .unknown(let raw):

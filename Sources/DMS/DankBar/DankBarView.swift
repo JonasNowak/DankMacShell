@@ -701,6 +701,8 @@ public struct DankBarView: View {
             clipboardButton(style: style)
         case "colorPicker", "colorPickerApplet":
             colorPickerButton(style: style)
+        case "symbianApplet", "symbianButton", "symbian":
+            SymbianBarWidget(isVertical: isVertical, options: options, style: style)
         case "spacer":
             Spacer(minLength: CGFloat(options["width"]?.doubleValue ?? 12.0))
                 .frame(width: isVertical ? nil : CGFloat(options["width"]?.doubleValue ?? 12.0),
@@ -1243,8 +1245,7 @@ private struct BarClockWidgetView: View {
     let style: BarWidgetStyleOptions
 
     @ObservedObject private var theme = ThemeStore.shared
-    @State private var currentTime = Date()
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @ObservedObject private var clock = ClockService.shared
 
     private static let time12Formatter: DateFormatter = {
         let f = DateFormatter()
@@ -1288,6 +1289,7 @@ private struct BarClockWidgetView: View {
     }()
 
     var body: some View {
+        let currentTime = clock.currentDate
         let showDate = (options["showDate"]?.boolValue ?? true) && !style.compactMode
         let timeFormat = options["timeFormat"]?.stringValue ?? "12h"
         let showSeconds = options["showSeconds"]?.boolValue ?? false
@@ -1341,9 +1343,6 @@ private struct BarClockWidgetView: View {
             }
         }
         .buttonStyle(.plain)
-        .onReceive(timer) { now in
-            currentTime = now
-        }
         .background(
             GeometryReader { geo in
                 Color.clear

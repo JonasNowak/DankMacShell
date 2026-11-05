@@ -23,6 +23,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var wallpaperPath: String
     public var wallpaperFolders: [String]
     public var autoGenerateWallpaperColors: Bool
+    public var wallpaperPickerHotkey: Bool
+    public var wallpaperPickerHotkeyKey: String
+    public var wallpaperPickerHotkeyModifiers: String
+    public var wallpaperPickerFolder: String
+    public var wallpaperPickerOnlyFolder: Bool
+    public var wallpaperPickerSkew: Double
     public var autoThemeOmniWM: Bool
     public var omniwmGradientMode: OmniWMGradientMode
     public var omniwmGradientDirection: OmniWMGradientDirection
@@ -106,11 +112,20 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var showNotepadApplet: Bool
     public var showClipboardApplet: Bool
     public var showColorPickerApplet: Bool
+    public var showSymbianApplet: Bool
     public var enabledPlugins: [String]
     public var launcherHotkey: Bool
+    public var launcherHotkeyKey: String
+    public var launcherHotkeyModifiers: String
     public var dashHotkey: Bool
+    public var dashHotkeyKey: String
+    public var dashHotkeyModifiers: String
     public var notepadHotkey: Bool
+    public var notepadHotkeyKey: String
+    public var notepadHotkeyModifiers: String
     public var clipboardHotkey: Bool
+    public var clipboardHotkeyKey: String
+    public var clipboardHotkeyModifiers: String
     public var weatherLocation: String
     public var weatherUnits: String // "celsius" or "fahrenheit"
     public var webSearchProvider: String // "google", "duckduckgo", "bing"
@@ -181,11 +196,20 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         showNotepadApplet: Bool = false,
         showClipboardApplet: Bool = false,
         showColorPickerApplet: Bool = false,
+        showSymbianApplet: Bool = false,
         enabledPlugins: [String] = ["github-notifications"],
         launcherHotkey: Bool = true,
+        launcherHotkeyKey: String = "space",
+        launcherHotkeyModifiers: String = "option",
         dashHotkey: Bool = true,
+        dashHotkeyKey: String = "d",
+        dashHotkeyModifiers: String = "option",
         notepadHotkey: Bool = true,
+        notepadHotkeyKey: String = "n",
+        notepadHotkeyModifiers: String = "option",
         clipboardHotkey: Bool = true,
+        clipboardHotkeyKey: String = "v",
+        clipboardHotkeyModifiers: String = "option",
         weatherLocation: String = "auto",
         weatherUnits: String = "celsius",
         webSearchProvider: String = "google",
@@ -199,6 +223,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         wallpaperPath: String = "",
         wallpaperFolders: [String] = [],
         autoGenerateWallpaperColors: Bool = true,
+        wallpaperPickerHotkey: Bool = true,
+        wallpaperPickerHotkeyKey: String = "w",
+        wallpaperPickerHotkeyModifiers: String = "hyper",
+        wallpaperPickerFolder: String = "",
+        wallpaperPickerOnlyFolder: Bool = false,
+        wallpaperPickerSkew: Double = 32.0,
         autoThemeOmniWM: Bool = true,
         omniwmGradientMode: OmniWMGradientMode = .expressive,
         omniwmGradientDirection: OmniWMGradientDirection = .topLeftToBottomRight,
@@ -234,6 +264,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.wallpaperPath = wallpaperPath
         self.wallpaperFolders = wallpaperFolders
         self.autoGenerateWallpaperColors = autoGenerateWallpaperColors
+        self.wallpaperPickerHotkey = wallpaperPickerHotkey
+        self.wallpaperPickerHotkeyKey = wallpaperPickerHotkeyKey
+        self.wallpaperPickerHotkeyModifiers = wallpaperPickerHotkeyModifiers
+        self.wallpaperPickerFolder = wallpaperPickerFolder
+        self.wallpaperPickerOnlyFolder = wallpaperPickerOnlyFolder
+        self.wallpaperPickerSkew = wallpaperPickerSkew
         self.autoThemeOmniWM = autoThemeOmniWM
         self.omniwmGradientMode = omniwmGradientMode
         self.omniwmGradientDirection = omniwmGradientDirection
@@ -262,11 +298,20 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.showNotepadApplet = showNotepadApplet
         self.showClipboardApplet = showClipboardApplet
         self.showColorPickerApplet = showColorPickerApplet
+        self.showSymbianApplet = showSymbianApplet
         self.enabledPlugins = enabledPlugins
         self.launcherHotkey = launcherHotkey
+        self.launcherHotkeyKey = launcherHotkeyKey
+        self.launcherHotkeyModifiers = launcherHotkeyModifiers
         self.dashHotkey = dashHotkey
+        self.dashHotkeyKey = dashHotkeyKey
+        self.dashHotkeyModifiers = dashHotkeyModifiers
         self.notepadHotkey = notepadHotkey
+        self.notepadHotkeyKey = notepadHotkeyKey
+        self.notepadHotkeyModifiers = notepadHotkeyModifiers
         self.clipboardHotkey = clipboardHotkey
+        self.clipboardHotkeyKey = clipboardHotkeyKey
+        self.clipboardHotkeyModifiers = clipboardHotkeyModifiers
         self.weatherLocation = weatherLocation
         self.weatherUnits = weatherUnits
         self.webSearchProvider = webSearchProvider
@@ -288,6 +333,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case wallpaperPath
         case wallpaperFolders
         case autoGenerateWallpaperColors
+        case wallpaperPickerHotkey
+        case wallpaperPickerHotkeyKey
+        case wallpaperPickerHotkeyModifiers
+        case wallpaperPickerFolder
+        case wallpaperPickerOnlyFolder
+        case wallpaperPickerSkew
         case autoThemeOmniWM
         case omniwmGradientMode
         case omniwmGradientDirection
@@ -320,11 +371,20 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case showNotepadApplet
         case showClipboardApplet
         case showColorPickerApplet
+        case showSymbianApplet
         case enabledPlugins
         case launcherHotkey
+        case launcherHotkeyKey
+        case launcherHotkeyModifiers
         case dashHotkey
+        case dashHotkeyKey
+        case dashHotkeyModifiers
         case notepadHotkey
+        case notepadHotkeyKey
+        case notepadHotkeyModifiers
         case clipboardHotkey
+        case clipboardHotkeyKey
+        case clipboardHotkeyModifiers
         case weatherLocation
         case weatherUnits
         case webSearchProvider
@@ -363,11 +423,20 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.showNotepadApplet = try container.decodeIfPresent(Bool.self, forKey: .showNotepadApplet) ?? false
         self.showClipboardApplet = try container.decodeIfPresent(Bool.self, forKey: .showClipboardApplet) ?? false
         self.showColorPickerApplet = try container.decodeIfPresent(Bool.self, forKey: .showColorPickerApplet) ?? false
+        self.showSymbianApplet = try container.decodeIfPresent(Bool.self, forKey: .showSymbianApplet) ?? false
         self.enabledPlugins = try container.decodeIfPresent([String].self, forKey: .enabledPlugins) ?? ["github-notifications"]
         self.launcherHotkey = try container.decodeIfPresent(Bool.self, forKey: .launcherHotkey) ?? true
+        self.launcherHotkeyKey = try container.decodeIfPresent(String.self, forKey: .launcherHotkeyKey) ?? "space"
+        self.launcherHotkeyModifiers = try container.decodeIfPresent(String.self, forKey: .launcherHotkeyModifiers) ?? "option"
         self.dashHotkey = try container.decodeIfPresent(Bool.self, forKey: .dashHotkey) ?? true
+        self.dashHotkeyKey = try container.decodeIfPresent(String.self, forKey: .dashHotkeyKey) ?? "d"
+        self.dashHotkeyModifiers = try container.decodeIfPresent(String.self, forKey: .dashHotkeyModifiers) ?? "option"
         self.notepadHotkey = try container.decodeIfPresent(Bool.self, forKey: .notepadHotkey) ?? true
+        self.notepadHotkeyKey = try container.decodeIfPresent(String.self, forKey: .notepadHotkeyKey) ?? "n"
+        self.notepadHotkeyModifiers = try container.decodeIfPresent(String.self, forKey: .notepadHotkeyModifiers) ?? "option"
         self.clipboardHotkey = try container.decodeIfPresent(Bool.self, forKey: .clipboardHotkey) ?? true
+        self.clipboardHotkeyKey = try container.decodeIfPresent(String.self, forKey: .clipboardHotkeyKey) ?? "v"
+        self.clipboardHotkeyModifiers = try container.decodeIfPresent(String.self, forKey: .clipboardHotkeyModifiers) ?? "option"
         self.weatherLocation = try container.decodeIfPresent(String.self, forKey: .weatherLocation) ?? "auto"
         self.weatherUnits = try container.decodeIfPresent(String.self, forKey: .weatherUnits) ?? "celsius"
         self.webSearchProvider = try container.decodeIfPresent(String.self, forKey: .webSearchProvider) ?? "google"
@@ -383,6 +452,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.wallpaperPath = try container.decodeIfPresent(String.self, forKey: .wallpaperPath) ?? ""
         self.wallpaperFolders = try container.decodeIfPresent([String].self, forKey: .wallpaperFolders) ?? []
         self.autoGenerateWallpaperColors = try container.decodeIfPresent(Bool.self, forKey: .autoGenerateWallpaperColors) ?? true
+        self.wallpaperPickerHotkey = try container.decodeIfPresent(Bool.self, forKey: .wallpaperPickerHotkey) ?? true
+        self.wallpaperPickerHotkeyKey = try container.decodeIfPresent(String.self, forKey: .wallpaperPickerHotkeyKey) ?? "w"
+        self.wallpaperPickerHotkeyModifiers = try container.decodeIfPresent(String.self, forKey: .wallpaperPickerHotkeyModifiers) ?? "hyper"
+        self.wallpaperPickerFolder = try container.decodeIfPresent(String.self, forKey: .wallpaperPickerFolder) ?? ""
+        self.wallpaperPickerOnlyFolder = try container.decodeIfPresent(Bool.self, forKey: .wallpaperPickerOnlyFolder) ?? false
+        self.wallpaperPickerSkew = try container.decodeIfPresent(Double.self, forKey: .wallpaperPickerSkew) ?? 32.0
         self.autoThemeOmniWM = try container.decodeIfPresent(Bool.self, forKey: .autoThemeOmniWM) ?? true
         self.omniwmGradientMode = try container.decodeIfPresent(OmniWMGradientMode.self, forKey: .omniwmGradientMode) ?? .expressive
         self.omniwmGradientDirection = try container.decodeIfPresent(OmniWMGradientDirection.self, forKey: .omniwmGradientDirection) ?? .topLeftToBottomRight
@@ -415,6 +490,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "version", "theme", "isLightMode", "barConfigs", "dockConfigs",
                 "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
+                "wallpaperPickerHotkey", "wallpaperPickerHotkeyKey", "wallpaperPickerHotkeyModifiers",
+                "wallpaperPickerFolder", "wallpaperPickerOnlyFolder", "wallpaperPickerSkew",
                 "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
                 "enableWellbeing", "syncWellbeingWithMacOS",
                 "enableLyrics", "showMediaLyricLine", "mediaPlayerLayout", "lyricsOffsetMs",
@@ -424,8 +501,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "showWorkspaceApps", "showLauncher", "showClock", "showInhibit",
                 "showMic", "showWifi", "showVolume", "showControlCenter",
                 "showPowerMenu", "showNotepadApplet", "showClipboardApplet",
-                "showColorPickerApplet", "enabledPlugins", "launcherHotkey",
-                "dashHotkey", "notepadHotkey", "clipboardHotkey", "weatherLocation",
+                "showColorPickerApplet", "showSymbianApplet", "enabledPlugins", "launcherHotkey",
+                "launcherHotkeyKey", "launcherHotkeyModifiers",
+                "dashHotkey", "dashHotkeyKey", "dashHotkeyModifiers",
+                "notepadHotkey", "notepadHotkeyKey", "notepadHotkeyModifiers",
+                "clipboardHotkey", "clipboardHotkeyKey", "clipboardHotkeyModifiers",
+                "weatherLocation",
                 "weatherUnits", "webSearchProvider", "pinnedApps", "apps",
                 "$include", "$schema", "rawSettings"
             ])
@@ -509,6 +590,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(wallpaperPath, forKey: .wallpaperPath)
         try container.encode(wallpaperFolders, forKey: .wallpaperFolders)
         try container.encode(autoGenerateWallpaperColors, forKey: .autoGenerateWallpaperColors)
+        try container.encode(wallpaperPickerHotkey, forKey: .wallpaperPickerHotkey)
+        try container.encode(wallpaperPickerHotkeyKey, forKey: .wallpaperPickerHotkeyKey)
+        try container.encode(wallpaperPickerHotkeyModifiers, forKey: .wallpaperPickerHotkeyModifiers)
+        try container.encode(wallpaperPickerFolder, forKey: .wallpaperPickerFolder)
+        try container.encode(wallpaperPickerOnlyFolder, forKey: .wallpaperPickerOnlyFolder)
+        try container.encode(wallpaperPickerSkew, forKey: .wallpaperPickerSkew)
         try container.encode(autoThemeOmniWM, forKey: .autoThemeOmniWM)
         try container.encode(omniwmGradientMode, forKey: .omniwmGradientMode)
         try container.encode(omniwmGradientDirection, forKey: .omniwmGradientDirection)
@@ -537,11 +624,20 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(showNotepadApplet, forKey: .showNotepadApplet)
         try container.encode(showClipboardApplet, forKey: .showClipboardApplet)
         try container.encode(showColorPickerApplet, forKey: .showColorPickerApplet)
+        try container.encode(showSymbianApplet, forKey: .showSymbianApplet)
         try container.encode(enabledPlugins, forKey: .enabledPlugins)
         try container.encode(launcherHotkey, forKey: .launcherHotkey)
+        try container.encode(launcherHotkeyKey, forKey: .launcherHotkeyKey)
+        try container.encode(launcherHotkeyModifiers, forKey: .launcherHotkeyModifiers)
         try container.encode(dashHotkey, forKey: .dashHotkey)
+        try container.encode(dashHotkeyKey, forKey: .dashHotkeyKey)
+        try container.encode(dashHotkeyModifiers, forKey: .dashHotkeyModifiers)
         try container.encode(notepadHotkey, forKey: .notepadHotkey)
+        try container.encode(notepadHotkeyKey, forKey: .notepadHotkeyKey)
+        try container.encode(notepadHotkeyModifiers, forKey: .notepadHotkeyModifiers)
         try container.encode(clipboardHotkey, forKey: .clipboardHotkey)
+        try container.encode(clipboardHotkeyKey, forKey: .clipboardHotkeyKey)
+        try container.encode(clipboardHotkeyModifiers, forKey: .clipboardHotkeyModifiers)
         try container.encode(weatherLocation, forKey: .weatherLocation)
         try container.encode(weatherUnits, forKey: .weatherUnits)
         try container.encode(webSearchProvider, forKey: .webSearchProvider)
@@ -558,6 +654,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "version", "theme", "isLightMode", "barConfigs", "dockConfigs",
                 "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
+                "wallpaperPickerHotkey", "wallpaperPickerHotkeyKey", "wallpaperPickerHotkeyModifiers",
+                "wallpaperPickerFolder", "wallpaperPickerOnlyFolder", "wallpaperPickerSkew",
                 "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
                 "enableWellbeing", "syncWellbeingWithMacOS",
                 "enableLyrics", "showMediaLyricLine", "mediaPlayerLayout", "lyricsOffsetMs",
@@ -567,8 +665,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "showWorkspaceApps", "showLauncher", "showClock", "showInhibit",
                 "showMic", "showWifi", "showVolume", "showControlCenter",
                 "showPowerMenu", "showNotepadApplet", "showClipboardApplet",
-                "showColorPickerApplet", "enabledPlugins", "launcherHotkey",
-                "dashHotkey", "notepadHotkey", "clipboardHotkey", "weatherLocation",
+                "showColorPickerApplet", "showSymbianApplet", "enabledPlugins", "launcherHotkey",
+                "launcherHotkeyKey", "launcherHotkeyModifiers",
+                "dashHotkey", "dashHotkeyKey", "dashHotkeyModifiers",
+                "notepadHotkey", "notepadHotkeyKey", "notepadHotkeyModifiers",
+                "clipboardHotkey", "clipboardHotkeyKey", "clipboardHotkeyModifiers",
+                "weatherLocation",
                 "weatherUnits", "webSearchProvider", "pinnedApps", "apps",
                 "$include", "$schema", "rawSettings"
             ])
@@ -676,11 +778,26 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case "showNotepadApplet": return AnyCodable(showNotepadApplet)
         case "showClipboardApplet": return AnyCodable(showClipboardApplet)
         case "showColorPickerApplet": return AnyCodable(showColorPickerApplet)
+        case "showSymbianApplet": return AnyCodable(showSymbianApplet)
         case "enabledPlugins": return AnyCodable(enabledPlugins.map { AnyCodable($0) })
         case "launcherHotkey": return AnyCodable(launcherHotkey)
+        case "launcherHotkeyKey": return AnyCodable(launcherHotkeyKey)
+        case "launcherHotkeyModifiers": return AnyCodable(launcherHotkeyModifiers)
         case "dashHotkey": return AnyCodable(dashHotkey)
+        case "dashHotkeyKey": return AnyCodable(dashHotkeyKey)
+        case "dashHotkeyModifiers": return AnyCodable(dashHotkeyModifiers)
         case "notepadHotkey": return AnyCodable(notepadHotkey)
+        case "notepadHotkeyKey": return AnyCodable(notepadHotkeyKey)
+        case "notepadHotkeyModifiers": return AnyCodable(notepadHotkeyModifiers)
         case "clipboardHotkey": return AnyCodable(clipboardHotkey)
+        case "clipboardHotkeyKey": return AnyCodable(clipboardHotkeyKey)
+        case "clipboardHotkeyModifiers": return AnyCodable(clipboardHotkeyModifiers)
+        case "wallpaperPickerHotkey": return AnyCodable(wallpaperPickerHotkey)
+        case "wallpaperPickerHotkeyKey": return AnyCodable(wallpaperPickerHotkeyKey)
+        case "wallpaperPickerHotkeyModifiers": return AnyCodable(wallpaperPickerHotkeyModifiers)
+        case "wallpaperPickerFolder": return AnyCodable(wallpaperPickerFolder)
+        case "wallpaperPickerOnlyFolder": return AnyCodable(wallpaperPickerOnlyFolder)
+        case "wallpaperPickerSkew": return AnyCodable(wallpaperPickerSkew)
         case "weatherLocation": return AnyCodable(weatherLocation)
         case "weatherUnits": return AnyCodable(weatherUnits)
         case "webSearchProvider": return AnyCodable(webSearchProvider)
@@ -775,14 +892,44 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if let b = value.boolValue { self.showClipboardApplet = b }
         case "showColorPickerApplet":
             if let b = value.boolValue { self.showColorPickerApplet = b }
+        case "showSymbianApplet":
+            if let b = value.boolValue { self.showSymbianApplet = b }
         case "launcherHotkey":
             if let b = value.boolValue { self.launcherHotkey = b }
+        case "launcherHotkeyKey":
+            if let s = value.stringValue { self.launcherHotkeyKey = s }
+        case "launcherHotkeyModifiers":
+            if let s = value.stringValue { self.launcherHotkeyModifiers = s }
         case "dashHotkey":
             if let b = value.boolValue { self.dashHotkey = b }
+        case "dashHotkeyKey":
+            if let s = value.stringValue { self.dashHotkeyKey = s }
+        case "dashHotkeyModifiers":
+            if let s = value.stringValue { self.dashHotkeyModifiers = s }
         case "notepadHotkey":
             if let b = value.boolValue { self.notepadHotkey = b }
+        case "notepadHotkeyKey":
+            if let s = value.stringValue { self.notepadHotkeyKey = s }
+        case "notepadHotkeyModifiers":
+            if let s = value.stringValue { self.notepadHotkeyModifiers = s }
         case "clipboardHotkey":
             if let b = value.boolValue { self.clipboardHotkey = b }
+        case "clipboardHotkeyKey":
+            if let s = value.stringValue { self.clipboardHotkeyKey = s }
+        case "clipboardHotkeyModifiers":
+            if let s = value.stringValue { self.clipboardHotkeyModifiers = s }
+        case "wallpaperPickerHotkey":
+            if let b = value.boolValue { self.wallpaperPickerHotkey = b }
+        case "wallpaperPickerHotkeyKey":
+            if let s = value.stringValue { self.wallpaperPickerHotkeyKey = s }
+        case "wallpaperPickerHotkeyModifiers":
+            if let s = value.stringValue { self.wallpaperPickerHotkeyModifiers = s }
+        case "wallpaperPickerFolder":
+            if let s = value.stringValue { self.wallpaperPickerFolder = s }
+        case "wallpaperPickerOnlyFolder":
+            if let b = value.boolValue { self.wallpaperPickerOnlyFolder = b }
+        case "wallpaperPickerSkew":
+            if let d = value.doubleValue { self.wallpaperPickerSkew = d }
         case "weatherLocation":
             if let s = value.stringValue { self.weatherLocation = s }
         case "weatherUnits":

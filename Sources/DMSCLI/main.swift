@@ -51,7 +51,7 @@ func printHelp() {
       dms plugins [search|list|install|uninstall|enable|disable|lock|restore]
       dms applets [list|toggle <name>]  Customize DankBar widgets and applets
       dms weather [status|refresh|location <city|lat,lon>] Live Open-Meteo weather controls
-      dms wallpaper [get|set <path>|list] Desktop wallpaper browser and switcher
+      dms wallpaper [get|set <path>|list|picker|next|prev|random] Desktop wallpaper browser and slanted switcher
       dms omniwm [get|sync|mode <mode>|direction <dir>|toggle] Auto-theme OmniWM window borders
       dms version                      Show version info
     """)
@@ -276,6 +276,26 @@ case "permission", "accessibility":
     }
     print("Opened System Settings > Privacy & Security > Accessibility (Gerätesteuerung und Datenzugriff).")
     print("Toggle 'DankMacShell' ON to enable active media key interception and full OSD swallowing.")
+
+case "symbian", "nokia":
+    let subArgs = Array(args.dropFirst())
+    let act = subArgs.first?.lowercased() ?? "open"
+    if act == "open" || act == "gui" || act == "show" {
+        switch SymbianClient.shared.launchCompanion() {
+        case .success:
+            print("Launched Nokia Belle USB Sync companion.")
+        case .failure(let err):
+            print("Failed to launch companion: \(err.description)")
+        }
+    } else {
+        let actionArgs = Array(subArgs.dropFirst())
+        switch SymbianClient.shared.runAction(act, arguments: actionArgs) {
+        case .success(let out):
+            print(out)
+        case .failure(let err):
+            print("Action failed: \(err.description)")
+        }
+    }
 
 case "status":
     let running = isDMSRunning()

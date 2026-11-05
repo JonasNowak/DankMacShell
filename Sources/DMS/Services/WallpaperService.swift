@@ -36,7 +36,11 @@ public final class WallpaperService: ObservableObject {
         scanTask?.cancel()
         isScanning = true
 
-        let userFolders = ConfigStore.shared.config.wallpaperFolders
+        var userFolders = ConfigStore.shared.config.wallpaperFolders
+        let pickerFolder = ConfigStore.shared.config.wallpaperPickerFolder
+        if !pickerFolder.isEmpty && !userFolders.contains(pickerFolder) {
+            userFolders.append(pickerFolder)
+        }
         var savedDesktop = ConfigStore.shared.config.wallpaperPath
         if savedDesktop.isEmpty,
            let screen = NSScreen.main ?? NSScreen.screens.first,
@@ -135,6 +139,12 @@ public final class WallpaperService: ObservableObject {
         ConfigStore.shared.update { $0.wallpaperFolders = folders }
         scan()
         ToastCenter.shared.show(icon: "trash", message: "Removed wallpaper folder")
+    }
+
+    /// Fast synchronous lookup in the memory cache for instantaneous first-frame slice rendering.
+    public func cachedThumbnail(for item: WallpaperItem) -> NSImage? {
+        guard let path = item.path else { return nil }
+        return memoryThumbCache.object(forKey: path as NSString)
     }
 
     /// Asynchronously retrieves or generates a downsampled thumbnail for the wallpaper image.
@@ -237,6 +247,84 @@ public final class WallpaperService: ObservableObject {
             ThemeStore.shared.apply(theme: themeName)
             ConfigStore.shared.update { $0.theme = themeName }
             ToastCenter.shared.show(icon: "paintpalette.fill", message: "Applied theme: \(themeName.capitalized)")
+        }
+    }
+
+    /// Fast live-preview of a wallpaper across connected screens without persisting to config,
+    /// generating Matugen themes, or emitting Toast alerts.
+    public func previewWallpaper(_ item: WallpaperItem) {
+        if let path = item.path {
+            let fileURL = URL(fileURLWithPath: path)
+            guard FileManager.default.fileExists(atPath: path) else { return }
+            let workspace = NSWorkspace.shared
+            for screen in NSScreen.screens {
+                _ = try? workspace.setDesktopImageURL(fileURL, for: screen, options: [:])
+            }
+            currentDesktopPath = path
+        } else if let themeName = item.associatedTheme {
+            ThemeStore.shared.apply(theme: themeName)
+        }
+    }
+
+    /// Reverts desktop wallpaper back to the specified original path from before a live testing session started.
+    public func revertWallpaper(to originalPath: String) {
+        guard !originalPath.isEmpty, FileManager.default.fileExists(atPath: originalPath) else { return }
+        let fileURL = URL(fileURLWithPath: originalPath)
+        let workspace = NSWorkspace.shared
+        for screen in NSScreen.screens {
+            _ = try? workspace.setDesktopImageURL(fileURL, for: screen, options: [:])
+        }
+        currentDesktopPath = originalPath
+        if ConfigStore.shared.config.theme == "dynamic" {
+            ThemeStore.shared.extractWallpaperSeed(from: fileURL, force: true)
+        }
+    }
+
+    /// Retrieves wallpapers constrained by the slanted wallpaper picker settings.
+    /// When `wallpaperPickerOnlyFolder` is enabled and a folder is configured, returns only wallpapers
+    /// located within that folder (or subdirectories).
+    public func pickerWallpapers() -> [WallpaperItem] {
+        let config = ConfigStore.shared.config
+        if config.wallpaperPickerOnlyFolder && !config.wallpaperPickerFolder.isEmpty {
+            let target = (config.wallpaperPickerFolder as NSString).expandingTildeInPath
+            let matched = wallpapers.filter { item in
+                guard let p = item.path else { return false }
+                return p.hasPrefix(target)
+            }
+            if !matched.isEmpty {
+                return matched
+            }
+        }
+        return wallpapers
+    }
+
+    /// Cycles desktop wallpaper to the next available wallpaper according to active folder constraints.
+    public func nextWallpaper() {
+        let items = pickerWallpapers().filter { $0.path != nil }
+        guard !items.isEmpty else { return }
+        let current = currentDesktopPath
+        let currentIndex = items.firstIndex(where: { $0.path == current }) ?? -1
+        let nextIndex = (currentIndex + 1) % items.count
+        applyWallpaper(items[nextIndex])
+    }
+
+    /// Cycles desktop wallpaper to the previous available wallpaper according to active folder constraints.
+    public func previousWallpaper() {
+        let items = pickerWallpapers().filter { $0.path != nil }
+        guard !items.isEmpty else { return }
+        let current = currentDesktopPath
+        let currentIndex = items.firstIndex(where: { $0.path == current }) ?? 0
+        let prevIndex = (currentIndex - 1 + items.count) % items.count
+        applyWallpaper(items[prevIndex])
+    }
+
+    /// Randomizes desktop wallpaper from items matching the active folder constraints.
+    public func randomWallpaper() {
+        let items = pickerWallpapers().filter { $0.path != nil }
+        guard !items.isEmpty else { return }
+        let others = items.filter { $0.path != currentDesktopPath }
+        if let pick = (others.isEmpty ? items : others).randomElement() {
+            applyWallpaper(pick)
         }
     }
 }

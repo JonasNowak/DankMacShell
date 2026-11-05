@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .executable(name: "DankMacShell", targets: ["DMS"]),
         .executable(name: "dms", targets: ["DMSCLI"]),
+        .executable(name: "dms-symbian", targets: ["DMSSymbian"]),
     ],
     targets: [
         // Pure logic: M3 color tokens, dynamic theme generator, config, fuzzy app search, telemetry models, IPC, clipboard, notepad, weather.
@@ -24,6 +25,15 @@ let package = Package(
         ),
         // Native dms CLI binary for terminal and keybind integration (dms run, dms ipc call ..., dms doctor, etc.).
         .executableTarget(name: "DMSCLI", dependencies: ["DMSCore"], path: "Sources/DMSCLI"),
+        // Standalone Nokia Belle USB Sync companion application (crash-isolated companion process like danksearch).
+        .executableTarget(
+            name: "DMSSymbian",
+            dependencies: ["DMSCore"],
+            path: "Sources/DMSSymbian",
+            resources: [
+                .process("Resources")
+            ]
+        ),
         // Unit tests for core logic.
         .testTarget(name: "DMSCoreTests", dependencies: ["DMSCore"]),
     ],

@@ -150,7 +150,8 @@ public struct BarLayout: Sendable, Codable, Equatable {
             BarWidgetEntry(id: "wifi", widgetId: "wifi"),
             BarWidgetEntry(id: "volume", widgetId: "volume"),
             BarWidgetEntry(id: "controlCenterButton", widgetId: "controlCenterButton"),
-            BarWidgetEntry(id: "powerMenuButton", widgetId: "powerMenuButton")
+            BarWidgetEntry(id: "powerMenuButton", widgetId: "powerMenuButton"),
+            BarWidgetEntry(id: "symbianApplet", widgetId: "symbianApplet", enabled: false)
         ]
     )
 }
