@@ -24,7 +24,7 @@ public final class LyricsService: ObservableObject {
 
     private static let lruCapacity = 32
     private static let syncIntervalNs: UInt64 = 100_000_000 // 100 ms (10 Hz)
-    private nonisolated static let userAgent = "DankMacShell/0.6.0 (https://github.com/jonasnowak/DankMacShell)"
+    private nonisolated static let userAgent = "DankMacShell/0.6.1 (https://github.com/jonasnowak/DankMacShell)"
 
     private var consumers: [String: Int] = [:]
     private var syncTask: Task<Void, Never>?
