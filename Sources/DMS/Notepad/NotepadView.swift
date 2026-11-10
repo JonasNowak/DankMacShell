@@ -89,8 +89,10 @@ public struct NotepadView: View {
         let p = themeStore.palette
 
         VStack(spacing: 0) {
-            // Header Bar
+            // Header Bar (with spacing for macOS Server-Side Decorations traffic lights)
             HStack(spacing: 12) {
+                Spacer().frame(width: 68)
+
                 Button(action: { showingList.toggle() }) {
                     Image(systemName: "sidebar.left")
                         .font(.system(size: 14, weight: .semibold))
@@ -367,7 +369,7 @@ public struct NotepadView: View {
             .padding(.vertical, 10)
             .background(themeStore.panelHeaderBackground)
         }
-        .frame(width: previewMode == "split" ? 780 : 480, height: 420)
+        .frame(minWidth: 480, idealWidth: previewMode == "split" ? 780 : 480, maxWidth: .infinity, minHeight: 360, idealHeight: 420, maxHeight: .infinity)
         .background(GlassSurfaceBackground())
         .cornerRadius(24)
         .overlay(

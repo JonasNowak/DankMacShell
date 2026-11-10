@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import DMSCore
 
-let version = "0.6.0"
+let version = "0.6.1"
 
 func printHelp() {
     print("""
