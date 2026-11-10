@@ -14,6 +14,7 @@ public final class ClipboardService: ObservableObject {
     private init() {
         self.lastChangeCount = NSPasteboard.general.changeCount
         self.items = ClipboardStore.shared.getItems()
+        ClipboardStore.shared.maxItemsValue = ConfigStore.shared.config.clipboardMaxItems
 
         // Fast poll on runloop
         timer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
@@ -28,7 +29,21 @@ public final class ClipboardService: ObservableObject {
         guard count != lastChangeCount else { return }
         lastChangeCount = count
 
-        guard let str = NSPasteboard.general.string(forType: .string), !str.isEmpty else { return }
+        let pb = NSPasteboard.general
+
+        // v0.6 CLIP: sensitive-content filter. Union of the types of ALL pasteboard items —
+        // one concealed/transient/auto-generated representation poisons the whole change.
+        let allTypes = pb.pasteboardItems?.flatMap { ($0.types ?? []).map(\.rawValue) } ?? []
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        let filterEnabled = ConfigStore.shared.config.clipboardFilterSensitive
+        guard ClipboardFilter.shouldRecord(
+            pasteboardTypes: allTypes,
+            sourceBundleID: frontmost?.bundleIdentifier,
+            sourceAppName: frontmost?.localizedName,
+            filterEnabled: filterEnabled
+        ) else { return }
+
+        guard let str = pb.string(forType: .string), !str.isEmpty else { return }
 
         if ClipboardStore.shared.add(text: str) != nil {
             self.items = ClipboardStore.shared.getItems()

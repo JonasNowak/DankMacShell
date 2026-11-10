@@ -44,6 +44,7 @@ public struct LauncherView: View {
     @State private var searchWarning: String? = nil
     @State private var searchHealthState: DankSearchHealthState = .healthy
     @State private var fileSearchTask: Task<Void, Never>? = nil
+    @State private var editingApp: AppItem? = nil
     @FocusState private var isFieldFocused: Bool
 
     public var onClose: () -> Void
@@ -395,7 +396,8 @@ public struct LauncherView: View {
                                             onHide: { RunningAppsService.shared.hide(app: app) },
                                             onQuit: { RunningAppsService.shared.quit(app: app) },
                                             onCopyID: { copyToClipboard(text: app.bundleID) },
-                                            onCopyPath: { copyToClipboard(text: app.path) }
+                                            onCopyPath: { copyToClipboard(text: app.path) },
+                                            onEdit: { editingApp = app }
                                         )
                                         .id(app.id)
                                     }
@@ -419,7 +421,8 @@ public struct LauncherView: View {
                                             onHide: { RunningAppsService.shared.hide(app: app) },
                                             onQuit: { RunningAppsService.shared.quit(app: app) },
                                             onCopyID: { copyToClipboard(text: app.bundleID) },
-                                            onCopyPath: { copyToClipboard(text: app.path) }
+                                            onCopyPath: { copyToClipboard(text: app.path) },
+                                            onEdit: { editingApp = app }
                                         )
                                         .id(app.id)
                                     }
@@ -614,6 +617,17 @@ public struct LauncherView: View {
                         ) {
                             copyToClipboard(text: app.path)
                         }
+
+                        Divider()
+                            .background(theme.outlineVariant.opacity(0.3))
+
+                        ActionPanelButton(
+                            title: "Edit App…",
+                            icon: "pencil.circle.fill",
+                            theme: theme
+                        ) {
+                            editingApp = app
+                        }
                     }
 
                     Spacer()
@@ -677,6 +691,9 @@ public struct LauncherView: View {
                 onClose()
             }
             return .handled
+        }
+        .sheet(item: $editingApp) { app in
+            AppEditView(app: app)
         }
     }
 
@@ -844,6 +861,7 @@ public struct LauncherItemRow: View {
     public var onQuit: (() -> Void)? = nil
     public var onCopyID: (() -> Void)? = nil
     public var onCopyPath: (() -> Void)? = nil
+    public var onEdit: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeStore.shared
     @State private var isHovered = false
@@ -958,6 +976,10 @@ public struct LauncherItemRow: View {
             if let copyPath = onCopyPath {
                 Button("Copy Path") { copyPath() }
             }
+            if let edit = onEdit {
+                Divider()
+                Button("Edit App…") { edit() }
+            }
         }
     }
 }
@@ -974,6 +996,7 @@ public struct LauncherTileItem: View {
     public var onQuit: (() -> Void)? = nil
     public var onCopyID: (() -> Void)? = nil
     public var onCopyPath: (() -> Void)? = nil
+    public var onEdit: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeStore.shared
     @State private var isHovered = false
@@ -1074,6 +1097,10 @@ public struct LauncherTileItem: View {
             }
             if let copyPath = onCopyPath {
                 Button("Copy Path") { copyPath() }
+            }
+            if let edit = onEdit {
+                Divider()
+                Button("Edit App…") { edit() }
             }
         }
     }

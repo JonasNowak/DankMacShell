@@ -23,6 +23,9 @@ public final class ClipboardController: ObservableObject {
         guard !isVisible else { return }
 
         DashController.shared.hide()
+        // v0.6 CLIP: remember the app that had focus before the panel activates,
+        // so Return on a history item can auto-paste back into it.
+        AutoPasteService.shared.capturePreviousApp()
         guard let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
 

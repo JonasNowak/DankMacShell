@@ -199,6 +199,33 @@ struct LauncherScorerAndFrecencyTests {
         #expect(dolphin.subtitle == "Manage your files")
     }
 
+    @Test("Custom Tag Matching from AppOverrides (v0.6)")
+    func testTagScoring() {
+        let app = LauncherCandidate(
+            id: "com.apple.Safari",
+            name: "Safari",
+            genericName: "Browse the World Wide Web",
+            identifier: "com.apple.Safari",
+            type: .app,
+            tags: ["webby", "surfari"]
+        )
+
+        // Tag prefix match: genericPrefixWeight (800) + app bonus (1,000)
+        let tagPrefix = LauncherScorer.score(candidate: app, query: "webb")
+        #expect(tagPrefix == 800 + 1000)
+
+        // Tag substring match: genericWeight (400) + app bonus (1,000)
+        let tagContains = LauncherScorer.score(candidate: app, query: "urf")
+        #expect(tagContains == 400 + 1000)
+
+        // No tag match and no name match -> nil
+        #expect(LauncherScorer.score(candidate: app, query: "zzzqqq") == nil)
+
+        // Candidate without tags behaves as before
+        let plain = LauncherCandidate(id: "x", name: "Safari", identifier: "com.apple.Safari", type: .app)
+        #expect(LauncherScorer.score(candidate: plain, query: "webb") == nil)
+    }
+
     @Test("LauncherViewMode Enumeration")
     func testLauncherViewMode() {
         #expect(LauncherViewMode.list.rawValue == "list")

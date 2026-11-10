@@ -49,7 +49,9 @@ public final class AppCatalogService {
         let math = AppSearch.evaluateMath(query: query)
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        var catalog = apps
+        // v0.6 LAUNCH: apply per-app overrides (display name, hidden flag) from the AppEditView.
+        let overrides = ConfigStore.shared.config.apps.perApp
+        var catalog = apps.compactMap { AppOverrideApplier.apply(overrides, to: $0) }
         if ConfigStore.shared.config.enabledPlugins.contains("symbian-belle-sync") {
             let binPath = SymbianClient.shared.resolveExecutablePath() ?? "/usr/local/bin/dms-symbian"
             catalog.append(AppItem(
@@ -81,7 +83,7 @@ public final class AppCatalogService {
         var matches: [SearchResult] = []
         let now = Date()
         for app in catalog {
-            let candidate = LauncherCandidate(app: app)
+            let candidate = LauncherCandidate(app: app, tags: AppOverrideApplier.tags(overrides, for: app.bundleID))
             if let score = LauncherScorer.score(candidate: candidate, query: trimmed, now: now) {
                 matches.append(SearchResult(app: app, score: score))
             } else if let legacyScore = AppSearch.score(app: app, query: trimmed) {

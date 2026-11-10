@@ -38,6 +38,11 @@ public final class NotepadService: ObservableObject {
         }
     }
 
+    /// Replaces the whole content of the active note (used by the find & replace bar).
+    public func replaceActiveNoteContent(_ content: String) {
+        updateActiveNote(content: content)
+    }
+
     public func flushPendingSave() {
         if saveTask != nil {
             saveTask?.cancel()

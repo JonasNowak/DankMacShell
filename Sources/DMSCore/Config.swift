@@ -142,19 +142,23 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         public var fileManager: String
         public var editor: String
         public var activityMonitor: String
+        /// Per-app customizations from the launcher AppEditView, keyed by bundle identifier.
+        public var perApp: [String: AppOverrideEntry]
 
         public init(
             terminal: String = "Terminal",
             browser: String = "Safari",
             fileManager: String = "Finder",
             editor: String = "TextEdit",
-            activityMonitor: String = "Activity Monitor"
+            activityMonitor: String = "Activity Monitor",
+            perApp: [String: AppOverrideEntry] = [:]
         ) {
             self.terminal = terminal
             self.browser = browser
             self.fileManager = fileManager
             self.editor = editor
             self.activityMonitor = activityMonitor
+            self.perApp = perApp
         }
 
         public init(from decoder: Decoder) throws {
@@ -164,6 +168,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             self.fileManager = try container.decodeIfPresent(String.self, forKey: .fileManager) ?? "Finder"
             self.editor = try container.decodeIfPresent(String.self, forKey: .editor) ?? "TextEdit"
             self.activityMonitor = try container.decodeIfPresent(String.self, forKey: .activityMonitor) ?? "Activity Monitor"
+            self.perApp = try container.decodeIfPresent([String: AppOverrideEntry].self, forKey: .perApp) ?? [:]
         }
     }
 
@@ -1167,5 +1172,46 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var interceptMediaKeys: Bool {
         get { rawSettings["interceptMediaKeys"]?.boolValue ?? true }
         set { rawSettings["interceptMediaKeys"] = AnyCodable(newValue) }
+    }
+
+    // MARK: - v0.6 LAUNCH / CLIP / NOTE settings
+
+    /// DLauncherV2 attachment mode: `"center"` (default) or `"island"` (anchored below the notch).
+    public var launcherAttachment: String {
+        get {
+            let raw = rawSettings["launcherAttachment"]?.stringValue ?? "center"
+            return LauncherAttachmentMode.parse(raw).rawValue
+        }
+        set { rawSettings["launcherAttachment"] = AnyCodable(newValue) }
+    }
+
+    /// Reject concealed/transient/auto-generated and password-manager pasteboard content (spec 26).
+    public var clipboardFilterSensitive: Bool {
+        get { rawSettings["clipboardFilterSensitive"]?.boolValue ?? true }
+        set { rawSettings["clipboardFilterSensitive"] = AnyCodable(newValue) }
+    }
+
+    /// Synthesize Cmd+V into the previously focused app when pressing Return in the clipboard modal.
+    public var clipboardAutoPaste: Bool {
+        get { rawSettings["clipboardAutoPaste"]?.boolValue ?? false }
+        set { rawSettings["clipboardAutoPaste"] = AnyCodable(newValue) }
+    }
+
+    /// Maximum clipboard history items retained (spec 26 §4, default 200).
+    public var clipboardMaxItems: Int {
+        get { rawSettings["clipboardMaxItems"]?.intValue ?? 200 }
+        set { rawSettings["clipboardMaxItems"] = AnyCodable(max(10, newValue)) }
+    }
+
+    /// Notepad Markdown preview layout: `"none"` (default), `"split"`, or `"full"`.
+    public var notepadPreviewMode: String {
+        get {
+            let raw = rawSettings["notepadPreviewMode"]?.stringValue ?? "none"
+            switch raw.lowercased() {
+            case "split", "full": return raw.lowercased()
+            default: return "none"
+            }
+        }
+        set { rawSettings["notepadPreviewMode"] = AnyCodable(newValue) }
     }
 }

@@ -222,6 +222,78 @@ struct ConfigAndIncludeTests {
         #expect(decoded == custom)
     }
 
+    @Test("v0.6 Per-App Overrides: Legacy Decode, Round-Trip, Defaults")
+    func testPerAppOverridesMigration() throws {
+        // Legacy config.json with an `apps` object lacking `perApp` decodes to an empty map
+        let legacyJSON = """
+        {
+          "version": 2,
+          "apps": { "terminal": "Ghostty", "browser": "Firefox" }
+        }
+        """
+        let legacy = DMSConfig.load(from: Data(legacyJSON.utf8))
+        #expect(legacy.apps.terminal == "Ghostty")
+        #expect(legacy.apps.perApp.isEmpty)
+        #expect(legacy.version == 2)
+
+        // Round-trip with per-app entries
+        var cfg = DMSConfig()
+        cfg.apps.perApp["com.apple.Safari"] = AppOverrideEntry(
+            displayName: "Web Browser",
+            launchArguments: ["--incognito"],
+            hiddenFromLauncher: true,
+            tags: ["web"]
+        )
+        let data = try cfg.encodeJSON()
+        let decoded = DMSConfig.load(from: data)
+        #expect(decoded.apps.perApp["com.apple.Safari"]?.displayName == "Web Browser")
+        #expect(decoded.apps.perApp["com.apple.Safari"]?.launchArguments == ["--incognito"])
+        #expect(decoded.apps.perApp["com.apple.Safari"]?.hiddenFromLauncher == true)
+        #expect(decoded.apps.perApp["com.apple.Safari"]?.tags == ["web"])
+        #expect(decoded.version == 2)
+    }
+
+    @Test("v0.6 LAUNCH/CLIP/NOTE Config Keys: Defaults and Round-Trip")
+    func testV06ConfigKeys() throws {
+        var cfg = DMSConfig()
+
+        // Defaults
+        #expect(cfg.launcherAttachment == "center")
+        #expect(cfg.clipboardFilterSensitive == true)
+        #expect(cfg.clipboardAutoPaste == false)
+        #expect(cfg.clipboardMaxItems == 200)
+        #expect(cfg.notepadPreviewMode == "none")
+
+        // Invalid values normalize to defaults
+        cfg.launcherAttachment = "bogus"
+        #expect(cfg.launcherAttachment == "center")
+        cfg.notepadPreviewMode = "weird"
+        #expect(cfg.notepadPreviewMode == "none")
+        cfg.clipboardMaxItems = 1
+        #expect(cfg.clipboardMaxItems == 10) // clamped to minimum
+
+        // Set valid values and round-trip through JSON
+        cfg.launcherAttachment = "island"
+        cfg.clipboardFilterSensitive = false
+        cfg.clipboardAutoPaste = true
+        cfg.clipboardMaxItems = 50
+        cfg.notepadPreviewMode = "split"
+
+        let data = try cfg.encodeJSON()
+        let decoded = DMSConfig.load(from: data)
+        #expect(decoded.launcherAttachment == "island")
+        #expect(decoded.clipboardFilterSensitive == false)
+        #expect(decoded.clipboardAutoPaste == true)
+        #expect(decoded.clipboardMaxItems == 50)
+        #expect(decoded.notepadPreviewMode == "split")
+
+        // Keys persist at the root of the JSON (rawSettings passthrough)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        #expect(json.contains("\"launcherAttachment\""))
+        #expect(json.contains("\"clipboardAutoPaste\""))
+        #expect(json.contains("\"notepadPreviewMode\""))
+    }
+
     @Test("All DMS Global Hotkeys Serialization and Dynamic Settings")
     func testAllGlobalHotkeysConfig() throws {
         var cfg = DMSConfig()

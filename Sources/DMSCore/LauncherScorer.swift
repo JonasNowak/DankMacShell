@@ -39,6 +39,8 @@ public struct LauncherCandidate: Sendable, Identifiable, Equatable {
     public let type: LauncherCandidateType
     public let launchCount: Int
     public let lastLaunchTime: Date?
+    /// Custom search tags from `AppOverrideEntry` (matched like the generic name).
+    public let tags: [String]
 
     public init(
         id: String,
@@ -47,7 +49,8 @@ public struct LauncherCandidate: Sendable, Identifiable, Equatable {
         identifier: String = "",
         type: LauncherCandidateType = .app,
         launchCount: Int = 0,
-        lastLaunchTime: Date? = nil
+        lastLaunchTime: Date? = nil,
+        tags: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -56,9 +59,10 @@ public struct LauncherCandidate: Sendable, Identifiable, Equatable {
         self.type = type
         self.launchCount = launchCount
         self.lastLaunchTime = lastLaunchTime
+        self.tags = tags
     }
 
-    public init(app: AppItem) {
+    public init(app: AppItem, tags: [String] = []) {
         self.id = app.id
         self.name = app.name
         self.genericName = app.subtitle
@@ -66,6 +70,7 @@ public struct LauncherCandidate: Sendable, Identifiable, Equatable {
         self.type = .app
         self.launchCount = app.launchCount
         self.lastLaunchTime = app.lastLaunchedAt
+        self.tags = tags
     }
 }
 
@@ -188,6 +193,10 @@ public enum LauncherScorer {
             matchScore = genericWeight
         } else if !id.isEmpty && id.contains(q) {
             matchScore = idWeight
+        } else if candidate.tags.contains(where: { $0.lowercased().hasPrefix(q) }) {
+            matchScore = genericPrefixWeight
+        } else if candidate.tags.contains(where: { $0.lowercased().contains(q) }) {
+            matchScore = genericWeight
         } else {
             // Fuzzy match (Levenshtein distance <= 2)
             let dist = levenshteinDistance(q, name)

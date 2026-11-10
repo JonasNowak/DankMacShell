@@ -155,7 +155,21 @@ public final class RunningAppsService {
     }
 
     public func activate(app: AppItem) {
+        // v0.6 LAUNCH: honor custom launch arguments from the launcher AppEditView.
+        if let args = AppOverrideApplier.launchArguments(ConfigStore.shared.config.apps.perApp, for: app.bundleID),
+           !args.isEmpty, !app.path.isEmpty {
+            launchWithArguments(path: app.path, arguments: args)
+            return
+        }
         activate(bundleID: app.bundleID, fallbackPath: app.path)
+    }
+
+    /// Launches an app bundle with custom arguments via `open -a <path> --args ...`.
+    private func launchWithArguments(path: String, arguments: [String]) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-a", path, "--args"] + arguments
+        try? process.run()
     }
 
     public func unhide(bundleID: String, fallbackPath: String? = nil, inBackground: Bool = false) {
