@@ -195,6 +195,17 @@ public final class NowPlayingService: ObservableObject {
         } else if positionRefs.isEmpty {
             stopPositionPolling()
         }
+        // v0.7 IPC: broadcast media changes to `dms listen events.media` subscribers
+        EventSubscriptionBroker.shared.broadcast(event: "events.media", payload: [
+            "title": enhanced.title,
+            "artist": enhanced.artist,
+            "album": enhanced.album,
+            "isPlaying": enhanced.isPlaying,
+            "app": enhanced.appName,
+            "duration": enhanced.durationSeconds,
+            "elapsed": enhanced.elapsedSeconds,
+            "hasArtwork": enhanced.hasArtwork
+        ])
     }
 
     // MARK: - Process Path Resolver

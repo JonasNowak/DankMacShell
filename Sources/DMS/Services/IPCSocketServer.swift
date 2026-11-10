@@ -12,6 +12,10 @@ public final class IPCSocketServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "io.github.jonasnowak.dms.socket", qos: .userInitiated)
     private let clientQueue = DispatchQueue(label: "io.github.jonasnowak.dms.socket.clients", qos: .userInitiated, attributes: .concurrent)
 
+    // v0.7 CLI: pending `dms dmenu` requests — requestID -> client fd kept open until the user picks a line.
+    private let dmenuLock = NSLock()
+    private var pendingDMenu: [String: Int32] = [:]
+
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dmsDir = appSupport.appendingPathComponent("DMS", isDirectory: true)
@@ -199,6 +203,17 @@ public final class IPCSocketServer: @unchecked Sendable {
         let tokens = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         let command = IPCCommand.parseCLI(args: tokens)
 
+        // v0.7 CLI: dmenu requests keep the connection open so the selection can be streamed back.
+        if case .dmenu(let requestID, _, _) = command {
+            registerPendingDMenu(requestID: requestID, clientFD: clientFD)
+            let responseText = DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                    IPCCommandExecutor.execute(command)
+                }
+            }
+            return (responseText, true)
+        }
+
         let responseText = DispatchQueue.main.sync {
             MainActor.assumeIsolated {
                 IPCCommandExecutor.execute(command)
@@ -206,6 +221,49 @@ public final class IPCSocketServer: @unchecked Sendable {
         }
 
         return (responseText, false)
+    }
+
+    // MARK: - dmenu Result Delivery (v0.7 CLI)
+
+    /// Registers a client connection as waiting for a dmenu selection.
+    public func registerPendingDMenu(requestID: String, clientFD: Int32) {
+        dmenuLock.lock()
+        pendingDMenu[requestID] = clientFD
+        dmenuLock.unlock()
+    }
+
+    /// Streams the dmenu selection back on the same persistent connection and writes the
+    /// `<requestID>.result` fallback file. Called from the launcher UI when the user picks or cancels.
+    public func deliverDMenuResult(requestID: String, line: String?, cancelled: Bool) {
+        dmenuLock.lock()
+        let fd = pendingDMenu.removeValue(forKey: requestID)
+        dmenuLock.unlock()
+
+        var payload: [String: Any] = [
+            "dmenuResult": requestID,
+            "cancelled": cancelled
+        ]
+        if let line = line {
+            payload["line"] = line
+            // Fallback file so a CLI that lost the connection can still read the selection.
+            try? line.write(
+                to: DMenuStaging.resultPath(for: requestID),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: payload),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return
+        }
+        let out = jsonString + "\n"
+        if let fd = fd {
+            out.utf8CString.withUnsafeBufferPointer { buf in
+                guard let base = buf.baseAddress else { return }
+                _ = write(fd, base, buf.count - 1)
+            }
+        }
     }
 
     @MainActor

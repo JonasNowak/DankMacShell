@@ -47,6 +47,11 @@ public struct LauncherView: View {
     @State private var editingApp: AppItem? = nil
     @FocusState private var isFieldFocused: Bool
 
+    // v0.7 CLI: dmenu filter mode state (plain string candidates instead of apps)
+    @State private var dmenuRequestID: String? = nil
+    @State private var dmenuPrompt: String? = nil
+    @State private var dmenuCandidates: [String] = []
+
     public var onClose: () -> Void
 
     public init(initialQuery: String = "", onClose: @escaping () -> Void) {
@@ -54,8 +59,48 @@ public struct LauncherView: View {
         self.onClose = onClose
     }
 
+    /// v0.7 CLI: dmenu mode — candidates are staged in `candidatesFile` by `dms dmenu`.
+    public init(dmenuPrompt: String, candidatesFile: String, requestID: String, onClose: @escaping () -> Void) {
+        self._query = State(initialValue: "")
+        self.onClose = onClose
+        self._dmenuRequestID = State(initialValue: requestID)
+        self._dmenuPrompt = State(initialValue: dmenuPrompt)
+        self._dmenuCandidates = State(initialValue: DMenuStaging.readCandidates(at: URL(fileURLWithPath: candidatesFile)))
+    }
+
+    private var isDMenuMode: Bool {
+        dmenuRequestID != nil
+    }
+
+    /// Fuzzy-filtered dmenu candidates for the current query.
+    private var dmenuResults: [String] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.isEmpty {
+            return dmenuCandidates
+        }
+        return dmenuCandidates
+            .compactMap { candidate -> (String, Int)? in
+                guard let score = AppSearch.scoreText(candidate, query: q) else { return nil }
+                return (candidate, score)
+            }
+            .sorted { $0.1 > $1.1 }
+            .map { $0.0 }
+    }
+
+    private var safeSelectedDMenuIndex: Int {
+        let rows = dmenuResults
+        guard !rows.isEmpty else { return 0 }
+        return min(max(0, selectedIndex), rows.count - 1)
+    }
+
+    private var selectedDMenuRow: String? {
+        let rows = dmenuResults
+        guard !rows.isEmpty else { return nil }
+        return rows[safeSelectedDMenuIndex]
+    }
+
     private var isFileSearch: Bool {
-        AppSearch.isFileSearchQuery(query)
+        !isDMenuMode && AppSearch.isFileSearchQuery(query)
     }
 
     private var fileQuery: String {
@@ -63,7 +108,7 @@ public struct LauncherView: View {
     }
 
     private var appSearchResult: (math: MathResult?, results: [SearchResult]) {
-        if isFileSearch {
+        if isDMenuMode || isFileSearch {
             return (nil, [])
         }
         return AppCatalogService.shared.search(query: query)
@@ -175,7 +220,7 @@ public struct LauncherView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(theme.primary)
 
-                        TextField("Search apps, calculate, or 'file: <name>'...", text: $query)
+                        TextField(isDMenuMode ? (dmenuPrompt ?? "Filter...") : "Search apps, calculate, or 'file: <name>'...", text: $query)
                             .textFieldStyle(.plain)
                             .font(theme.font(size: 15, weight: .medium))
                             .foregroundColor(theme.onSurface)
@@ -221,6 +266,7 @@ public struct LauncherView: View {
                     )
 
                     // View Mode Switcher: List vs Grid/Tile (matches launcher_dark.png)
+                    if !isDMenuMode {
                     HStack(spacing: 4) {
                         Button {
                             withAnimation(.easeInOut(duration: 0.15)) {
@@ -255,6 +301,7 @@ public struct LauncherView: View {
                     .padding(4)
                     .background(theme.surfaceContainerHigh.opacity(0.7))
                     .clipShape(RoundedRectangle(cornerRadius: theme.scaledRadius(14), style: .continuous))
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
@@ -344,7 +391,39 @@ public struct LauncherView: View {
                 // Results Container
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: true) {
-                        if isFileSearch {
+                        if isDMenuMode {
+                            // MARK: - dmenu Filter Mode (v0.7 CLI): plain string rows
+                            let rows = dmenuResults
+                            if rows.isEmpty {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "line.3.horizontal.decrease.circle")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(theme.outline)
+                                        .padding(.top, 24)
+                                    Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                         ? "Type to filter..."
+                                         : "No entries matching '\(query)'")
+                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .foregroundColor(theme.onSurfaceVariant)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 20)
+                            } else {
+                                LazyVStack(spacing: 6) {
+                                    ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
+                                        DMenuRow(
+                                            text: row,
+                                            isSelected: idx == safeSelectedDMenuIndex
+                                        ) {
+                                            completeDMenuSelection(row)
+                                        }
+                                        .id("dmenu-\(idx)")
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+                            }
+                        } else if isFileSearch {
                             // MARK: - Dedicated File Search Results
                             if curFiles.isEmpty {
                                 VStack(spacing: 8) {
@@ -433,7 +512,7 @@ public struct LauncherView: View {
                         }
                     }
                     .frame(maxHeight: 410)
-                    .onChange(of: isFileSearch ? curSelectedFile?.id : curSelectedApp?.id) { _, targetID in
+                    .onChange(of: isDMenuMode ? "dmenu-\(safeSelectedDMenuIndex)" : (isFileSearch ? curSelectedFile?.id : curSelectedApp?.id)) { _, targetID in
                         if let id = targetID {
                             withAnimation(.easeOut(duration: 0.1)) {
                                 proxy.scrollTo(id, anchor: .center)
@@ -449,11 +528,15 @@ public struct LauncherView: View {
                     HStack(spacing: 6) {
                         Text("↑↓ Navigate")
                         Text("•")
-                        Text("↵ Open")
+                        Text(isDMenuMode ? "↵ Select" : "↵ Open")
                         Text("•")
-                        Text("Tab Actions")
-                        Text("•")
-                        Text("Esc Dismiss")
+                        if isDMenuMode {
+                            Text("Esc Cancel")
+                        } else {
+                            Text("Tab Actions")
+                            Text("•")
+                            Text("Esc Dismiss")
+                        }
                     }
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(theme.outline)
@@ -482,7 +565,7 @@ public struct LauncherView: View {
                             .buttonStyle(.plain)
                         }
 
-                        Text("DLauncherV2")
+                        Text(isDMenuMode ? "dms dmenu" : "DLauncherV2")
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundColor(theme.primary)
                     }
@@ -679,12 +762,19 @@ public struct LauncherView: View {
             return .ignored
         }
         .onKeyPress(.tab) {
+            if isDMenuMode {
+                return .ignored
+            }
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 showActionPanel.toggle()
             }
             return .handled
         }
         .onKeyPress(.escape) {
+            if isDMenuMode {
+                cancelDMenu()
+                return .handled
+            }
             if showActionPanel {
                 withAnimation { showActionPanel = false }
             } else {
@@ -698,7 +788,12 @@ public struct LauncherView: View {
     }
 
     private func navigate(delta: Int) {
-        if isFileSearch {
+        if isDMenuMode {
+            let rows = dmenuResults
+            guard !rows.isEmpty else { return }
+            let next = max(0, min(rows.count - 1, safeSelectedDMenuIndex + delta))
+            selectedIndex = next
+        } else if isFileSearch {
             let files = fileResults
             guard !files.isEmpty else { return }
             let next = max(0, min(files.count - 1, safeSelectedFileIndex + delta))
@@ -709,6 +804,22 @@ public struct LauncherView: View {
             let next = max(0, min(apps.count - 1, safeSelectedIndex + delta))
             selectedIndex = next
         }
+    }
+
+    /// v0.7 CLI: streams the picked dmenu line back over the requesting socket connection.
+    private func completeDMenuSelection(_ line: String) {
+        if let requestID = dmenuRequestID {
+            IPCSocketServer.shared.deliverDMenuResult(requestID: requestID, line: line, cancelled: false)
+        }
+        onClose()
+    }
+
+    /// v0.7 CLI: Esc cancels the dmenu request (CLI exits 1, prints nothing).
+    private func cancelDMenu() {
+        if let requestID = dmenuRequestID {
+            IPCSocketServer.shared.deliverDMenuResult(requestID: requestID, line: nil, cancelled: true)
+        }
+        onClose()
     }
 
     @ViewBuilder
@@ -745,6 +856,13 @@ public struct LauncherView: View {
     }
 
     private func executeSelection() {
+        if isDMenuMode {
+            if let row = selectedDMenuRow {
+                completeDMenuSelection(row)
+            }
+            return
+        }
+
         if let math = appSearchResult.math {
             copyToClipboard(text: math.result)
             onClose()
@@ -1166,6 +1284,64 @@ public struct FileItemRow: View {
                     Image(systemName: "arrow.right.circle")
                         .font(.system(size: 12))
                         .foregroundColor(theme.outline)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                isSelected
+                    ? theme.surfaceContainerHighest.opacity(0.85)
+                    : theme.surfaceContainerHigh.opacity(0.6)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        isSelected ? theme.primary.opacity(0.35) : Color.clear,
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Plain string row for `dms dmenu` filter mode (v0.7 CLI).
+public struct DMenuRow: View {
+    public let text: String
+    public var isSelected: Bool = false
+    public let onSelect: () -> Void
+
+    @ObservedObject private var theme = ThemeStore.shared
+
+    public init(text: String, isSelected: Bool = false, onSelect: @escaping () -> Void) {
+        self.text = text
+        self.isSelected = isSelected
+        self.onSelect = onSelect
+    }
+
+    public var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.primary)
+                    .frame(width: 28, height: 28)
+                    .background(theme.primaryContainer.opacity(0.4))
+                    .cornerRadius(8)
+
+                Text(text)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundColor(theme.onSurface)
+                    .lineLimit(1)
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "return")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(theme.primary.opacity(0.85))
+                        .padding(.trailing, 4)
                 }
             }
             .padding(.horizontal, 12)

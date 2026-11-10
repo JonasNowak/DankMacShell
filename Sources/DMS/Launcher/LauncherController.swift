@@ -39,6 +39,24 @@ public final class LauncherController {
     }
 
     public func show(query initialQuery: String = "") {
+        present {
+            LauncherView(initialQuery: initialQuery) { [weak self] in
+                self?.hide()
+            }
+        }
+    }
+
+    /// v0.7 CLI: shows the launcher in dmenu filter mode listing plain string candidates
+    /// staged by `dms dmenu`. The selection is streamed back over the requesting socket connection.
+    public func showDMenu(prompt: String, candidatesFile: String, requestID: String) {
+        present {
+            LauncherView(dmenuPrompt: prompt, candidatesFile: candidatesFile, requestID: requestID) { [weak self] in
+                self?.hide()
+            }
+        }
+    }
+
+    private func present(_ makeView: () -> LauncherView) {
         guard let screen = NSScreen.main else { return }
         ControlCenterController.shared.hide()
         PowerMenuController.shared.hide()
@@ -64,9 +82,7 @@ public final class LauncherController {
         )
         panel.setFrame(frame, display: true)
 
-        let rootView = LauncherView(initialQuery: initialQuery) { [weak self] in
-            self?.hide()
-        }
+        let rootView = makeView()
         if let host = hostingView {
             host.rootView = rootView
         } else {

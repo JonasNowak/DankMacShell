@@ -44,6 +44,13 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var mediaPlayerLayout: MediaPlayerLayout
     /// Global lyrics timing offset in ms (positive = lyrics appear earlier).
     public var lyricsOffsetMs: Int
+    /// Master switch for live terminal emulator theme sync (v0.7 THEME).
+    public var terminalThemeSync: Bool
+    /// Per-emulator terminal theme export toggles (v0.7 THEME).
+    public var terminalThemeGhostty: Bool
+    public var terminalThemeKitty: Bool
+    public var terminalThemeAlacritty: Bool
+    public var terminalThemeITerm2: Bool
 
     // MARK: - Legacy / Direct Accessors (Backward Compatibility)
     public var barPosition: String {
@@ -245,6 +252,11 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         showMediaLyricLine: Bool = true,
         mediaPlayerLayout: MediaPlayerLayout = .bento,
         lyricsOffsetMs: Int = 0,
+        terminalThemeSync: Bool = true,
+        terminalThemeGhostty: Bool = true,
+        terminalThemeKitty: Bool = true,
+        terminalThemeAlacritty: Bool = true,
+        terminalThemeITerm2: Bool = false,
         rawSettings: [String: AnyCodable] = [:],
         includes: [String] = []
     ) {
@@ -286,6 +298,11 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.showMediaLyricLine = showMediaLyricLine
         self.mediaPlayerLayout = mediaPlayerLayout
         self.lyricsOffsetMs = min(10_000, max(-10_000, lyricsOffsetMs))
+        self.terminalThemeSync = terminalThemeSync
+        self.terminalThemeGhostty = terminalThemeGhostty
+        self.terminalThemeKitty = terminalThemeKitty
+        self.terminalThemeAlacritty = terminalThemeAlacritty
+        self.terminalThemeITerm2 = terminalThemeITerm2
         self.barMarginX = barMarginX
         self.showTelemetry = showTelemetry
         self.showWeather = showWeather
@@ -355,6 +372,11 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case showMediaLyricLine
         case mediaPlayerLayout
         case lyricsOffsetMs
+        case terminalThemeSync
+        case terminalThemeGhostty
+        case terminalThemeKitty
+        case terminalThemeAlacritty
+        case terminalThemeITerm2
         case barPosition
         case barAutoHide
         case barTransparent
@@ -480,6 +502,11 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         }
         let decodedOffset = try container.decodeIfPresent(Int.self, forKey: .lyricsOffsetMs) ?? 0
         self.lyricsOffsetMs = min(10_000, max(-10_000, decodedOffset))
+        self.terminalThemeSync = try container.decodeIfPresent(Bool.self, forKey: .terminalThemeSync) ?? true
+        self.terminalThemeGhostty = try container.decodeIfPresent(Bool.self, forKey: .terminalThemeGhostty) ?? true
+        self.terminalThemeKitty = try container.decodeIfPresent(Bool.self, forKey: .terminalThemeKitty) ?? true
+        self.terminalThemeAlacritty = try container.decodeIfPresent(Bool.self, forKey: .terminalThemeAlacritty) ?? true
+        self.terminalThemeITerm2 = try container.decodeIfPresent(Bool.self, forKey: .terminalThemeITerm2) ?? false
         if let arr = try? container.decodeIfPresent([String].self, forKey: .includes) {
             self.includes = arr
         } else if let single = try? container.decodeIfPresent(String.self, forKey: .includes) {
@@ -500,6 +527,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
                 "enableWellbeing", "syncWellbeingWithMacOS",
                 "enableLyrics", "showMediaLyricLine", "mediaPlayerLayout", "lyricsOffsetMs",
+                "terminalThemeSync", "terminalThemeGhostty", "terminalThemeKitty",
+                "terminalThemeAlacritty", "terminalThemeITerm2",
                 "barPosition",
                 "barAutoHide", "barTransparent", "barMarginX", "showDock",
                 "showTelemetry", "showWeather", "showMedia", "showSpaces",
@@ -612,6 +641,11 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(showMediaLyricLine, forKey: .showMediaLyricLine)
         try container.encode(mediaPlayerLayout.rawValue, forKey: .mediaPlayerLayout)
         try container.encode(lyricsOffsetMs, forKey: .lyricsOffsetMs)
+        try container.encode(terminalThemeSync, forKey: .terminalThemeSync)
+        try container.encode(terminalThemeGhostty, forKey: .terminalThemeGhostty)
+        try container.encode(terminalThemeKitty, forKey: .terminalThemeKitty)
+        try container.encode(terminalThemeAlacritty, forKey: .terminalThemeAlacritty)
+        try container.encode(terminalThemeITerm2, forKey: .terminalThemeITerm2)
         try container.encode(barMarginX, forKey: .barMarginX)
         try container.encode(showTelemetry, forKey: .showTelemetry)
         try container.encode(showWeather, forKey: .showWeather)
@@ -664,6 +698,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
                 "autoThemeOmniWM", "omniwmGradientMode", "omniwmGradientDirection", "omniwmSyncOverview", "omniwmSyncWorkspaceBar",
                 "enableWellbeing", "syncWellbeingWithMacOS",
                 "enableLyrics", "showMediaLyricLine", "mediaPlayerLayout", "lyricsOffsetMs",
+                "terminalThemeSync", "terminalThemeGhostty", "terminalThemeKitty",
+                "terminalThemeAlacritty", "terminalThemeITerm2",
                 "barPosition",
                 "barAutoHide", "barTransparent", "barMarginX", "showDock",
                 "showTelemetry", "showWeather", "showMedia", "showSpaces",
@@ -809,6 +845,11 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case "pinnedApps": return AnyCodable(pinnedApps.map { AnyCodable($0) })
         case "controlCenterColumns": return AnyCodable(controlCenterColumns)
         case "autoThemeOmniWM": return AnyCodable(autoThemeOmniWM)
+        case "terminalThemeSync": return AnyCodable(terminalThemeSync)
+        case "terminalThemeGhostty": return AnyCodable(terminalThemeGhostty)
+        case "terminalThemeKitty": return AnyCodable(terminalThemeKitty)
+        case "terminalThemeAlacritty": return AnyCodable(terminalThemeAlacritty)
+        case "terminalThemeITerm2": return AnyCodable(terminalThemeITerm2)
         case "omniwmGradientMode": return AnyCodable(omniwmGradientMode.rawValue)
         case "omniwmGradientDirection": return AnyCodable(omniwmGradientDirection.rawValue)
         case "omniwmSyncOverview": return AnyCodable(omniwmSyncOverview)
@@ -857,6 +898,16 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if let b = value.boolValue { self.showLauncher = b }
         case "autoThemeOmniWM":
             if let b = value.boolValue { self.autoThemeOmniWM = b }
+        case "terminalThemeSync":
+            if let b = value.boolValue { self.terminalThemeSync = b }
+        case "terminalThemeGhostty":
+            if let b = value.boolValue { self.terminalThemeGhostty = b }
+        case "terminalThemeKitty":
+            if let b = value.boolValue { self.terminalThemeKitty = b }
+        case "terminalThemeAlacritty":
+            if let b = value.boolValue { self.terminalThemeAlacritty = b }
+        case "terminalThemeITerm2":
+            if let b = value.boolValue { self.terminalThemeITerm2 = b }
         case "omniwmGradientMode":
             if let s = value.stringValue, let m = OmniWMGradientMode(rawValue: s) { self.omniwmGradientMode = m }
         case "omniwmGradientDirection":
@@ -953,6 +1004,17 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     }
 
     // MARK: - Global Theme & Customization Typed Accessors (Spec 01 / 03 / 31)
+
+    /// Whether terminal theme export is enabled for a given emulator (v0.7 THEME).
+    public func isTerminalThemeEnabled(_ emulator: TerminalEmulator) -> Bool {
+        guard terminalThemeSync else { return false }
+        switch emulator {
+        case .ghostty: return terminalThemeGhostty
+        case .kitty: return terminalThemeKitty
+        case .alacritty: return terminalThemeAlacritty
+        case .iterm2: return terminalThemeITerm2
+        }
+    }
 
     /// Theme mode: "dark", "light", or "system". Syncs with `isLightMode`.
     public var themeMode: String {

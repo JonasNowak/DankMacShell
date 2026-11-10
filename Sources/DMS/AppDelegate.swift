@@ -60,6 +60,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if cfg.theme.lowercased() == "dynamic" {
             ThemeStore.shared.setDynamicWallpaper()
         }
+        // v0.7 THEME: initial terminal theme export (palette didSet only fires on changes)
+        TerminalThemeExporter.shared.exportIfEnabled(
+            palette: ThemeStore.shared.palette,
+            themeName: ThemeStore.shared.themeName,
+            isDark: ThemeStore.shared.palette.isDark
+        )
         if cfg.getSetting("sleepInhibitEnabled")?.boolValue == true {
             IdleInhibitService.shared.enable()
         }

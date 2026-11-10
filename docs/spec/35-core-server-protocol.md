@@ -93,7 +93,7 @@ Server configurations are stored in `SettingsData`:
 ## 6. Port Audit
 | Upstream File / Subsystem | Status in Port | Verdict | Details of Gap |
 |---|---|---|---|
-| `subscription.go` (Pub/Sub Event Broker) | Absent | **Missing (0%)** | Port's `IPCSocketServer.swift` only supports one-shot command-response. It has ZERO event streaming or subscribe capabilities. |
+| `subscription.go` (Pub/Sub Event Broker) | Implemented | **Done (v0.7.0)** | `EventSubscriptionBroker` (NSLock-based) + `IPCSocketServer` `SUBSCRIBE <topic>` handling keep the connection open and stream newline-delimited JSON events; `dms listen [topic]` is the streaming client. Topics: `events.audio`, `events.battery`, `events.wifi`, `events.workspaces`, plus `events.media` (NowPlayingService) and `events.theme` (ThemeStore) added in v0.7.0. |
 | `router.go` (URL path-based router) | Absent | **Missing (0%)** | Port uses a rigid `switch` statement on raw strings in `IPCCommandExecutor.swift` without path routing or middleware. |
 | `lyrics/` (Synchronized LRC lyrics engine) | Absent | **Missing (0%)** | Zero lyrics parsing, timing synchronization, or LRCLIB fetching in port. |
 | `cups/`, `tailscale/`, `sysupdate/` | Absent | **Missing (0%)** | All auxiliary hardware and maintenance daemon modules are completely missing. |
@@ -102,7 +102,7 @@ Server configurations are stored in `SettingsData`:
 
 ## 7. Reimplementation Checklist
 - [ ] Upgrade `IPCSocketServer` to support multi-client persistent socket connections.
-- [ ] Implement `EventSubscriptionBroker` enabling clients to subscribe to live system event streams (`events.audio`, `events.workspaces`, etc.).
+- [x] Implement `EventSubscriptionBroker` enabling clients to subscribe to live system event streams (`events.audio`, `events.workspaces`, etc.). (v0.7.0: broker + `SUBSCRIBE` handling + `dms listen` client; `events.media` and `events.theme` topics added)
 - [ ] Implement URL path-based router (`/api/v1/...`) with JSON request/response encoding.
 - [ ] Implement `LyricsService` with real-time LRC file parsing and LRCLIB REST API client.
 - [ ] Implement `TailscaleService` monitoring local `tailscale status --json` output.

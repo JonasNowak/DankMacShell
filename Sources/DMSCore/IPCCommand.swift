@@ -135,6 +135,11 @@ public enum IPCCommand: Sendable, Equatable {
     // Symbian Belle USB Sync (Plugin)
     case symbian(action: String, path: String? = nil, query: String? = nil)
 
+    // CLI Pipelines (v0.7): dmenu filter mode, event streaming, interactive REPL
+    case dmenu(requestID: String, prompt: String, candidatesFile: String)
+    case listen(topic: String)
+    case shell
+
     case unknown(String)
 
     // MARK: - URL Parser (dms:// scheme)
@@ -723,8 +728,152 @@ public enum IPCCommand: Sendable, Equatable {
                 query: extra.count > 1 ? extra.dropFirst().joined(separator: " ") : nil
             )
 
+        case "dmenu":
+            // dmenu <requestID> [--prompt <text...>] [--file <path>]
+            // NB: request IDs are uppercase hex — use rawAction, not the lowercased action.
+            let requestID = rawAction.isEmpty ? DMenuStaging.newRequestID() : rawAction
+            var prompt = ""
+            var file = ""
+            var i = 0
+            while i < extra.count {
+                if extra[i] == "--prompt" || extra[i] == "-p" {
+                    var parts: [String] = []
+                    var j = i + 1
+                    while j < extra.count && !extra[j].hasPrefix("-") {
+                        parts.append(extra[j])
+                        j += 1
+                    }
+                    prompt = parts.joined(separator: " ")
+                    i = j
+                } else if extra[i] == "--file" || extra[i] == "-f" {
+                    if i + 1 < extra.count { file = extra[i + 1] }
+                    i += 2
+                } else {
+                    i += 1
+                }
+            }
+            return .dmenu(requestID: requestID, prompt: prompt, candidatesFile: file)
+
+        case "listen":
+            return .listen(topic: action.isEmpty ? (extra.first ?? "*") : action)
+
+        case "shell":
+            return .shell
+
         default:
             return .unknown(args.joined(separator: " "))
         }
+    }
+
+    // MARK: - CLI Tab-Completion Vocabulary (used by `dms shell`)
+
+    /// All known CLI targets accepted by `parseCLI`.
+    public static let cliTargets: [String] = [
+        "spotlight", "launcher", "control-center", "dash", "powermenu", "notepad",
+        "clipboard", "processlist", "unhide", "unhide-all", "hide", "activate",
+        "colorpicker", "qr", "keybinds", "settings", "bar", "dock", "workspace",
+        "audio", "mic", "brightness", "inhibit", "mpris", "lyrics", "theme",
+        "wallpaper", "omniwm", "screenshot", "toast", "doctor", "reload",
+        "plugins", "applets", "status", "weather", "island", "danksearch",
+        "wellbeing", "symbian", "dmenu", "listen", "shell", "ipc"
+    ]
+
+    /// Known actions per target (subset of `parseCLI`); empty means any action is free-form.
+    public static func cliActions(for target: String) -> [String] {
+        switch target {
+        case "spotlight", "launcher":
+            return ["toggle", "open", "close", "openquery"]
+        case "control-center":
+            return ["toggle", "open", "close"]
+        case "dash":
+            return ["toggle", "open", "opentab", "close"]
+        case "powermenu":
+            return ["open", "lock", "sleep", "restart", "shutdown", "logout"]
+        case "notepad":
+            return ["toggle", "open", "close", "get", "set", "append"]
+        case "clipboard":
+            return ["toggle", "open", "list", "clear", "copy"]
+        case "processlist", "processes":
+            return ["toggle", "open", "list", "kill"]
+        case "unhide", "unhide-all":
+            return ["all", "--background"]
+        case "hide", "activate":
+            return []
+        case "colorpicker":
+            return ["pick"]
+        case "qr":
+            return []
+        case "keybinds":
+            return ["toggle", "open", "close"]
+        case "settings":
+            return ["toggle", "open", "close", "get", "set", "dump"]
+        case "bar", "dock":
+            return ["toggle", "reveal", "hide", "status", "setposition"]
+        case "workspace", "workspaces":
+            return ["status", "switch", "next", "prev"]
+        case "audio":
+            return ["status", "setvolume", "mute", "unmute", "toggle"]
+        case "mic":
+            return ["status", "mute", "unmute", "toggle"]
+        case "brightness":
+            return ["get", "set", "increment", "decrement"]
+        case "inhibit":
+            return ["toggle", "status", "enable", "disable"]
+        case "mpris":
+            return ["status", "play", "pause", "toggle", "next", "prev", "seek", "lyrics"]
+        case "lyrics":
+            return ["status", "current", "refresh", "clear-cache", "offset"]
+        case "theme":
+            return ["get", "set", "list", "toggle", "togglemode"]
+        case "wallpaper", "wallpapers":
+            return ["get", "status", "set", "list", "picker", "next", "prev", "random"]
+        case "omniwm", "omniwmtheme":
+            return ["get", "status", "sync", "mode", "direction", "toggle"]
+        case "screenshot":
+            return ["region", "full", "window"]
+        case "toast":
+            return ["info", "warn", "warning", "error"]
+        case "doctor", "reload", "status":
+            return []
+        case "plugins", "plugin":
+            return ["list", "search", "install", "uninstall", "enable", "disable", "lock", "restore"]
+        case "applets", "applet":
+            return ["list", "toggle"]
+        case "weather":
+            return ["status", "refresh", "set", "location"]
+        case "island", "disland":
+            return ["toggle", "open", "close"]
+        case "danksearch", "dsearch":
+            return ["status"]
+        case "wellbeing", "screentime":
+            return ["status", "enable", "disable", "toggle", "sync", "open-system"]
+        case "symbian", "symbian-sync", "nokia":
+            return ["status", "open", "sync", "eject", "install", "clean"]
+        case "dmenu":
+            return ["--prompt", "-p", "--file", "-f"]
+        case "listen":
+            return ["*", "events.audio", "events.battery", "events.wifi", "events.workspaces", "events.media", "events.theme"]
+        case "shell":
+            return []
+        default:
+            return []
+        }
+    }
+
+    /// Flat completion vocabulary: targets + actions + common flags.
+    public static var cliVocabulary: [String] {
+        var words = Set(cliTargets)
+        for target in cliTargets {
+            words.formUnion(cliActions(for: target))
+        }
+        words.formUnion(["--prompt", "--file", "--background", "-p", "-f", "-b", "ipc", "call", "help", "version"])
+        return words.sorted()
+    }
+
+    /// Returns all vocabulary words starting with `prefix` (for readline tab-completion).
+    public static func cliCompletions(forPrefix prefix: String) -> [String] {
+        let p = prefix.lowercased()
+        if p.isEmpty { return cliVocabulary }
+        return cliVocabulary.filter { $0.lowercased().hasPrefix(p) }
     }
 }

@@ -8,7 +8,22 @@ public final class ThemeStore: ObservableObject {
 
     @Published public private(set) var palette: ThemePalette {
         didSet {
+            guard oldValue != palette else { return }
             rebuildCachedColors()
+            // v0.7 THEME: live terminal emulator theme sync + events.theme broadcast
+            TerminalThemeExporter.shared.exportIfEnabled(
+                palette: palette,
+                themeName: themeName,
+                isDark: palette.isDark
+            )
+            EventSubscriptionBroker.shared.broadcast(event: "events.theme", payload: [
+                "theme": themeName,
+                "isDark": palette.isDark,
+                "isLightMode": isLightMode,
+                "primary": palette.primary.hex,
+                "surface": palette.surface.hex,
+                "onSurface": palette.onSurface.hex
+            ])
         }
     }
 
