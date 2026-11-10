@@ -46,10 +46,22 @@ public final class LauncherController {
 
         let width: CGFloat = 680
         let height: CGFloat = 540
-        let xPos = screen.frame.midX - (width / 2)
-        let yPos = screen.frame.midY - (height / 2) + 60
 
-        let frame = NSRect(x: xPos, y: yPos, width: width, height: height)
+        // v0.6 LAUNCH: "island" attachment anchors the launcher directly below the
+        // Dynamic Island / notch (top-center below the menu bar on notchless displays).
+        let mode = LauncherAttachmentMode.parse(ConfigStore.shared.config.launcherAttachment)
+        if mode == .island {
+            DIslandController.shared.collapse()
+        }
+        let notch = screen.extractNotchGeometry()
+        let frame = LauncherPlacementSolver.solve(
+            screenFrame: screen.frame,
+            visibleFrame: screen.visibleFrame,
+            notch: notch,
+            mode: mode,
+            panelWidth: width,
+            panelHeight: height
+        )
         panel.setFrame(frame, display: true)
 
         let rootView = LauncherView(initialQuery: initialQuery) { [weak self] in

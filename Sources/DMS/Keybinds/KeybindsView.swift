@@ -60,6 +60,12 @@ public struct KeybindsView: View {
             ShortcutEntry(category: "DankMaterialShell", title: "Control Center", keys: "⌥ C"),
             ShortcutEntry(category: "DankMaterialShell", title: "Power & Session Menu", keys: "⌥ P"),
 
+            // In-panel shortcuts (v0.6)
+            ShortcutEntry(category: "In-Panel Shortcuts", title: "Notepad: Find & Replace", keys: "⌘ F", description: "Opens the find & replace bar in the notepad"),
+            ShortcutEntry(category: "In-Panel Shortcuts", title: "Notepad: Next Match", keys: "↵", description: "Jumps to the next match while the find bar is open (wraps around)"),
+            ShortcutEntry(category: "In-Panel Shortcuts", title: "Clipboard: Copy Selected Item", keys: "↵", description: "Copies the selected history item; auto-pastes into the previous app when enabled"),
+            ShortcutEntry(category: "In-Panel Shortcuts", title: "Launcher: Open Actions Panel", keys: "Tab", description: "Toggles the per-app action sidebar, including Edit App…"),
+
             // Navigation
             ShortcutEntry(category: "Navigation & Windows", title: "Switch Space Left", keys: "^ ←"),
             ShortcutEntry(category: "Navigation & Windows", title: "Switch Space Right", keys: "^ →"),

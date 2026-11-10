@@ -39,8 +39,22 @@ public final class ClipboardStore: @unchecked Sendable {
 
     private let lock = NSLock()
     private var items: [ClipboardItem] = []
-    private let maxItems: Int = 100
+    private var maxItems: Int = 100
     private let storageURL: URL
+
+    /// Maximum history items retained. Settable so `ClipboardService` can push `clipboardMaxItems` from config.
+    public var maxItemsValue: Int {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return maxItems
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            maxItems = max(1, newValue)
+        }
+    }
 
     public init(storageURL: URL? = nil) {
         if let custom = storageURL {

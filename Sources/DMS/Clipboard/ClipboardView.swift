@@ -21,6 +21,28 @@ public struct ClipboardView: View {
         return clipboard.search(query: searchText)
     }
 
+    private var safeSelectedIndex: Int {
+        let items = filteredItems
+        guard !items.isEmpty else { return 0 }
+        return min(max(0, selectedIndex), items.count - 1)
+    }
+
+    /// Copies the item and (optionally, per `clipboardAutoPaste`) auto-pastes into the
+    /// previously focused app, then closes the panel.
+    private func activate(_ item: ClipboardItem) {
+        clipboard.copyItem(text: item.text)
+        if ConfigStore.shared.config.clipboardAutoPaste {
+            AutoPasteService.shared.pasteIntoPreviousApp()
+        }
+        onClose()
+    }
+
+    private func navigate(delta: Int) {
+        let items = filteredItems
+        guard !items.isEmpty else { return }
+        selectedIndex = max(0, min(items.count - 1, safeSelectedIndex + delta))
+    }
+
     public var body: some View {
         let p = themeStore.palette
 
@@ -88,13 +110,14 @@ public struct ClipboardView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 6) {
-                        ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                            Button(action: {
-                                clipboard.copyItem(text: item.text)
-                                onClose()
-                            }) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 6) {
+                            ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
+                                Button(action: {
+                                    selectedIndex = index
+                                    activate(item)
+                                }) {
                                 HStack(alignment: .top, spacing: 12) {
                                     Image(systemName: item.isURL ? "link" : (item.lineCount > 1 ? "doc.plaintext" : "text.quote"))
                                         .font(.system(size: 14))
@@ -134,13 +157,22 @@ public struct ClipboardView: View {
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
-                                .background(index == selectedIndex ? Color(hex: p.secondaryContainer.hex).opacity(0.4) : Color(hex: p.surfaceContainerLow.hex))
+                                .background(index == safeSelectedIndex ? Color(hex: p.secondaryContainer.hex).opacity(0.4) : Color(hex: p.surfaceContainerLow.hex))
                                 .cornerRadius(12)
                             }
                             .buttonStyle(.plain)
+                            .id(item.id)
                         }
                     }
                     .padding(12)
+                }
+                .onChange(of: safeSelectedIndex) { _, newIndex in
+                    let items = filteredItems
+                    guard newIndex < items.count else { return }
+                    withAnimation(.easeOut(duration: 0.1)) {
+                        proxy.scrollTo(items[newIndex].id, anchor: .center)
+                    }
+                }
                 }
             }
 
@@ -154,7 +186,9 @@ public struct ClipboardView: View {
 
                 Spacer()
 
-                Text("Click to copy & paste • Esc to dismiss")
+                Text(ConfigStore.shared.config.clipboardAutoPaste
+                     ? "↑↓ Navigate • ↵ Copy & auto-paste • Esc to dismiss"
+                     : "↑↓ Navigate • ↵ Copy • Esc to dismiss")
                     .font(.system(size: 10))
                     .foregroundColor(Color(hex: p.outline.hex))
             }
@@ -170,5 +204,26 @@ public struct ClipboardView: View {
                 .stroke(themeStore.panelBorderColor, lineWidth: 1)
         )
         .shadow(color: themeStore.adaptiveShadowColor(baseOpacity: 0.32), radius: 24, x: 0, y: 12)
+        .onKeyPress(.downArrow) {
+            navigate(delta: 1)
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            navigate(delta: -1)
+            return .handled
+        }
+        .onKeyPress(.return) {
+            let items = filteredItems
+            guard !items.isEmpty else { return .ignored }
+            activate(items[safeSelectedIndex])
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            onClose()
+            return .handled
+        }
+        .onChange(of: searchText) { _, _ in
+            selectedIndex = 0
+        }
     }
 }

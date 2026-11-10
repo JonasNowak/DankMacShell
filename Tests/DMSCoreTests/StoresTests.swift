@@ -89,6 +89,27 @@ struct StoresTests {
         #expect(store.getItems().first?.text == "Item 115")
     }
 
+    @Test("ClipboardStore Configurable maxItems Eviction (v0.6)")
+    func testClipboardMaxItemsConfigurable() {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_clip_max_\(UUID().uuidString).json")
+        let store = ClipboardStore(storageURL: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        store.maxItemsValue = 5
+        #expect(store.maxItemsValue == 5)
+
+        for i in 1...8 {
+            store.add(text: "Item \(i)")
+        }
+        #expect(store.getItems().count == 5)
+        #expect(store.getItems().first?.text == "Item 8")
+        #expect(store.getItems().last?.text == "Item 4")
+
+        // Clamped to a minimum of 1
+        store.maxItemsValue = 0
+        #expect(store.maxItemsValue == 1)
+    }
+
     @Test("ClipboardStore Persistence Across Instances")
     func testClipboardPersistence() {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_clip_persist_\(UUID().uuidString).json")

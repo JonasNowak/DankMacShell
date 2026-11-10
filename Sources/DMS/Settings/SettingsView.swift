@@ -2922,6 +2922,23 @@ public struct SettingsView: View {
                 palette: palette
             )
         }
+
+        SettingsCard(icon: "macwindow", title: "Launcher Attachment", subtitle: "Where the launcher panel appears", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                SettingsSegmentedControl(
+                    options: [("Top Center", "center"), ("Dynamic Island", "island")],
+                    selection: Binding(
+                        get: { configStore.config.launcherAttachment },
+                        set: { val in configStore.update { $0.launcherAttachment = val } }
+                    ),
+                    palette: palette
+                )
+
+                Text("Dynamic Island anchors the launcher directly below the notch and collapses the island while open. On displays without a notch it falls back to top center.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(hex: palette.outline.hex))
+            }
+        }
     }
 
     // MARK: - 18. Keyboard Shortcuts Tab
@@ -3162,6 +3179,41 @@ public struct SettingsView: View {
                     )
                 }
             }
+        }
+
+        SettingsCard(icon: "doc.on.clipboard.fill", title: "Clipboard Security", subtitle: "Keep sensitive copies out of history", palette: palette) {
+            VStack(spacing: 10) {
+                SettingsToggleRow(
+                    title: "Filter Sensitive Content",
+                    subtitle: "Ignore concealed/transient pasteboard items and copies from password managers (1Password, Bitwarden, KeePassXC)",
+                    isOn: Binding(
+                        get: { configStore.config.clipboardFilterSensitive },
+                        set: { val in configStore.update { $0.clipboardFilterSensitive = val } }
+                    ),
+                    palette: palette
+                )
+
+                SettingsToggleRow(
+                    title: "Auto-Paste on Return",
+                    subtitle: "Pressing ↵ on a history item also sends a synthetic ⌘V into the previously focused app (requires Accessibility permission)",
+                    isOn: Binding(
+                        get: { configStore.config.clipboardAutoPaste },
+                        set: { val in configStore.update { $0.clipboardAutoPaste = val } }
+                    ),
+                    palette: palette
+                )
+            }
+        }
+
+        SettingsCard(icon: "note.text", title: "Notepad Markdown Preview", subtitle: "Live rendered preview of the active note", palette: palette) {
+            SettingsSegmentedControl(
+                options: [("Off", "none"), ("Split View", "split"), ("Full Preview", "full")],
+                selection: Binding(
+                    get: { configStore.config.notepadPreviewMode },
+                    set: { val in configStore.update { $0.notepadPreviewMode = val } }
+                ),
+                palette: palette
+            )
         }
     }
 
