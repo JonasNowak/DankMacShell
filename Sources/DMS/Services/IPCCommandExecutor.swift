@@ -894,6 +894,16 @@ public enum IPCCommandExecutor {
                 return "Unknown symbian action '\(action)'. Valid actions: open, close, toggle, status, clean, eject, install, sync."
             }
 
+        case .dmenu(let requestID, let prompt, let candidatesFile):
+            LauncherController.shared.showDMenu(prompt: prompt, candidatesFile: candidatesFile, requestID: requestID)
+            return "DMenu request \(requestID) opened"
+
+        case .listen(let topic):
+            return "Server accepts SUBSCRIBE \(topic) on a persistent connection; use the client-side 'dms listen \(topic)'"
+
+        case .shell:
+            return "Interactive REPL is client-side; use 'dms shell'"
+
         case .unknown(let raw):
             return "Unknown command: \(raw)"
         }

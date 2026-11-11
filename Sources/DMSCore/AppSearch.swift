@@ -273,6 +273,35 @@ public enum AppSearch {
         return nil
     }
 
+    /// Scores a plain text line (e.g. a `dms dmenu` candidate) against a query. Same tiers as `score(app:query:)`.
+    public static func scoreText(_ text: String, query: String) -> Int? {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if q.isEmpty {
+            return 0
+        }
+        let target = text.lowercased()
+
+        if target == q {
+            return 1000
+        }
+        if target.hasPrefix(q) {
+            return 800 - (target.count - q.count)
+        }
+        let words = target.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        let initials = String(words.compactMap { $0.first })
+        if initials.hasPrefix(q) {
+            return 600
+        }
+        if let range = target.range(of: q) {
+            let dist = target.distance(from: target.startIndex, to: range.lowerBound)
+            return 400 - dist
+        }
+        if let fuzzyScore = fuzzySubsequence(query: q, target: target) {
+            return fuzzyScore
+        }
+        return nil
+    }
+
     private static func fuzzySubsequence(query: String, target: String) -> Int? {
         var qIdx = query.startIndex
         var tIdx = target.startIndex

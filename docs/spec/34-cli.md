@@ -110,8 +110,9 @@ All CLI commands map to discrete IPC messages dispatched over the Unix domain so
 ## 7. Port Audit
 | Upstream File / Subsystem | Status in Port | Verdict | Details of Gap |
 |---|---|---|---|
-| `commands_dmenu.go` (18,273 bytes) | Absent | **Missing (0%)** | `dms dmenu` stdin/stdout filter mode is completely absent in the port. |
-| `shell.go` (Interactive REPL) | Absent | **Missing (0%)** | `dms shell` interactive session is completely absent. |
+| `commands_dmenu.go` (18,273 bytes) | Implemented | **Done (v0.7.0)** | `dms dmenu [--prompt <text>]` reads newline-delimited candidates from stdin, stages them in `~/Library/Application Support/DMS/dmenu/<requestID>.txt`, sends path+requestID over the socket, shows `LauncherController` in filter/dmenu mode, prints the selection to stdout (exit 0) or exits 1 on Esc. |
+| `shell.go` (Interactive REPL) | Implemented | **Done (v0.7.0)** | `dms shell` REPL with `dms> ` prompt over the socket, history in `~/.dms_shell_history`, tab-completion over the `IPCCommand.parseCLI` vocabulary (Darwin libedit, zero-dep). |
+| `listen` streaming client | Implemented | **Done (v0.7.0)** | `dms listen [topic]` (default `*`) sends `SUBSCRIBE <topic>` and streams newline-delimited JSON events to stdout until Ctrl-C. |
 | `commands_doctor.go` (62,859 bytes) | Partially Insp. | **Major Gap** | Port has a tiny 20-line `doctor` print routine checking only 3 hardcoded file paths. |
 | `commands_config.go` (JSON path get/set/diff) | Partially Insp. | **Major Gap** | Port only allows dumping the entire raw JSON; lacks deep key get/set, validation, and diffing. |
 | `commands_windowrules.go`, `commands_features.go`, `commands_matugen.go` | Absent | **Missing (0%)** | Window rules CLI, feature toggles, and matugen theme generator CLI commands are completely absent. |
@@ -120,8 +121,9 @@ All CLI commands map to discrete IPC messages dispatched over the Unix domain so
 
 ## 8. Reimplementation Checklist
 - [ ] Migrate `DMSCLI` to `swift-argument-parser` for robust subcommand structure and validation.
-- [ ] Implement `dms dmenu` pipe mode bridging stdin items to the macOS launcher modal and returning the selection to stdout.
-- [ ] Implement `dms shell` interactive REPL with command completion.
+- [x] Implement `dms dmenu` pipe mode bridging stdin items to the macOS launcher modal and returning the selection to stdout. (v0.7.0)
+- [x] Implement `dms shell` interactive REPL with command completion. (v0.7.0)
+- [x] Implement `dms listen [topic]` streaming newline-delimited JSON events over a persistent socket connection. (v0.7.0)
 - [ ] Expand `dms doctor` into a thorough diagnostics tool checking macOS permissions (Accessibility, Screen Recording), socket latency, and display topology.
 - [ ] Implement `dms config [get|set|reset|diff]` supporting dot-separated key paths (`bar.segments.center`).
 - [ ] Add `dms screenshot`, `dms color pick`, `dms qr`, and `dms notify` subcommands.

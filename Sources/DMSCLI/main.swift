@@ -1,8 +1,10 @@
 import Foundation
 import AppKit
 import DMSCore
+import EditLine
+import EditLine.readline
 
-let version = "0.6.1"
+let version = "0.7.0"
 
 func printHelp() {
     print("""
@@ -18,6 +20,12 @@ func printHelp() {
       dms permission                   Open Accessibility settings to enable full OSD swallowing
 
       dms ipc call <target> <action> [args...]  Send IPC command to shell
+      dms dmenu [--prompt <text>]   dmenu/rofi drop-in: read candidates from stdin, print selection to stdout
+      dms listen [topic]            Stream newline-delimited JSON events (default topic: *)
+      dms shell                     Interactive IPC REPL with history and tab-completion
+
+    Event topics for 'dms listen':
+      events.audio events.battery events.wifi events.workspaces events.media events.theme  (or * for all)
 
     Target shortcuts:
       dms spotlight [toggle|open|close] Toggle Spotlight/Launcher overlay
@@ -62,7 +70,7 @@ func getSocketPath() -> String {
     return appSupport.appendingPathComponent("DMS/dms.sock").path
 }
 
-func sendSocketCommand(_ commandStr: String) -> String? {
+func connectSocket() -> Int32? {
     let path = getSocketPath()
     guard FileManager.default.fileExists(atPath: path) else {
         return nil
@@ -70,7 +78,6 @@ func sendSocketCommand(_ commandStr: String) -> String? {
 
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { return nil }
-    defer { close(fd) }
 
     var addr = sockaddr_un()
     addr.sun_family = sa_family_t(AF_UNIX)
@@ -90,8 +97,17 @@ func sendSocketCommand(_ commandStr: String) -> String? {
     }
 
     guard connectRes == 0 else {
+        close(fd)
         return nil
     }
+    return fd
+}
+
+func sendSocketCommand(_ commandStr: String) -> String? {
+    guard let fd = connectSocket() else {
+        return nil
+    }
+    defer { close(fd) }
 
     let message = commandStr.hasSuffix("\n") ? commandStr : (commandStr + "\n")
     _ = message.utf8CString.withUnsafeBufferPointer { buf in
@@ -185,6 +201,192 @@ func probeMediaRemote() -> String {
         return "{}"
     }
     return "{}"
+}
+
+// MARK: - v0.7 CLI Pipelines: dmenu / listen / shell
+
+func writeStderr(_ message: String) {
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+}
+
+/// `dms dmenu [--prompt <text>]`: read newline-delimited candidates from stdin, present them in the
+/// running shell's launcher (filter mode), print the chosen line to stdout (exit 0).
+/// Esc/cancel prints nothing and exits 1. Daemon unreachable exits 3.
+func runDMenu(args: [String]) {
+    var prompt = ""
+    var i = 0
+    while i < args.count {
+        if args[i] == "--prompt" || args[i] == "-p" {
+            if i + 1 < args.count { prompt = args[i + 1] }
+            i += 2
+        } else {
+            i += 1
+        }
+    }
+
+    let stdinData = FileHandle.standardInput.readDataToEndOfFile()
+    guard let input = String(data: stdinData, encoding: .utf8) else {
+        writeStderr("dms dmenu: stdin is not valid UTF-8")
+        exit(1)
+    }
+    let candidates = input
+        .split(separator: "\n", omittingEmptySubsequences: false)
+        .map(String.init)
+        .filter { !$0.isEmpty }
+    guard !candidates.isEmpty else {
+        exit(1) // empty input: nothing to select, like dmenu
+    }
+
+    let requestID = DMenuStaging.newRequestID()
+    let candidatesURL: URL
+    do {
+        candidatesURL = try DMenuStaging.stage(candidates: candidates, requestID: requestID)
+    } catch {
+        writeStderr("dms dmenu: failed to stage candidates: \(error.localizedDescription)")
+        exit(1)
+    }
+    func finish(_ code: Int32) -> Never {
+        DMenuStaging.cleanup(requestID: requestID)
+        exit(code)
+    }
+
+    guard let fd = connectSocket() else {
+        writeStderr("dms dmenu: DMS daemon not running (socket \(getSocketPath()) missing) — start it with 'dms start'")
+        finish(3)
+    }
+
+    // Only the staged file path + requestID travel over the socket; the line protocol stays intact.
+    var commandLine = "ipc call dmenu \(requestID) --file \(candidatesURL.path)"
+    if !prompt.isEmpty {
+        // Keep the line protocol intact: a prompt must never contain a newline.
+        let safePrompt = prompt.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
+        commandLine += " --prompt \(safePrompt)"
+    }
+    commandLine += "\n"
+    _ = commandLine.utf8CString.withUnsafeBufferPointer { buf in
+        write(fd, buf.baseAddress!, buf.count - 1)
+    }
+
+    // Keep the persistent connection open and stream lines until the dmenu result arrives.
+    var buffer = Data()
+    var chunk = [UInt8](repeating: 0, count: 8192)
+    while true {
+        let n = read(fd, &chunk, chunk.count)
+        if n <= 0 { break }
+        buffer.append(contentsOf: chunk.prefix(n))
+        while let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+            let lineData = buffer.subdata(in: 0..<newlineIndex)
+            buffer.removeSubrange(0...newlineIndex)
+            guard let line = String(data: lineData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !line.isEmpty else { continue }
+            if let data = line.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let resultID = obj["dmenuResult"] as? String,
+               resultID == requestID {
+                close(fd)
+                if (obj["cancelled"] as? Bool) ?? false {
+                    finish(1)
+                }
+                if let selected = obj["line"] as? String {
+                    print(selected)
+                    finish(0)
+                }
+                finish(1)
+            }
+        }
+    }
+    close(fd)
+
+    // Connection closed without a streamed result — fall back to the <requestID>.result file.
+    if let selected = DMenuStaging.readResult(for: requestID), !selected.isEmpty {
+        print(selected)
+        finish(0)
+    }
+    finish(1)
+}
+
+/// `dms listen [topic]` (default `*`): SUBSCRIBE on a persistent socket connection and print each
+/// newline-delimited JSON event to stdout until Ctrl-C or the daemon closes the stream.
+func runListen(args: [String]) {
+    let topic = args.first ?? "*"
+    guard let fd = connectSocket() else {
+        writeStderr("dms listen: DMS daemon not running (socket \(getSocketPath()) missing) — start it with 'dms start'")
+        exit(3)
+    }
+    defer { close(fd) }
+
+    let subscribe = "SUBSCRIBE \(topic)\n"
+    _ = subscribe.utf8CString.withUnsafeBufferPointer { buf in
+        write(fd, buf.baseAddress!, buf.count - 1)
+    }
+
+    var buffer = Data()
+    var chunk = [UInt8](repeating: 0, count: 8192)
+    while true {
+        let n = read(fd, &chunk, chunk.count)
+        if n <= 0 { break }
+        buffer.append(contentsOf: chunk.prefix(n))
+        while let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+            let lineData = buffer.subdata(in: 0..<newlineIndex)
+            buffer.removeSubrange(0...newlineIndex)
+            if let line = String(data: lineData, encoding: .utf8), !line.isEmpty {
+                print(line)
+                fflush(stdout)
+            }
+        }
+    }
+}
+
+/// readline tab-completion over the known target/action vocabulary from `IPCCommand.parseCLI`.
+/// Builds the `char**` match list manually (common prefix first, then candidates, nil-terminated)
+/// because macOS libedit does not export `rl_completion_matches` to Swift.
+let dmsShellCompletion: @convention(c) (UnsafePointer<CChar>?, Int32, Int32) -> UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>? = { text, _, _ in
+    guard let text = text else { return nil }
+    let matches = IPCCommand.cliCompletions(forPrefix: String(cString: text))
+    guard !matches.isEmpty else { return nil }
+    var common = matches[0]
+    for match in matches.dropFirst() {
+        while !match.hasPrefix(common) && !common.isEmpty {
+            common = String(common.dropLast())
+        }
+    }
+    var entries: [UnsafeMutablePointer<CChar>?] = [strdup(common)]
+    entries.append(contentsOf: matches.map { strdup($0) })
+    entries.append(nil)
+    let buffer = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: entries.count)
+    for (index, entry) in entries.enumerated() {
+        buffer[index] = entry
+    }
+    return buffer
+}
+
+/// `dms shell`: interactive REPL — `dms> ` prompt, one IPC command per line over the socket,
+/// history in ~/.dms_shell_history, tab-completion over the CLI vocabulary.
+func runShell() {
+    let historyPath = (NSHomeDirectory() as NSString).appendingPathComponent(".dms_shell_history")
+    _ = read_history(historyPath)
+    stifle_history(500)
+    rl_attempted_completion_function = dmsShellCompletion
+
+    print("DankMacShell IPC shell (v\(version)) — type 'exit' or Ctrl-D to quit, Tab to complete.")
+    while true {
+        guard let raw = readline("dms> ") else {
+            print("")
+            break
+        }
+        let line = String(cString: raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        free(raw)
+        if line.isEmpty { continue }
+        if line == "exit" || line == "quit" { break }
+        add_history(line)
+        let command = line.lowercased().hasPrefix("ipc") ? line : "ipc call \(line)"
+        if let response = sendSocketCommand(command) {
+            print(response)
+        } else {
+            writeStderr("dms: daemon unreachable (is DankMacShell running? try 'dms start')")
+        }
+    }
+    _ = write_history(historyPath)
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
@@ -349,6 +551,15 @@ case "doctor":
         print("[✓] CBBlueLightClient: Night Shift dynamic lookup")
     }
     print("Doctor check complete.")
+
+case "dmenu":
+    runDMenu(args: Array(args.dropFirst()))
+
+case "listen":
+    runListen(args: Array(args.dropFirst()))
+
+case "shell":
+    runShell()
 
 case "ipc":
     // dms ipc call <target> <action> [args...]

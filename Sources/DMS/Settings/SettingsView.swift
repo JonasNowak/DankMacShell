@@ -487,6 +487,93 @@ public struct SettingsView: View {
             }
         }
 
+        SettingsCard(icon: "terminal.fill", title: "Terminal Theme Sync", subtitle: "Live-export the active M3 + Dank16 palette to terminal emulators (skips nix/home-manager managed files)", palette: palette) {
+            SettingsToggleRow(
+                title: "Sync Terminal Themes",
+                subtitle: "Write Ghostty / Kitty / Alacritty / iTerm2 theme files and ~/Library/Application Support/DMS/theme.json on every theme change",
+                isOn: Binding(
+                    get: { configStore.config.terminalThemeSync },
+                    set: { val in
+                        configStore.update { $0.terminalThemeSync = val }
+                        if val {
+                            TerminalThemeExporter.shared.exportIfEnabled(
+                                palette: themeStore.palette,
+                                themeName: themeStore.themeName,
+                                isDark: themeStore.palette.isDark
+                            )
+                        }
+                    }
+                ),
+                palette: palette
+            )
+
+            if configStore.config.terminalThemeSync {
+                Divider().opacity(0.3)
+
+                VStack(spacing: 10) {
+                    ForEach([
+                        ("Ghostty (~/.config/ghostty/themes/dms)", \DMSConfig.terminalThemeGhostty),
+                        ("Kitty (~/.config/kitty/dms-theme.conf)", \DMSConfig.terminalThemeKitty),
+                        ("Alacritty (~/.config/alacritty/dms-theme.toml)", \DMSConfig.terminalThemeAlacritty),
+                        ("iTerm2 Dynamic Profile (dms.json)", \DMSConfig.terminalThemeITerm2)
+                    ], id: \.0) { label, keyPath in
+                        SettingsToggleRow(
+                            title: label,
+                            subtitle: nil,
+                            isOn: Binding(
+                                get: { configStore.config[keyPath: keyPath] },
+                                set: { val in
+                                    configStore.update { $0[keyPath: keyPath] = val }
+                                    TerminalThemeExporter.shared.exportIfEnabled(
+                                        palette: themeStore.palette,
+                                        themeName: themeStore.themeName,
+                                        isDark: themeStore.palette.isDark
+                                    )
+                                }
+                            ),
+                            palette: palette
+                        )
+                    }
+                }
+
+                Divider().opacity(0.3)
+
+                HStack {
+                    if let lastExport = TerminalThemeExporter.shared.lastExportDate {
+                        Text("Last exported: \(lastExport.formatted(date: .omitted, time: .standard))")
+                            .font(.system(size: 9.5))
+                            .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                    }
+                    if !TerminalThemeExporter.shared.lastSkippedManaged.isEmpty {
+                        Text("Skipped (nix-managed): \(TerminalThemeExporter.shared.lastSkippedManaged.joined(separator: ", "))")
+                            .font(.system(size: 9.5))
+                            .foregroundColor(Color(hex: palette.warning.hex))
+                    }
+                    Spacer()
+                    Button(action: {
+                        TerminalThemeExporter.shared.exportIfEnabled(
+                            palette: themeStore.palette,
+                            themeName: themeStore.themeName,
+                            isDark: themeStore.palette.isDark
+                        )
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 10))
+                            Text("Export Now")
+                                .font(.system(size: 10.5, weight: .bold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: palette.primary.hex))
+                        .foregroundColor(Color(hex: palette.onPrimary.hex))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+
         SettingsCard(icon: "sun.max.fill", title: "Appearance Mode, Opacity, Blur & Shadows", palette: palette) {
             HStack {
                 Text("Theme Mode")

@@ -27,6 +27,7 @@
 - [Quick Start](#quick-start)
 - [Global Hotkeys](#global-hotkeys)
 - [DMS CLI (`dms`)](#dms-cli)
+- [Terminal Theme Sync & home-manager](#terminal-themes)
 - [Configuration](#configuration)
 - [URL Scheme (`dms://`)](#url-scheme)
 - [License](#license)
@@ -296,9 +297,99 @@ dms omniwm [get|sync|mode <mode>|direction <dir>|toggle]
 dms screenshot [region|full|window]
 dms toast <info|warn|error> <message>
 dms version
+
+# CLI Pipelines (v0.7)
+dms dmenu [--prompt <text>]     # Read candidates from stdin, pick one in the launcher, print it to stdout
+                                 # (exit 0 on selection, exit 1 on Esc/cancel)
+dms listen [topic]               # Stream newline-delimited JSON events from the daemon (default topic: *)
+                                 # topics: events.audio, events.battery, events.wifi, events.workspaces,
+                                 #         events.media, events.theme
+dms shell                        # Interactive IPC REPL (dms> prompt, history in ~/.dms_shell_history,
+                                 # tab-completion over the CLI vocabulary)
 ```
 
 </details>
+
+### `dms dmenu` — scriptable picker
+
+```bash
+printf 'alpha\nbeta\ngamma\n' | dms dmenu --prompt "Pick one"
+# -> shows the launcher in filter mode; the chosen line is printed to stdout
+```
+
+Candidates are staged in `~/Library/Application Support/DMS/dmenu/<requestID>.txt` and only the
+path + request ID travel over the socket, so the line protocol stays intact. The daemon writes the
+selection back on the same connection (and to `<requestID>.result` as a fallback).
+
+### `dms listen` — event stream
+
+```bash
+dms listen events.audio    # prints one JSON object per line until Ctrl-C
+```
+
+### `dms shell` — interactive IPC REPL
+
+```bash
+dms shell
+dms> theme get
+dms> audio setvolume 50
+```
+
+<a id="terminal-themes"></a>
+
+## 🖥️ Terminal Theme Sync & home-manager (v0.7)
+
+When the DMS theme changes, the shell live-exports the current palette to your terminal emulators
+(master switch `terminalThemeSync`, per-emulator toggles in Settings → Theme; Ghostty, Kitty and
+Alacritty default ON, iTerm2 OFF):
+
+| Emulator | File written |
+| --- | --- |
+| Ghostty | `$XDG_CONFIG_HOME/ghostty/themes/dms` (or `~/.config/ghostty/themes/dms`) |
+| Kitty | `$XDG_CONFIG_HOME/kitty/dms-theme.conf` |
+| Alacritty | `$XDG_CONFIG_HOME/alacritty/dms-theme.toml` |
+| iTerm2 | `~/Library/Application Support/iTerm2/DynamicProfiles/dms.json` |
+
+Config dirs resolve via `XDG_CONFIG_HOME` when set, else `~/.config` — never hardcoded.
+
+In addition, DMS always writes a canonical machine-readable document to
+`~/Library/Application Support/DMS/theme.json` (full `ThemePalette` + `Dank16Palette` + theme name
++ dark/light flag, atomic tmp+rename write). This is the read-only interface for
+home-manager / stylix-style setups.
+
+### home-manager / Nix compatibility
+
+DMS never writes a file that home-manager manages: before writing, each target is resolved and if
+it is a symlink into `/nix/store` (read-only), that emulator is skipped with a warning in the
+unified log and the remaining emulators are still exported. Instead, let home-manager own the
+wrapper config and include the DMS-written file:
+
+```nix
+# kitty — home-manager owns kitty.conf, DMS owns the included theme.
+# The include MUST come after any theme include so DMS colors win:
+programs.kitty.extraConfig = "include dms-theme.conf";
+# ~/.config/kitty/dms-theme.conf is written by DMS (not declared by home-manager)
+
+# ghostty
+programs.ghostty.settings.config-file = "themes/dms"; # DMS writes ~/.config/ghostty/themes/dms
+
+# alacritty
+programs.alacritty.settings.import = [ "dms-theme.toml" ]; # DMS writes ~/.config/alacritty/dms-theme.toml
+```
+
+Note on kitty: kitty's auto-reload watcher only watches its *top-level* config file, never
+`include`d files — and under home-manager that top-level `kitty.conf` is a read-only `/nix/store`
+symlink that never changes, so kitty would never reload on its own. After writing `dms-theme.conf`,
+DMS therefore sends `SIGUSR1` (kitty's own config-reload signal) to every running kitty process,
+and logs a warning if your `kitty.conf` does not include `dms-theme.conf`.
+
+iTerm2 Dynamic Profiles work natively — that directory is not home-manager managed, so DMS writes
+`dms.json` there directly and iTerm2 picks it up as a dynamic profile.
+
+For stylix-style pipelines, read `~/Library/Application Support/DMS/theme.json` — it always exists
+and is always writable, regardless of which emulator targets are managed.
+
+
 
 <a id="configuration"></a>
 
@@ -321,6 +412,11 @@ The configuration file is automatically created with defaults on first launch an
   "launcherHotkey": true,
   "weatherUnits": "celsius",
   "searchProvider": "google",
+  "terminalThemeSync": true,
+  "terminalThemeGhostty": true,
+  "terminalThemeKitty": true,
+  "terminalThemeAlacritty": true,
+  "terminalThemeITerm2": false,
   "pinnedApps": [
     "com.apple.Terminal",
     "com.apple.Safari",

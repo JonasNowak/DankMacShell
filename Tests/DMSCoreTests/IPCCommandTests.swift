@@ -211,4 +211,59 @@ struct IPCCommandTests {
         // Empty args defaults to .status
         #expect(IPCCommand.parseCLI(args: []) == .status)
     }
+
+    @Test("CLI Parsing for v0.7 dmenu / listen / shell")
+    func testCLIParsingDMenuListenShell() {
+        // dmenu with explicit request ID, prompt and staged candidates file
+        #expect(IPCCommand.parseCLI(args: ["dmenu", "ABC123", "--prompt", "Pick one", "--file", "/tmp/x.txt"])
+                == .dmenu(requestID: "ABC123", prompt: "Pick one", candidatesFile: "/tmp/x.txt"))
+        // short flags
+        #expect(IPCCommand.parseCLI(args: ["dmenu", "REQ", "-p", "Choose", "-f", "/tmp/y.txt"])
+                == .dmenu(requestID: "REQ", prompt: "Choose", candidatesFile: "/tmp/y.txt"))
+        // prompt with multiple words, no file
+        #expect(IPCCommand.parseCLI(args: ["dmenu", "REQ2", "--prompt", "Pick", "a", "line"])
+                == .dmenu(requestID: "REQ2", prompt: "Pick a line", candidatesFile: ""))
+        // no request ID -> a fresh one is generated
+        let generated = IPCCommand.parseCLI(args: ["dmenu"])
+        if case .dmenu(let requestID, let prompt, let file) = generated {
+            #expect(!requestID.isEmpty)
+            #expect(prompt.isEmpty)
+            #expect(file.isEmpty)
+        } else {
+            Issue.record("expected .dmenu, got \(generated)")
+        }
+        // also reachable through the `ipc call` prefix
+        #expect(IPCCommand.parseCLI(args: ["ipc", "call", "listen", "events.audio"]) == .listen(topic: "events.audio"))
+
+        // listen defaults to the wildcard topic
+        #expect(IPCCommand.parseCLI(args: ["listen"]) == .listen(topic: "*"))
+        #expect(IPCCommand.parseCLI(args: ["listen", "events.audio"]) == .listen(topic: "events.audio"))
+        #expect(IPCCommand.parseCLI(args: ["listen", "events.theme"]) == .listen(topic: "events.theme"))
+
+        // shell REPL
+        #expect(IPCCommand.parseCLI(args: ["shell"]) == .shell)
+    }
+
+    @Test("CLI completion vocabulary covers dmenu / listen / shell")
+    func testCLIVocabulary() {
+        #expect(IPCCommand.cliTargets.contains("dmenu"))
+        #expect(IPCCommand.cliTargets.contains("listen"))
+        #expect(IPCCommand.cliTargets.contains("shell"))
+        #expect(IPCCommand.cliActions(for: "listen").contains("events.media"))
+        #expect(IPCCommand.cliActions(for: "listen").contains("events.theme"))
+        #expect(IPCCommand.cliActions(for: "dmenu").contains("--prompt"))
+
+        let dmenuCompletions = IPCCommand.cliCompletions(forPrefix: "dm")
+        #expect(dmenuCompletions.contains("dmenu"))
+        #expect(!dmenuCompletions.contains("listen"))
+        #expect(IPCCommand.cliCompletions(forPrefix: "da").contains("danksearch"))
+
+        let listenCompletions = IPCCommand.cliCompletions(forPrefix: "events.")
+        #expect(listenCompletions.contains("events.audio"))
+        #expect(listenCompletions.contains("events.theme"))
+
+        // Empty prefix returns the whole vocabulary.
+        #expect(IPCCommand.cliCompletions(forPrefix: "") == IPCCommand.cliVocabulary)
+        #expect(IPCCommand.cliVocabulary.contains("shell"))
+    }
 }
