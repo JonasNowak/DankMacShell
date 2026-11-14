@@ -14,7 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/JonasNowak/MaterialMacLibrary.git", from: "0.1.0"),
-        .package(url: "https://github.com/JonasNowak/dank-theme-engine.git", from: "0.1.0"),
+        .package(url: "https://github.com/JonasNowak/dank-theme-engine.git", from: "0.1.1"),
     ],
     targets: [
         // Pure logic: M3 color tokens, dynamic theme generator, config, fuzzy app search, telemetry models, IPC, clipboard, notepad, weather.

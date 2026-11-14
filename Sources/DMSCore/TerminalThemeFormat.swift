@@ -237,31 +237,80 @@ public enum EmulatorReload {
         (try DankThemeEngine.kittyGUIPids()).map(Int32.init)
     }
 
+    /// Checks whether a candidate parent-directory prefix before `/kitty` represents one
+    /// filesystem path (which may contain spaces, e.g. `Home Manager Apps`) rather than an
+    /// earlier command plus space-separated arguments.
+    private static func isSingleKittyDirPrefix(_ prefix: Substring) -> Bool {
+        guard let firstWS = prefix.firstIndex(where: { $0 == " " || $0 == "\t" }) else {
+            return true
+        }
+        guard prefix[..<firstWS].contains("/") else { return false }
+        if prefix.contains(" /") || prefix.contains("\t/") { return false }
+        if prefix.hasSuffix(".app/Contents/MacOS") { return true }
+        return !prefix.contains(" -")
+            && !prefix.contains("\t-")
+            && !prefix.contains(" +")
+            && !prefix.contains("\t+")
+            && !prefix.contains(" @")
+            && !prefix.contains("\t@")
+    }
+
+    private static func splitKittyExeAndArgs(_ rest: Substring) -> Substring? {
+        if rest == "kitty" {
+            return rest[rest.endIndex...]
+        }
+        if rest.hasPrefix("kitty") {
+            let after = rest.dropFirst("kitty".count)
+            if let ch = after.first, ch == " " || ch == "\t" {
+                return after
+            }
+        }
+
+        let needle = "/kitty"
+        var searchStart = rest.startIndex
+        while let range = rest[searchStart...].range(of: needle) {
+            let atBoundary = range.upperBound == rest.endIndex
+                || rest[range.upperBound] == " "
+                || rest[range.upperBound] == "\t"
+            if atBoundary && isSingleKittyDirPrefix(rest[..<range.lowerBound]) {
+                return rest[range.upperBound...]
+            }
+            searchStart = rest.index(after: range.lowerBound)
+        }
+        return nil
+    }
+
+    private static func isKittyGUITrailingArgs(_ trailing: Substring) -> Bool {
+        let args = trailing.split(whereSeparator: { $0 == " " || $0 == "\t" })
+        guard let firstArg = args.first else { return true }
+        if firstArg.hasPrefix("@") { return false }
+        if firstArg.hasPrefix("+") {
+            if firstArg == "+" {
+                return args.count > 1 && args[1] == "open"
+            }
+            return firstArg == "+open"
+        }
+        return true
+    }
+
     /// Parses `ps -axww -o pid=,command=` output and returns the pids of kitty GUI boss processes,
-    /// replicating kitty's `is_kitty_gui_cmdline`: executable basename `kitty`, and the second
-    /// argument must not be `@...` (remote-control CLI) or `+...` (kittens), except `+open`.
+    /// replicating kitty's `is_kitty_gui_cmdline`: executable basename `kitty` (including paths
+    /// containing spaces such as Home Manager's `~/Applications/Home Manager Apps/kitty.app/...`),
+    /// and the first argument must not be `@...` (remote-control CLI) or `+...` (kittens), except
+    /// `+open`.
     public static func kittyGUIPids(fromPSOutput psOutput: String) -> [Int32] {
         var pids: [Int32] = []
-        for line in psOutput.split(separator: "\n") {
-            let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
-            guard let pid = Int32(parts.first ?? ""), parts.count >= 2 else { continue }
-            let cmd = Array(parts.dropFirst())
-            guard (cmd[0] as NSString).lastPathComponent == "kitty" else { continue }
-            if cmd.count == 1 {
+        for rawLine in psOutput.split(separator: "\n") {
+            let trimmed = rawLine.drop(while: { $0 == " " || $0 == "\t" })
+            guard let pidEnd = trimmed.firstIndex(where: { $0 == " " || $0 == "\t" }),
+                  let pid = Int32(trimmed[..<pidEnd]) else {
+                continue
+            }
+            let rest = trimmed[pidEnd...].drop(while: { $0 == " " || $0 == "\t" })
+            guard !rest.isEmpty, let trailing = splitKittyExeAndArgs(rest) else { continue }
+            if isKittyGUITrailingArgs(trailing) {
                 pids.append(pid)
-                continue
             }
-            let second = cmd[1]
-            if second.hasPrefix("@") { continue }
-            if second.hasPrefix("+") {
-                if second == "+" {
-                    if cmd.count > 2 && cmd[2] == "open" { pids.append(pid) }
-                } else if second == "+open" {
-                    pids.append(pid)
-                }
-                continue
-            }
-            pids.append(pid)
         }
         return pids
     }

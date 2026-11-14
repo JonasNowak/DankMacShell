@@ -107,18 +107,34 @@ public final class TerminalThemeExporter: ObservableObject {
     /// `reload_conf_in_all_kitties()` use) to every running kitty GUI process.
     /// Process discovery + signaling live in the Rust-backed DankThemeEngine.
     private static func signalKittyConfigReload(logger: Logger) {
-        guard let pids = try? DankThemeEngine.signalKittyReload() else { return }
-        for pid in pids {
-            logger.info("Sent SIGUSR1 to kitty (pid \(pid)) to reload its config")
+        do {
+            let pids = try DankThemeEngine.signalKittyReload()
+            if pids.isEmpty {
+                logger.debug("No running kitty GUI process found to signal SIGUSR1")
+                return
+            }
+            for pid in pids {
+                logger.info("Sent SIGUSR1 to kitty (pid \(pid)) to reload its config")
+            }
+        } catch {
+            logger.error("Failed to signal kitty reload: \(error.localizedDescription)")
         }
     }
 
-    /// Warns when the resolved kitty.conf does not include the DMS theme file — the file is
-    /// written, but kitty will never load it until the include exists (home-manager extraConfig).
+    /// Warns when the resolved kitty.conf does not include the DMS theme file — or when
+    /// kitty OS auto-theme files (`*-theme.auto.conf`) are present and would shadow `dms-theme.conf`.
     private static func warnIfKittyConfigMissesInclude(logger: Logger) {
-        let confPath = TerminalThemePaths.configHome()
-            .appendingPathComponent("kitty/kitty.conf", isDirectory: false)
-        guard FileManager.default.fileExists(atPath: confPath.path) else { return }
+        let kittyDir = TerminalThemePaths.configHome()
+            .appendingPathComponent("kitty", isDirectory: true)
+        let fm = FileManager.default
+        for autoFile in ["dark-theme.auto.conf", "light-theme.auto.conf", "no-preference-theme.auto.conf"] {
+            let autoPath = kittyDir.appendingPathComponent(autoFile, isDirectory: false)
+            if fm.fileExists(atPath: autoPath.path) {
+                logger.warning("\(autoPath.path, privacy: .public) exists and overrides kitty.conf colors on appearance changes — remove it so DMS controls kitty colors")
+            }
+        }
+        let confPath = kittyDir.appendingPathComponent("kitty.conf", isDirectory: false)
+        guard fm.fileExists(atPath: confPath.path) else { return }
         if !EmulatorReload.kittyConfigReferencesTheme(atPath: confPath.path) {
             logger.warning("\(confPath.path, privacy: .public) does not include dms-theme.conf — add `include dms-theme.conf` to your kitty config (e.g. home-manager programs.kitty.extraConfig) so kitty loads the DMS theme")
         }
