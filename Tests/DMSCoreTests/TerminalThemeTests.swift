@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import DMSCore
+import DankThemeEngine
 
 @Suite("Terminal Theme Format Tests (v0.7)")
 struct TerminalThemeTests {
@@ -321,6 +322,41 @@ struct TerminalThemeTests {
         #expect(!EmulatorReload.kittyConfigReferencesTheme("# include dms-theme.conf\nfont_size 14\n"))
         #expect(!EmulatorReload.kittyConfigReferencesTheme("include /nix/store/xyz/themes/rose-pine-moon.conf\n"))
         #expect(!EmulatorReload.kittyConfigReferencesTheme(""))
+    }
+
+    // MARK: - DankThemeEngine parity
+
+    @Test("DankThemeEngine parity: target registry, render output, managed symlink")
+    func testDankThemeEngineParity() throws {
+        // Every DMSCore emulator maps to a registered engine target id.
+        let targetIds = try DankThemeEngine.listTargets().map(\.id)
+        for emulator in TerminalEmulator.allCases {
+            #expect(targetIds.contains(emulator.rawValue))
+            #expect(emulator.dteTargetId == emulator.rawValue)
+        }
+
+        // Rendering through the engine matches the DMSCore renderer byte-for-byte.
+        let doc = TerminalThemeDocument(
+            themeName: palette.name,
+            isDark: palette.isDark,
+            palette: palette,
+            dank16: dank16
+        )
+        for emulator in TerminalEmulator.allCases {
+            let dte = try DankThemeEngine.renderTerminal(targetId: emulator.rawValue, doc: doc.dteDocument)
+            #expect(dte.targetId == emulator.rawValue)
+            #expect(dte.content == rendered(emulator))
+        }
+
+        // Managed-symlink detection for the default /nix/store prefix delegates to the engine,
+        // so both entry points agree on every path (existing store files, symlink chains,
+        // dangling links, and plain non-store paths).
+        let storePath = "/nix/store/abc-dms-theme/x.conf"
+        #expect(DankThemeEngine.isManagedSymlink(storePath) == TerminalThemeSecurity.isManagedSymlink(path: storePath))
+        let outside = "/tmp/dms-not-managed-\(UUID().uuidString).conf"
+        #expect(!DankThemeEngine.isManagedSymlink(outside))
+        #expect(!TerminalThemeSecurity.isManagedSymlink(path: outside))
+        #expect(DankThemeEngine.isManagedSymlink(outside) == TerminalThemeSecurity.isManagedSymlink(path: outside))
     }
 
     // MARK: - Config toggles

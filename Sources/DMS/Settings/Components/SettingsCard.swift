@@ -1,13 +1,18 @@
 import SwiftUI
 import DMSCore
+import MaterialMacLibrary
 
 /// Material 3 Card container for settings sections.
+/// Chrome is delegated to `MaterialComponents.MaterialSettingsCard` with the bridged
+/// `MaterialTheme`; the explicit `palette` parameter is forwarded to the library card.
 public struct SettingsCard<Content: View>: View {
     public let icon: String?
     public let title: String?
     public let subtitle: String?
     public let palette: DMSPalette
     public let content: Content
+
+    @ObservedObject private var theme = ThemeStore.shared
 
     public init(
         icon: String? = nil,
@@ -24,50 +29,21 @@ public struct SettingsCard<Content: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let title = title {
-                HStack(spacing: 8) {
-                    if let icon = icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(Color(hex: palette.primary.hex))
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(hex: palette.onSurface.hex))
-                        if let subtitle = subtitle {
-                            Text(subtitle)
-                                .font(.system(size: 11))
-                                .foregroundColor(Color(hex: palette.outline.hex))
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(.bottom, 2)
-            }
-
+        MaterialSettingsCard(icon: icon, title: title, subtitle: subtitle, palette: palette) {
             content
         }
-        .padding(12)
-        .background(
-            ThemeStore.shared.isLightMode
-                ? Color(hex: palette.surfaceContainerLowest.hex).opacity(0.85)
-                : Color(hex: palette.surfaceContainerHigh.hex).opacity(0.75)
-        )
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(hex: palette.outlineVariant.hex).opacity(0.35), lineWidth: 1)
-        )
+        .materialTheme(theme.materialTheme)
     }
 }
 
 /// Material 3 segmented pill selector (e.g., [✓ Left | Right | Hidden] from DMS spec/screenshots).
+/// Delegated to `MaterialComponents.MaterialSegmentedControl`.
 public struct SettingsSegmentedControl<T: Hashable & Equatable>: View {
     public let options: [(title: String, value: T)]
     @Binding public var selection: T
     public let palette: DMSPalette
+
+    @ObservedObject private var theme = ThemeStore.shared
 
     public init(
         options: [(title: String, value: T)],
@@ -80,43 +56,13 @@ public struct SettingsSegmentedControl<T: Hashable & Equatable>: View {
     }
 
     public var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<options.count, id: \.self) { idx in
-                let item = options[idx]
-                let isSelected = selection == item.value
-
-                Button(action: {
-                    selection = item.value
-                }) {
-                    HStack(spacing: 5) {
-                        if isSelected {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(Color(hex: palette.primary.hex))
-                        }
-                        Text(item.title)
-                            .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                            .foregroundColor(isSelected ? Color(hex: palette.onPrimaryContainer.hex) : Color(hex: palette.onSurfaceVariant.hex))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        isSelected
-                            ? Color(hex: palette.primaryContainer.hex)
-                            : Color(hex: palette.surfaceContainerLow.hex).opacity(0.6)
-                    )
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(3)
-        .background(Color(hex: palette.surfaceContainerLow.hex))
-        .cornerRadius(10)
+        MaterialSegmentedControl(options: options, selection: $selection, palette: palette)
+            .materialTheme(theme.materialTheme)
     }
 }
 
 /// Material 3 Slider row with title, live value readout, and explanatory subtext.
+/// Delegated to `MaterialComponents.MaterialSliderRow`.
 public struct SettingsSliderRow: View {
     public let title: String
     public let valueFormatted: String
@@ -125,6 +71,8 @@ public struct SettingsSliderRow: View {
     public let step: Double
     public let helper: String?
     public let palette: DMSPalette
+
+    @ObservedObject private var theme = ThemeStore.shared
 
     public init(
         title: String,
@@ -145,39 +93,28 @@ public struct SettingsSliderRow: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: palette.onSurface.hex))
-                Spacer()
-                Text(valueFormatted)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color(hex: palette.primary.hex))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(hex: palette.primaryContainer.hex).opacity(0.5))
-                    .cornerRadius(4)
-            }
-
-            Slider(value: $value, in: range, step: step)
-                .tint(Color(hex: palette.primary.hex))
-
-            if let helper = helper {
-                Text(helper)
-                    .font(.system(size: 10))
-                    .foregroundColor(Color(hex: palette.outline.hex))
-            }
-        }
+        MaterialSliderRow(
+            title: title,
+            valueFormatted: valueFormatted,
+            value: $value,
+            range: range,
+            step: step,
+            helper: helper,
+            palette: palette
+        )
+        .materialTheme(theme.materialTheme)
     }
 }
 
-/// Material 3 Toggle row with icon, title, description, and switch.
+/// Material 3 Toggle row with title, description, and switch.
+/// Delegated to `MaterialComponents.MaterialToggleRow`.
 public struct SettingsToggleRow: View {
     public let title: String
     public let subtitle: String?
     @Binding public var isOn: Bool
     public let palette: DMSPalette
+
+    @ObservedObject private var theme = ThemeStore.shared
 
     public init(
         title: String,
@@ -192,22 +129,7 @@ public struct SettingsToggleRow: View {
     }
 
     public var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: palette.onSurface.hex))
-                if let subtitle = subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(hex: palette.outline.hex))
-                }
-            }
-            Spacer()
-            Toggle("", isOn: $isOn)
-                .toggleStyle(.switch)
-                .tint(Color(hex: palette.primary.hex))
-                .labelsHidden()
-        }
+        MaterialToggleRow(title: title, subtitle: subtitle, isOn: $isOn, palette: palette)
+            .materialTheme(theme.materialTheme)
     }
 }

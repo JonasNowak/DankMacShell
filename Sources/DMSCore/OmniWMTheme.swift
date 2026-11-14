@@ -1,4 +1,5 @@
 import Foundation
+import DankThemeEngine
 
 /// Defines how DankMacShell derives the two colors for OmniWM's active window border gradient.
 public enum OmniWMGradientMode: String, Codable, CaseIterable, Sendable {
@@ -34,6 +35,16 @@ public enum OmniWMGradientMode: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public extension OmniWMGradientMode {
+    /// Converts to the `DankThemeEngine` gradient mode (identical raw values).
+    var dteMode: DTEOmniWMGradientMode { DTEOmniWMGradientMode(rawValue: rawValue) ?? .expressive }
+
+    /// Creates a mode from a `DankThemeEngine` gradient mode.
+    init(dte: DTEOmniWMGradientMode) {
+        self = OmniWMGradientMode(rawValue: dte.rawValue) ?? .expressive
+    }
+}
+
 /// OmniWM window border gradient direction.
 public enum OmniWMGradientDirection: String, Codable, CaseIterable, Sendable {
     case topLeftToBottomRight = "topLeftToBottomRight"
@@ -47,10 +58,22 @@ public enum OmniWMGradientDirection: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// Pure updater for OmniWM `settings.toml`.
+public extension OmniWMGradientDirection {
+    /// Converts to the `DankThemeEngine` gradient direction (identical raw values).
+    var dteDirection: DTEOmniWMGradientDirection { DTEOmniWMGradientDirection(rawValue: rawValue) ?? .topLeftToBottomRight }
+
+    /// Creates a direction from a `DankThemeEngine` gradient direction.
+    init(dte: DTEOmniWMGradientDirection) {
+        self = OmniWMGradientDirection(rawValue: dte.rawValue) ?? .topLeftToBottomRight
+    }
+}
+
+/// Pure updater for OmniWM `settings.toml`. The TOML parser/writer and gradient
+/// resolution are delegated to the Rust-backed `DankThemeEngine.updateOmniWMToml(...)`.
 public struct OmniWMThemeUpdater: Sendable {
 
     /// Derives the start and end colors for the gradient given the current palette and mode.
+    /// Field selection only — exact parity with the engine's `resolve_colors`.
     public static func resolveColors(
         palette: ThemePalette,
         secondarySeed: M3Color? = nil,
@@ -72,6 +95,7 @@ public struct OmniWMThemeUpdater: Sendable {
     }
 
     /// Surgically updates the theme-bearing sections in `settings.toml` without mutating any hotkeys, routing, or comments.
+    /// Delegates to `DankThemeEngine.updateOmniWMToml(...)`; on engine failure the input is returned unchanged.
     public static func applyTheme(
         to tomlContent: String,
         palette: ThemePalette,
@@ -81,137 +105,20 @@ public struct OmniWMThemeUpdater: Sendable {
         syncOverview: Bool = true,
         syncWorkspaceBar: Bool = true
     ) -> String {
-        let (start, end, solid, isGradient) = resolveColors(palette: palette, secondarySeed: secondarySeed, mode: mode)
-
-        var updates: [String: [String: String]] = [:]
-
-        // 1. [borders.color]
-        updates["borders.color"] = [
-            "alpha": "1.0",
-            "red": String(format: "%.6f", solid.red),
-            "green": String(format: "%.6f", solid.green),
-            "blue": String(format: "%.6f", solid.blue)
-        ]
-
-        // 2. [borders.gradient]
-        updates["borders.gradient"] = [
-            "direction": "\"\(direction.rawValue)\"",
-            "enabled": isGradient ? "true" : "false"
-        ]
-
-        // 3. [borders.gradient.start]
-        updates["borders.gradient.start"] = [
-            "alpha": "1.0",
-            "red": String(format: "%.6f", start.red),
-            "green": String(format: "%.6f", start.green),
-            "blue": String(format: "%.6f", start.blue)
-        ]
-
-        // 4. [borders.gradient.end]
-        updates["borders.gradient.end"] = [
-            "alpha": "1.0",
-            "red": String(format: "%.6f", end.red),
-            "green": String(format: "%.6f", end.green),
-            "blue": String(format: "%.6f", end.blue)
-        ]
-
-        // 5. Overview window borders
-        if syncOverview {
-            updates["overview.windowBorders.hovered"] = [
-                "alpha": "1.0",
-                "red": String(format: "%.6f", palette.tertiary.red),
-                "green": String(format: "%.6f", palette.tertiary.green),
-                "blue": String(format: "%.6f", palette.tertiary.blue)
-            ]
-            updates["overview.windowBorders.selected"] = [
-                "alpha": "1.0",
-                "red": String(format: "%.6f", palette.primary.red),
-                "green": String(format: "%.6f", palette.primary.green),
-                "blue": String(format: "%.6f", palette.primary.blue)
-            ]
-            updates["overview.windowBorders.normal"] = [
-                "alpha": "0.5",
-                "red": String(format: "%.6f", palette.outline.red),
-                "green": String(format: "%.6f", palette.outline.green),
-                "blue": String(format: "%.6f", palette.outline.blue)
-            ]
+        let config = DTEOmniWMConfig(
+            mode: mode.dteMode,
+            direction: direction.dteDirection,
+            syncOverview: syncOverview,
+            syncWorkspaceBar: syncWorkspaceBar,
+            secondarySeed: secondarySeed?.hex
+        )
+        if let updated = try? DankThemeEngine.updateOmniWMToml(
+            tomlContent,
+            palette: palette.dtePalette,
+            config: config
+        ) {
+            return updated
         }
-
-        // 6. Workspace bar accent
-        if syncWorkspaceBar {
-            updates["workspaceBar.accentColor"] = [
-                "alpha": "1.0",
-                "red": String(format: "%.6f", palette.primary.red),
-                "green": String(format: "%.6f", palette.primary.green),
-                "blue": String(format: "%.6f", palette.primary.blue)
-            ]
-        }
-
-        return updateTOML(content: tomlContent, updates: updates)
-    }
-
-    private static func updateTOML(content: String, updates: [String: [String: String]]) -> String {
-        var remainingUpdates = updates
-        let lines = content.components(separatedBy: "\n")
-        var outputLines: [String] = []
-        var currentSection: String?
-        var sectionKeysSeen = Set<String>()
-
-        let finishSection = { (sec: String?) in
-            guard let sec = sec, let keyMap = remainingUpdates[sec] else { return }
-            for (k, v) in keyMap.sorted(by: { $0.key < $1.key }) {
-                if !sectionKeysSeen.contains(k) {
-                    outputLines.append("\(k) = \(v)")
-                }
-            }
-            remainingUpdates.removeValue(forKey: sec)
-        }
-
-        for line in lines {
-            let stripped = line.trimmingCharacters(in: .whitespaces)
-
-            // Header line: [section] or [[array_section]]
-            if stripped.hasPrefix("[") && stripped.hasSuffix("]") && !stripped.hasPrefix("[[") {
-                finishSection(currentSection)
-                let secName = stripped.trimmingCharacters(in: CharacterSet(charactersIn: "[] \t"))
-                currentSection = secName
-                sectionKeysSeen.removeAll()
-                outputLines.append(line)
-                continue
-            } else if stripped.hasPrefix("[[") {
-                finishSection(currentSection)
-                currentSection = nil
-                sectionKeysSeen.removeAll()
-                outputLines.append(line)
-                continue
-            }
-
-            if let sec = currentSection, let keyMap = remainingUpdates[sec] {
-                if stripped.contains("=") && !stripped.hasPrefix("#") {
-                    let parts = stripped.split(separator: "=", maxSplits: 1)
-                    let key = parts[0].trimmingCharacters(in: .whitespaces)
-                    if let newVal = keyMap[key] {
-                        outputLines.append("\(key) = \(newVal)")
-                        sectionKeysSeen.insert(key)
-                        continue
-                    }
-                }
-            }
-
-            outputLines.append(line)
-        }
-
-        finishSection(currentSection)
-
-        // Any sections that didn't exist in the input file at all:
-        for (secName, keyMap) in remainingUpdates.sorted(by: { $0.key < $1.key }) {
-            outputLines.append("")
-            outputLines.append("[\(secName)]")
-            for (k, v) in keyMap.sorted(by: { $0.key < $1.key }) {
-                outputLines.append("\(k) = \(v)")
-            }
-        }
-
-        return outputLines.joined(separator: "\n")
+        return tomlContent
     }
 }

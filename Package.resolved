@@ -1,0 +1,24 @@
+{
+  "originHash" : "727c9cf144a06aaa91b24e02ab9489938c95788b5a378ceb6e1d09cf967164ac",
+  "pins" : [
+    {
+      "identity" : "dank-theme-engine",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/JonasNowak/dank-theme-engine.git",
+      "state" : {
+        "revision" : "eed704c899fd1bf3a893891cfac9f13911873b90",
+        "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "materialmaclibrary",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/JonasNowak/MaterialMacLibrary.git",
+      "state" : {
+        "revision" : "c6ee01a13aa608f650716b6228aa9e0f00598b4e",
+        "version" : "0.1.0"
+      }
+    }
+  ],
+  "version" : 3
+}

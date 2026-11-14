@@ -1,7 +1,12 @@
 import SwiftUI
 import DMSCore
+import MaterialMacLibrary
 
 /// Edit mode bottom toolbar with Add Tile, Undo, Redo, Reset, and Done actions.
+/// The Add Tile / Reset / Done bar chrome is delegated to
+/// `MaterialComponents.MaterialFloatingEditChrome` (`.bar` style) with the bridged
+/// `MaterialTheme`; Undo/Redo remain DMS-specific circular actions wired to the
+/// control-center undo stack.
 public struct CcEditChrome: View {
     @ObservedObject var themeStore = ThemeStore.shared
     public let canUndo: Bool
@@ -11,6 +16,8 @@ public struct CcEditChrome: View {
     public let onRedo: () -> Void
     public let onReset: () -> Void
     public let onDone: () -> Void
+
+    @Environment(\.materialTheme) private var m3
 
     public init(
         canUndo: Bool,
@@ -31,85 +38,43 @@ public struct CcEditChrome: View {
     }
 
     public var body: some View {
-        let p = themeStore.palette
-
         HStack(spacing: 8) {
-            // Add Tile Button
-            Button(action: onAddTile) {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .bold))
-                    Text("Add Tile")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color(hex: p.primaryContainer.hex))
-                .foregroundColor(Color(hex: p.onPrimaryContainer.hex))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            // Undo Button
-            Button(action: onUndo) {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(canUndo ? Color(hex: p.onSurface.hex) : Color(hex: p.outline.hex).opacity(0.4))
-                    .frame(width: 26, height: 26)
-                    .background(Color(hex: p.surfaceContainerHighest.hex).opacity(canUndo ? 1.0 : 0.5))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!canUndo)
-
-            // Redo Button
-            Button(action: onRedo) {
-                Image(systemName: "arrow.uturn.forward")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(canRedo ? Color(hex: p.onSurface.hex) : Color(hex: p.outline.hex).opacity(0.4))
-                    .frame(width: 26, height: 26)
-                    .background(Color(hex: p.surfaceContainerHighest.hex).opacity(canRedo ? 1.0 : 0.5))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!canRedo)
-
-            // Reset Button
-            Button(action: onReset) {
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.counterclockwise")
-                    Text("Reset")
-                }
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(Color(hex: p.surfaceContainerHighest.hex))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-
-            // Done Button
-            Button(action: onDone) {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                    Text("Done")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(Color(hex: p.primary.hex))
-                .foregroundColor(Color(hex: p.onPrimary.hex))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
+            undoButton
+            redoButton
+            MaterialFloatingEditChrome(
+                addTitle: "Add Tile",
+                onAdd: onAddTile,
+                onReset: onReset,
+                onDone: onDone,
+                style: .bar
+            )
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color(hex: p.surfaceContainerHigh.hex))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .materialTheme(themeStore.materialTheme)
+    }
+
+    private var undoButton: some View {
+        Button(action: onUndo) {
+            Image(systemName: "arrow.uturn.backward")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(canUndo ? m3.onSurface : m3.outline.opacity(0.4))
+                .frame(width: 26, height: 26)
+                .background(m3.surfaceContainerHighest.opacity(canUndo ? 1.0 : 0.5))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canUndo)
+    }
+
+    private var redoButton: some View {
+        Button(action: onRedo) {
+            Image(systemName: "arrow.uturn.forward")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(canRedo ? m3.onSurface : m3.outline.opacity(0.4))
+                .frame(width: 26, height: 26)
+                .background(m3.surfaceContainerHighest.opacity(canRedo ? 1.0 : 0.5))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canRedo)
     }
 }

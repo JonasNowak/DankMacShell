@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import DMSCore
+import MaterialMacLibrary
 
 // MARK: - Popout Layout Helper (SURF-001 Connected Mode Positioning)
 
@@ -8,6 +9,7 @@ import DMSCore
 /// according to DMS specification `SURF-001`.
 /// In connected mode ("Gothic Corners"), the popout attaches flush to DankBar (`gap = 0`)
 /// and expands its dimensions to accommodate concave fillet flanges that bridge into the bar.
+/// Pure positioning math is delegated to `MaterialComponents.PopoutLayoutHelper`.
 @MainActor
 public struct PopoutLayoutHelper {
     public static func frame(
@@ -21,94 +23,30 @@ public struct PopoutLayoutHelper {
         let config = ConfigStore.shared.config
         let isConnected = config.gothCornersEnabled && !anchorToControlCenter
         let barPosition = config.barPosition.lowercased()
-        let isBottom = barPosition == "bottom"
-        let isVertical = barPosition == "left" || barPosition == "right"
         let filletR: CGFloat = isConnected ? CGFloat(config.barConfigs.first?.gothFilletRadius ?? 14.0) : 0.0
 
-        let totalWidth: CGFloat = (isConnected && !isVertical) ? (bodyWidth + 2 * filletR) : bodyWidth
-        let totalHeight: CGFloat = (isConnected && isVertical) ? (bodyHeight + 2 * filletR) : bodyHeight
-        let gap: CGFloat = isConnected ? 0.0 : 8.0
-
-        let visibleFrame = screen.visibleFrame
-        let fullFrame = screen.frame
-        let mouseLoc = NSEvent.mouseLocation
-
         let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == screen }) ?? DankBarController.shared.panel
-        let barFrame = barPanel.frame
 
-        var xPos: CGFloat
-        var yPos: CGFloat
-
-        if anchorToControlCenter {
-            let ccPanel = ControlCenterController.shared.panel
-            let ccFrame = ccPanel.frame
-            xPos = ccFrame.width > 0 ? ccFrame.minX : (fullFrame.maxX - totalWidth - 12)
-            if isBottom {
-                yPos = min(visibleFrame.maxY - totalHeight - gap, ccFrame.maxY + gap)
-            } else if !isVertical {
-                yPos = ccFrame.height > 0 ? (ccFrame.maxY - totalHeight) : max(visibleFrame.minY + gap, ccFrame.minY)
-            } else {
-                yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - totalHeight - 12, ccFrame.midY - totalHeight / 2.0))
-            }
-            return NSRect(x: xPos, y: yPos, width: totalWidth, height: totalHeight)
-        }
-
-        if isControlCenter {
-            let marginX: CGFloat = CGFloat(config.barMarginX)
-            xPos = fullFrame.maxX - totalWidth - marginX
-            xPos = max(visibleFrame.minX + 8, min(visibleFrame.maxX - totalWidth - 8, xPos))
-
-            if isBottom {
-                let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
-                yPos = isConnected ? barTop : min(visibleFrame.maxY - totalHeight - gap, barTop + gap)
-            } else if !isVertical {
-                let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
-                yPos = isConnected ? (barBottom - totalHeight) : max(visibleFrame.minY + gap, barBottom - totalHeight - gap)
-            } else {
-                let targetY = mouseLoc.y
-                yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - totalHeight - 12, targetY - totalHeight / 2.0))
-                if barPosition == "left" {
-                    let barRight = barFrame.width > 0 ? barFrame.maxX : (fullFrame.minX + DankBarController.verticalBarWidth + 8)
-                    xPos = barRight + gap
-                } else {
-                    let barLeft = barFrame.width > 0 ? barFrame.minX : (fullFrame.maxX - DankBarController.verticalBarWidth - 8)
-                    xPos = barLeft - totalWidth - gap
-                }
-            }
-            return NSRect(x: xPos, y: yPos, width: totalWidth, height: totalHeight)
-        }
-
-        if isVertical {
-            let targetY = mouseLoc.y
-            yPos = targetY - totalHeight / 2.0 - (isConnected ? filletR : 0.0)
-            yPos = max(visibleFrame.minY + 12, min(visibleFrame.maxY - totalHeight - 12, yPos))
-            let barRight = barFrame.width > 0 ? barFrame.maxX : (fullFrame.minX + DankBarController.verticalBarWidth + 8)
-            let barLeft = barFrame.width > 0 ? barFrame.minX : (fullFrame.maxX - DankBarController.verticalBarWidth - 8)
-            if barPosition == "left" {
-                xPos = barRight + gap
-            } else {
-                xPos = barLeft - totalWidth - gap
-            }
-        } else if isBottom {
-            let targetX = (anchorX != nil && anchorX! > 0) ? anchorX! : mouseLoc.x
-            var computedX = targetX - bodyWidth / 2.0 - (isConnected ? filletR : 0.0)
-            computedX = max(visibleFrame.minX + 8, min(visibleFrame.maxX - totalWidth - 8, computedX))
-            xPos = computedX
-
-            let barTop = barFrame.height > 0 ? barFrame.maxY : (fullFrame.minY + 8 + DankBarController.barHeight)
-            yPos = isConnected ? barTop : min(visibleFrame.maxY - totalHeight - gap, barTop + gap)
-        } else {
-            // Top bar
-            let targetX = (anchorX != nil && anchorX! > 0) ? anchorX! : mouseLoc.x
-            var computedX = targetX - bodyWidth / 2.0 - (isConnected ? filletR : 0.0)
-            computedX = max(visibleFrame.minX + 8, min(visibleFrame.maxX - totalWidth - 8, computedX))
-            xPos = computedX
-
-            let barBottom = barFrame.height > 0 ? barFrame.minY : (fullFrame.maxY - 8 - DankBarController.barHeight)
-            yPos = isConnected ? (barBottom - totalHeight) : max(visibleFrame.minY + gap, barBottom - totalHeight - gap)
-        }
-
-        return NSRect(x: xPos, y: yPos, width: totalWidth, height: totalHeight)
+        let input = PopoutLayoutInput(
+            bodyWidth: bodyWidth,
+            bodyHeight: bodyHeight,
+            anchorX: anchorX,
+            barPosition: barPosition,
+            connected: isConnected,
+            filletRadius: filletR,
+            barFrame: barPanel.frame,
+            visibleFrame: screen.visibleFrame,
+            fullFrame: screen.frame,
+            mouseLocation: NSEvent.mouseLocation,
+            marginX: CGFloat(config.barMarginX),
+            isControlCenter: isControlCenter,
+            anchorToControlCenter: anchorToControlCenter,
+            controlCenterFrame: ControlCenterController.shared.panel.frame,
+            barHeight: DankBarController.barHeight,
+            verticalBarWidth: DankBarController.verticalBarWidth
+        )
+        let f = MaterialComponents.PopoutLayoutHelper.frame(for: input)
+        return NSRect(x: f.minX, y: f.minY, width: f.width, height: f.height)
     }
 }
 
@@ -123,6 +61,7 @@ extension Notification.Name {
 /// - Entrance: Grows outward from the bar seam, expanding in height/width from 0 to full dimensions,
 ///   scale 0.94 to 1.0, and opacity 0.0 to 1.0 over 250ms with M3 `emphasizedDecel` [0.05, 0.7, 0.1, 1.0].
 /// - Exit: Retracts back into the bar edge over 180ms with M3 `emphasizedAccel` [0.3, 0.0, 0.8, 0.15].
+/// Durations and curves are delegated to `MaterialComponents.PopoutAnimationHelper`.
 @MainActor
 public enum PopoutAnimationHelper {
     public static func animateIn(
@@ -166,9 +105,12 @@ public enum PopoutAnimationHelper {
         // Notify view hierarchy to retract protrusion back into the bar
         NotificationCenter.default.post(name: .popoutWillDismiss, object: panel)
 
+        let exitCurve = MaterialComponents.PopoutAnimationHelper.exitCurve
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.18
-            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.3, 0.0, 0.8, 0.15)
+            ctx.duration = MaterialComponents.PopoutAnimationHelper.exitDuration
+            ctx.timingFunction = CAMediaTimingFunction(
+                controlPoints: Float(exitCurve.c1x), Float(exitCurve.c1y), Float(exitCurve.c2x), Float(exitCurve.c2y)
+            )
             panel.animator().alphaValue = 0.0
         } completionHandler: {
             MainActor.assumeIsolated {
@@ -183,9 +125,11 @@ public enum PopoutAnimationHelper {
 // MARK: - Popout Surface Container (SURF-001 / SURF-002 Connected Gothic Chrome)
 
 /// Reusable container view for all DankBar popouts and overlay panels.
-/// In connected mode ("Gothic Corners"), renders continuous concave fillet arcs (`BarGothCornerShape`)
-/// bridging the popout surface directly into the attached DankBar.
-/// Complies with `SURF-002` protruding out of the bar into the screen with M3 `emphasizedDecel` animation.
+/// In connected mode ("Gothic Corners"), renders continuous concave fillet arcs (delegated to
+/// `MaterialShapes.GothEarCornerShape` via `BarGothCornerShape`) bridging the popout surface
+/// directly into the attached DankBar, over a `MaterialComponents.GlassSurfaceBackground`.
+/// Complies with `SURF-002` protruding out of the bar into the screen; protrusion motion math
+/// (scale/opacity/collapsed size/curves) is delegated to `MaterialComponents.PopoutAnimationHelper`.
 public struct PopoutSurfaceContainer<Content: View>: View {
     @ObservedObject private var theme = ThemeStore.shared
     @ObservedObject private var configStore = ConfigStore.shared
@@ -271,6 +215,12 @@ public struct PopoutSurfaceContainer<Content: View>: View {
     public var body: some View {
         let isConnected = self.isConnected
         let isVertical = self.isVertical
+        let scale = MaterialComponents.PopoutAnimationHelper.scale(isVerticalBar: isVertical, presented: isPresented)
+        let collapsed = MaterialComponents.PopoutAnimationHelper.collapsedSize(
+            isVerticalBar: isVertical,
+            total: CGSize(width: totalWidth, height: totalHeight),
+            presented: isPresented
+        )
 
         ZStack(alignment: protrusionAlignment) {
             ZStack(alignment: protrusionAlignment) {
@@ -311,28 +261,23 @@ public struct PopoutSurfaceContainer<Content: View>: View {
                 )
             }
             .frame(
-                width: isVertical ? (isPresented ? totalWidth : 0) : totalWidth,
-                height: !isVertical ? (isPresented ? totalHeight : 0) : totalHeight,
+                width: isVertical ? collapsed.width : totalWidth,
+                height: !isVertical ? collapsed.height : totalHeight,
                 alignment: protrusionAlignment
             )
             .clipped()
-            .scaleEffect(
-                x: isVertical ? (isPresented ? 1.0 : 0.05) : (isPresented ? 1.0 : 0.94),
-                y: !isVertical ? (isPresented ? 1.0 : 0.05) : (isPresented ? 1.0 : 0.94),
-                anchor: scaleAnchor
-            )
-            .opacity(isPresented ? 1.0 : 0.0)
+            .scaleEffect(x: scale.width, y: scale.height, anchor: scaleAnchor)
+            .opacity(MaterialComponents.PopoutAnimationHelper.opacity(presented: isPresented))
         }
         .frame(width: totalWidth, height: totalHeight, alignment: protrusionAlignment)
+        .materialTheme(theme.materialTheme)
         .onAppear {
-            let curve = M3BezierCurve.emphasizedDecel
-            withAnimation(.timingCurve(curve.c1x, curve.c1y, curve.c2x, curve.c2y, duration: 0.250)) {
+            withAnimation(MaterialComponents.PopoutAnimationHelper.entranceAnimation()) {
                 isPresented = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .popoutWillDismiss)) { _ in
-            let curve = M3BezierCurve.emphasizedAccel
-            withAnimation(.timingCurve(curve.c1x, curve.c1y, curve.c2x, curve.c2y, duration: 0.180)) {
+            withAnimation(MaterialComponents.PopoutAnimationHelper.exitAnimation()) {
                 isPresented = false
             }
         }

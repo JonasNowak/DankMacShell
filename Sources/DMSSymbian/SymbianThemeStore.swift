@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import DMSCore
+import MaterialMacLibrary
 
 /// Theme provider for the Nokia Belle USB Sync companion application.
 /// Mirrors the DMS shell theme: reads the shared DMS config (`settings.json`,
@@ -123,25 +124,15 @@ public final class SymbianThemeStore: ObservableObject {
     }
 }
 
-public extension Color {
-    init(hex: String) {
-        var clean = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.hasPrefix("#") {
-            clean.removeFirst()
-        }
-        if clean.count == 3 {
-            let r = clean[clean.startIndex]
-            let g = clean[clean.index(clean.startIndex, offsetBy: 1)]
-            let b = clean[clean.index(clean.startIndex, offsetBy: 2)]
-            clean = "\(r)\(r)\(g)\(g)\(b)\(b)"
-        }
-        guard clean.count >= 6, let hexNum = UInt64(clean.prefix(6), radix: 16) else {
-            self = .clear
-            return
-        }
-        let r = Double((hexNum >> 16) & 0xFF) / 255.0
-        let g = Double((hexNum >> 8) & 0xFF) / 255.0
-        let b = Double(hexNum & 0xFF) / 255.0
-        self = Color(.sRGB, red: r, green: g, blue: b, opacity: 1.0)
+extension SymbianThemeStore {
+    /// Bridges the Symbian companion theme into a `MaterialTheme` so `MaterialComponents`
+    /// views can be injected with `.materialTheme(store.materialTheme)`.
+    /// `Color.init(hex:)` is provided by `MaterialTokens` (via `MaterialMacLibrary` / DMSCore).
+    var materialTheme: MaterialTheme {
+        MaterialTheme(
+            palette: palette,
+            isLightMode: isLightMode,
+            activeThemeName: "symbian"
+        )
     }
 }

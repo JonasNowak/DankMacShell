@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import DMSCore
+import DankThemeEngine
 
 @Suite("Theme and HCT Math Tests")
 struct ThemeAndHCTTests {
@@ -175,5 +176,55 @@ struct ThemeAndHCTTests {
             #expect(abs(reconstituted.green - original.green) < 0.05)
             #expect(abs(reconstituted.blue - original.blue) < 0.05)
         }
+    }
+
+    @Test("DankThemeEngine parity: HCT solver, hex conversion, stock presets, dynamic generation")
+    func testDankThemeEngineParity() throws {
+        // HCT solver: DMSCore HCT delegates to the same Rust CAM16 implementation.
+        let dteSolved = try HCTMath.solve(hue: 280, chroma: 60, tone: 40)
+        let localSolved = HCT.solve(hue: 280, chroma: 60, tone: 40)
+        #expect(dteSolved.hex == localSolved.hex)
+
+        // Hex -> HCT parity.
+        let dteHct = try HCTMath.fromHex("#9C27B0")
+        let localHct = HCT.from(color: M3Color("#9C27B0"))
+        #expect(abs(dteHct.hue - localHct.hue) < 0.01)
+        #expect(abs(dteHct.chroma - localHct.chroma) < 0.01)
+        #expect(abs(dteHct.tone - localHct.tone) < 0.01)
+
+        // WCAG helpers parity.
+        #expect(HCTMath.relativeLuminance("#FFFFFF") == HCTMath.relativeLuminance(M3Color("#FFFFFF")))
+        #expect(HCTMath.contrastRatio("#000000", "#FFFFFF") == HCTMath.contrastRatio(M3Color("#000000"), M3Color("#FFFFFF")))
+
+        // Stock presets resolve through the engine with identical palettes.
+        let preset = try DankThemeEngine.resolveTheme(.preset("purple", isDark: true))
+        #expect(preset.name == StockThemes.purpleDark.name)
+        #expect(preset.primary.hex == StockThemes.purpleDark.primary.hex)
+        #expect(preset.surface.hex == StockThemes.purpleDark.surface.hex)
+        #expect(try DankThemeEngine.stockThemes().map(\.name) == StockThemes.allAvailableThemes)
+
+        // Dynamic generation parity (same seed/name/contrast/scheme).
+        let pair = try DankThemeEngine.generateDynamicTheme(
+            seedHex: "#007AFF",
+            name: "Parity",
+            contrast: .high,
+            scheme: .vibrant
+        )
+        let (dark, light) = DynamicThemeGenerator.generate(
+            from: M3Color("#007AFF"),
+            name: "Parity",
+            contrast: .high,
+            scheme: .vibrant
+        )
+        #expect(pair.dark.name == dark.name)
+        #expect(pair.dark.primary.hex == dark.primary.hex)
+        #expect(pair.light.name == light.name)
+        #expect(pair.light.surface.hex == light.surface.hex)
+
+        // Dank16 parity.
+        let dteDank16 = try DankThemeEngine.dank16(for: StockThemes.purpleDark.dtePalette)
+        let localDank16 = Dank16Generator.generate(from: StockThemes.purpleDark)
+        #expect(dteDank16.colorsHex == localDank16.colors.map(\.hex))
+        #expect(dteDank16.background.hex == localDank16.background.hex)
     }
 }
