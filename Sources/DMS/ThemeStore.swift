@@ -138,6 +138,27 @@ public final class ThemeStore: ObservableObject {
     public private(set) var successContainer: Color = .clear
     public private(set) var onSuccessContainer: Color = .clear
 
+    // MARK: - M3 Expressive Extended Surface & Fixed Accent Colors
+    public private(set) var surfaceDim: Color = .clear
+    public private(set) var surfaceBright: Color = .clear
+    public private(set) var inverseSurface: Color = .clear
+    public private(set) var inverseOnSurface: Color = .clear
+
+    public private(set) var primaryFixed: Color = .clear
+    public private(set) var primaryFixedDim: Color = .clear
+    public private(set) var onPrimaryFixed: Color = .clear
+    public private(set) var onPrimaryFixedVariant: Color = .clear
+
+    public private(set) var secondaryFixed: Color = .clear
+    public private(set) var secondaryFixedDim: Color = .clear
+    public private(set) var onSecondaryFixed: Color = .clear
+    public private(set) var onSecondaryFixedVariant: Color = .clear
+
+    public private(set) var tertiaryFixed: Color = .clear
+    public private(set) var tertiaryFixedDim: Color = .clear
+    public private(set) var onTertiaryFixed: Color = .clear
+    public private(set) var onTertiaryFixedVariant: Color = .clear
+
     private init() {
         let initialPalette = StockThemes.theme(named: "purple", isDark: true)
         self.palette = initialPalette
@@ -200,6 +221,26 @@ public final class ThemeStore: ObservableObject {
         onSuccess = Color(hex: palette.onSuccess.hex)
         successContainer = Color(hex: palette.successContainer.hex)
         onSuccessContainer = Color(hex: palette.onSuccessContainer.hex)
+
+        surfaceDim = Color(hex: palette.surfaceDim.hex)
+        surfaceBright = Color(hex: palette.surfaceBright.hex)
+        inverseSurface = Color(hex: palette.inverseSurface.hex)
+        inverseOnSurface = Color(hex: palette.inverseOnSurface.hex)
+
+        primaryFixed = Color(hex: palette.primaryFixed.hex)
+        primaryFixedDim = Color(hex: palette.primaryFixedDim.hex)
+        onPrimaryFixed = Color(hex: palette.onPrimaryFixed.hex)
+        onPrimaryFixedVariant = Color(hex: palette.onPrimaryFixedVariant.hex)
+
+        secondaryFixed = Color(hex: palette.secondaryFixed.hex)
+        secondaryFixedDim = Color(hex: palette.secondaryFixedDim.hex)
+        onSecondaryFixed = Color(hex: palette.onSecondaryFixed.hex)
+        onSecondaryFixedVariant = Color(hex: palette.onSecondaryFixedVariant.hex)
+
+        tertiaryFixed = Color(hex: palette.tertiaryFixed.hex)
+        tertiaryFixedDim = Color(hex: palette.tertiaryFixedDim.hex)
+        onTertiaryFixed = Color(hex: palette.onTertiaryFixed.hex)
+        onTertiaryFixedVariant = Color(hex: palette.onTertiaryFixedVariant.hex)
 
         dank16Palette = Dank16Generator.generate(from: palette).colors
         let hct = HCT.from(color: palette.primary)
@@ -401,10 +442,32 @@ public final class ThemeStore: ObservableObject {
         Color.black.opacity(isLightMode ? baseOpacity * 0.45 : baseOpacity)
     }
 
-    // MARK: - Typography & Shape Helpers
+    // MARK: - Typography, Motion & Shape Helpers
+
+    public var fastSpatialAnimation: Animation { motionTokens.fastSpatialAnimation }
+    public var defaultSpatialAnimation: Animation { motionTokens.defaultSpatialAnimation }
+    public var slowSpatialAnimation: Animation { motionTokens.slowSpatialAnimation }
+    public var fastEffectsAnimation: Animation { motionTokens.fastEffectsAnimation }
+    public var defaultEffectsAnimation: Animation { motionTokens.defaultEffectsAnimation }
+    public var slowEffectsAnimation: Animation { motionTokens.slowEffectsAnimation }
 
     public func scaledRadius(_ base: CGFloat) -> CGFloat {
         CGFloat(shapeTokens.scaled(Double(base)))
+    }
+
+    public func morphedRadius(_ base: CGFloat, progress: CGFloat, targetScale: Double? = nil) -> CGFloat {
+        CGFloat(shapeTokens.morphedRadius(base: Double(base), progress: Double(progress), targetScale: targetScale))
+    }
+
+    public func font(for role: M3TypeScaleRole, emphasized: Bool = false) -> Font {
+        let style = typographyTokens.style(for: role, emphasized: emphasized)
+        let isDisplay = role == .displayLarge || role == .displayMedium || role == .displaySmall
+        return font(
+            size: CGFloat(style.size / max(0.01, typographyTokens.fontScale)),
+            weight: style.swiftUIWeight,
+            mono: false,
+            display: isDisplay && !emphasized
+        )
     }
 
     public func font(size: CGFloat, weight: Font.Weight = .regular, mono: Bool = false, display: Bool = false) -> Font {

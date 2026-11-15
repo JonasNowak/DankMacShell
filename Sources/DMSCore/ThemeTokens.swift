@@ -6,7 +6,11 @@ import DankThemeEngine
 
 public typealias M3ShapeTokens = MaterialShapeTokens
 public typealias M3BezierCurve = MaterialBezierCurve
+public typealias M3SpringSpec = MaterialSpringSpec
+public typealias M3MotionScheme = MaterialMotionScheme
 public typealias M3MotionTokens = MaterialMotionTokens
+public typealias M3TypeScaleRole = MaterialTypeScaleRole
+public typealias M3TypeStyle = MaterialTypeStyle
 public typealias M3TypographyTokens = MaterialTypographyTokens
 public typealias M3SurfaceTokens = MaterialSurfaceTokens
 public typealias M3ShadowTokens = MaterialShadowTokens

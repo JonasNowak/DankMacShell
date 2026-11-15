@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/JonasNowak/MaterialMacLibrary.git",
       "state" : {
-        "revision" : "c6ee01a13aa608f650716b6228aa9e0f00598b4e",
-        "version" : "0.1.0"
+        "revision" : "7ef85648820b108df31ec40ba1f7c9640be5d6a9",
+        "version" : "0.2.0"
       }
     }
   ],

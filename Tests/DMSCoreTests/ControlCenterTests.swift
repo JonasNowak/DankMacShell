@@ -208,12 +208,21 @@ struct ControlCenterTests {
         #expect(undoCount <= 50)
     }
 
-    @Test("AvatarShapeGenerator Paths for All 12 User Shapes")
+    @Test("AvatarShapeGenerator Paths for All 12 User Shapes and 35 M3 Expressive Shapes")
     func testAvatarShapeGeneratorAllShapes() {
         let rect = CGRect(x: 0, y: 0, width: 64, height: 64)
 
         for shapeName in ControlCenterUtils.userShapes {
             let path = AvatarShapeGenerator.path(for: shapeName, in: rect)
+            #expect(!path.isEmpty)
+            let bounds = path.boundingBox
+            #expect(bounds.width > 0)
+            #expect(bounds.height > 0)
+        }
+
+        #expect(ControlCenterUtils.expressiveUserShapes.count == 35)
+        for shape in M3ExpressiveShape.allCases {
+            let path = AvatarShapeGenerator.path(for: shape, in: rect)
             #expect(!path.isEmpty)
             let bounds = path.boundingBox
             #expect(bounds.width > 0)

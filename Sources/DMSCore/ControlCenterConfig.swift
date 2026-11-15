@@ -144,6 +144,9 @@ public enum ControlCenterUtils: Sendable {
         "sunny", "pentagon", "arch", "slanted", "gem", "square"
     ]
 
+    /// Complete 35-shape Google Material 3 Expressive shape catalog.
+    public static let expressiveUserShapes: [String] = AvatarShapeGenerator.expressiveShapeNames
+
     public static let actionIds: [String] = ["settings", "lock", "power"]
     public static let editId: String = "edit"
     public static let buttonIds: [String] = actionIds + [editId]
