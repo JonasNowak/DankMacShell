@@ -12,11 +12,13 @@ struct SettingsTests {
         #expect(categories.contains(.personalization))
         #expect(categories.contains(.primaryBar))
         #expect(categories.contains(.widgetsNotifications))
-        #expect(categories.contains(.dockLauncher))
         #expect(categories.contains(.keyboardShortcuts))
         #expect(categories.contains(.power))
         #expect(categories.contains(.plugins))
         #expect(categories.contains(.about))
+
+        // Launcher lives under Widgets & Notifications (Dock subsystem removed)
+        #expect(SettingsTab.launcher.category == .widgetsNotifications)
 
         // Ensure every category has at least one tab
         for cat in categories {
@@ -39,7 +41,7 @@ struct SettingsTests {
         #expect(SettingsTab.resolve(tab: "wallpaper") == .wallpaper)
         #expect(SettingsTab.resolve(tab: "island") == .island)
         #expect(SettingsTab.resolve(tab: "Dank Island") == .island)
-        #expect(SettingsTab.resolve(tab: "dock") == .dock)
+        #expect(SettingsTab.resolve(tab: "dock") == .theme)
         #expect(SettingsTab.resolve(tab: "launcher") == .launcher)
         #expect(SettingsTab.resolve(tab: "plugins") == .plugins)
         #expect(SettingsTab.resolve(tab: "shortcuts") == .shortcuts)
@@ -82,10 +84,6 @@ struct SettingsTests {
         let themeResults = SettingsSearchIndex.filter(query: "seed")
         #expect(themeResults.contains(.theme))
 
-        // Keyword search: "magnification" should find dock
-        let dockResults = SettingsSearchIndex.filter(query: "magnification")
-        #expect(dockResults.contains(.dock))
-
         // Keyword search: "caffeinate" should find power
         let powerResults = SettingsSearchIndex.filter(query: "caffeinate")
         #expect(powerResults.contains(.power))
@@ -107,6 +105,8 @@ struct SettingsTests {
         #expect(!tabIds.contains("displays"))
         #expect(!tabIds.contains("gammacontrol"))
         #expect(!tabIds.contains("printers"))
+        // macOS already provides the native Dock, so no "dock" tab exists
+        #expect(!tabIds.contains("dock"))
     }
 
     @Test("Widget Catalog and BarLayout Operations")

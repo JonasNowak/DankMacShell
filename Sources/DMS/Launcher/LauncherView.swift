@@ -134,7 +134,6 @@ public struct LauncherView: View {
                     category: app.category,
                     isRunning: isRunning,
                     isHidden: isHidden,
-                    isPinned: app.isPinned,
                     launchCount: app.launchCount,
                     lastLaunchedAt: app.lastLaunchedAt
                 )
@@ -469,7 +468,6 @@ public struct LauncherView: View {
                                             item: app,
                                             isSelected: app.id == curSelectedApp?.id,
                                             onSelect: { launchApp(app) },
-                                            onTogglePin: { togglePin(app) },
                                             onShowInFinder: { showInFinder(app) },
                                             onUnhideInBackground: { RunningAppsService.shared.unhide(app: app, inBackground: true) },
                                             onHide: { RunningAppsService.shared.hide(app: app) },
@@ -494,7 +492,6 @@ public struct LauncherView: View {
                                             item: app,
                                             isSelected: app.id == curSelectedApp?.id,
                                             onSelect: { launchApp(app) },
-                                            onTogglePin: { togglePin(app) },
                                             onShowInFinder: { showInFinder(app) },
                                             onUnhideInBackground: { RunningAppsService.shared.unhide(app: app, inBackground: true) },
                                             onHide: { RunningAppsService.shared.hide(app: app) },
@@ -658,15 +655,6 @@ public struct LauncherView: View {
                             ) {
                                 RunningAppsService.shared.quit(app: app)
                             }
-                        }
-
-                        let isPinned = ConfigStore.shared.config.pinnedApps.contains(app.bundleID)
-                        ActionPanelButton(
-                            title: isPinned ? "Unpin from Dock" : "Pin to Dock",
-                            icon: isPinned ? "pin.slash.fill" : "pin.fill",
-                            theme: theme
-                        ) {
-                            togglePin(app)
                         }
 
                         ActionPanelButton(
@@ -900,10 +888,6 @@ public struct LauncherView: View {
         onClose()
     }
 
-    private func togglePin(_ app: AppItem) {
-        RunningAppsService.shared.togglePin(bundleID: app.bundleID)
-    }
-
     private func showInFinder(_ app: AppItem) {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: app.path)])
         onClose()
@@ -972,7 +956,6 @@ public struct LauncherItemRow: View {
     public let item: AppItem
     public let isSelected: Bool
     public let onSelect: () -> Void
-    public var onTogglePin: (() -> Void)? = nil
     public var onShowInFinder: (() -> Void)? = nil
     public var onUnhideInBackground: (() -> Void)? = nil
     public var onHide: (() -> Void)? = nil
@@ -1065,10 +1048,6 @@ public struct LauncherItemRow: View {
 
             Button(isRunning && isHidden ? "Unhide and Focus" : "Open \(item.name)") { onSelect() }
             Divider()
-            if let pin = onTogglePin {
-                let isPinned = ConfigStore.shared.config.pinnedApps.contains(item.bundleID)
-                Button(isPinned ? "Unpin from Dock" : "Pin to Dock") { pin() }
-            }
             if let show = onShowInFinder {
                 Button("Show in Finder") { show() }
             }
@@ -1107,7 +1086,6 @@ public struct LauncherTileItem: View {
     public let item: AppItem
     public let isSelected: Bool
     public let onSelect: () -> Void
-    public var onTogglePin: (() -> Void)? = nil
     public var onShowInFinder: (() -> Void)? = nil
     public var onUnhideInBackground: (() -> Void)? = nil
     public var onHide: (() -> Void)? = nil
@@ -1187,10 +1165,6 @@ public struct LauncherTileItem: View {
 
             Button(isRunning && isHidden ? "Unhide and Focus" : "Open \(item.name)") { onSelect() }
             Divider()
-            if let pin = onTogglePin {
-                let isPinned = ConfigStore.shared.config.pinnedApps.contains(item.bundleID)
-                Button(isPinned ? "Unpin from Dock" : "Pin to Dock") { pin() }
-            }
             if let show = onShowInFinder {
                 Button("Show in Finder") { show() }
             }

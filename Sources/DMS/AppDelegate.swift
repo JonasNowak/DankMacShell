@@ -73,7 +73,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // Show DankBar & Dynamic Island
         DankBarController.shared.show()
         _ = DIslandController.shared
-        DockController.shared.reposition()
         _ = WorkspaceService.shared
         _ = PluginService.shared
         _ = ToastController.shared

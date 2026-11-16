@@ -13,7 +13,7 @@ let package = Package(
         .executable(name: "dms-symbian", targets: ["DMSSymbian"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/JonasNowak/MaterialMacLibrary.git", from: "0.2.0"),
+        .package(url: "https://github.com/JonasNowak/MaterialMacLibrary.git", from: "0.3.0"),
         .package(url: "https://github.com/JonasNowak/dank-theme-engine.git", from: "0.1.1"),
     ],
     targets: [

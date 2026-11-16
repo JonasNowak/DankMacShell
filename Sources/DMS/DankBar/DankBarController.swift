@@ -476,7 +476,6 @@ public final class DankBarController {
             fullscreenScreens = newFullscreenScreens
             obstructedBarKeys = newObstructedBarKeys
             reposition()
-            DockController.shared.reposition()
         } else {
             // Self-healing synchronization: if panel state disagrees with obstruction state, reposition
             var needsReposition = false
@@ -594,45 +593,6 @@ public final class DankBarController {
                 if isFullWidth && isFullHeight && touchesBottom {
                     return true
                 }
-            }
-        }
-        return false
-    }
-
-    public func isDockObstructed(screenIndex: Int, config: DockConfig, frame: NSRect) -> Bool {
-        if fullscreenScreens.contains(screenIndex) { return true }
-        let screens = NSScreen.screens
-        guard screens.indices.contains(screenIndex) else { return false }
-        let screen = screens[screenIndex]
-        let primaryScreen = screens.first ?? screen
-        let primaryHeight = primaryScreen.frame.height
-        let dockCG = CGRect(x: frame.minX, y: primaryHeight - frame.maxY, width: frame.width, height: frame.height)
-
-        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return false }
-
-        let myPID = ProcessInfo.processInfo.processIdentifier
-        var activePIDs = Set<pid_t>()
-        if let frontApp = NSWorkspace.shared.frontmostApplication,
-           frontApp.bundleIdentifier != Bundle.main.bundleIdentifier,
-           frontApp.processIdentifier != myPID {
-            activePIDs.insert(frontApp.processIdentifier)
-        } else if let activeApp = NSWorkspace.shared.runningApplications.first(where: {
-            $0.isActive && $0.bundleIdentifier != Bundle.main.bundleIdentifier && $0.processIdentifier != myPID
-        }) {
-            activePIDs.insert(activeApp.processIdentifier)
-        }
-
-        for win in windowList {
-            guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
-            guard let winPID = win[kCGWindowOwnerPID as String] as? pid_t, winPID != myPID else { continue }
-            if !activePIDs.isEmpty && !activePIDs.contains(winPID) { continue }
-            guard let bounds = win[kCGWindowBounds as String] as? [String: CGFloat],
-                  let w = bounds["Width"], let h = bounds["Height"],
-                  let winX = bounds["X"], let winY = bounds["Y"] else { continue }
-            let winRect = CGRect(x: winX, y: winY, width: w, height: h)
-            if SmartAutoHideSolver.isWindowOverlappingBar(windowBounds: winRect, barBounds: dockCG, tolerance: 15.0) {
-                return true
             }
         }
         return false

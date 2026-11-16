@@ -68,7 +68,6 @@ public enum AppOverrideApplier {
                 category: app.category,
                 isRunning: app.isRunning,
                 isHidden: app.isHidden,
-                isPinned: app.isPinned,
                 launchCount: app.launchCount,
                 lastLaunchedAt: app.lastLaunchedAt
             )

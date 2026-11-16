@@ -24,8 +24,8 @@ rebuilt as a native Swift 6 macOS application (AppKit + SwiftUI).
 
 | Upstream DMS (Wayland / Linux) | macOS Implementation | Technical Notes |
 | :--- | :--- | :--- |
-| **DankBar / DBar** (`PanelWindow`, layer-shell) | `ShellPanel` (`NSPanel`, `.statusBar` level, `canJoinAllSpaces`, borderless, non-activating). Configurable top or bottom position. | Smooth auto-hide option with hover tracking. Dock coexistence or auto-hide. |
-| **Apps Dock / Running Apps** (`ToplevelManager`) | Pinned apps + running apps from `NSWorkspace` notifications (`didLaunchApplication`, `didTerminateApplication`, `didActivateApplication`). | Context menu for Pin/Unpin, Hide, Quit. Active app dot indicators. |
+| **DankBar / DBar** (`PanelWindow`, layer-shell) | `ShellPanel` (`NSPanel`, `.statusBar` level, `canJoinAllSpaces`, borderless, non-activating). Configurable top or bottom position. | Smooth auto-hide option with hover tracking and smart auto-hide. |
+| **Running Apps** (`ToplevelManager`) | Workspace running apps inside DankBar via `WorkspaceService`. (Standalone Desktop Dock intentionally omitted; macOS provides the native Dock.) | Active app dot indicators and click-to-activate. |
 | **Dynamic M3 Theming** (Matugen / `dank16`) | `DynamicThemeGenerator` in `DMSCore` sampling `NSWorkspace.shared.desktopImageURL` with `CoreImage`. | Generates full M3 dark & light palettes (Primary, Secondary, Tertiary, Surface, Containers, Outline, Errors). |
 | **Stock M3 Themes** (`StockThemes.js`) | Purple (default), Blue, Green, Orange, Red, Yellow, Neutral. | Instant switching and persistence. |
 | **DLauncherV2** (Spotlight App Launcher) | Centered overlay `ShellPanel` with fuzzy app catalog, quick math evaluator (`2+2`, `sqrt(144)`), and keyboard navigation. | Global hotkey via Carbon `RegisterEventHotKey` (default `⌥Space`). |

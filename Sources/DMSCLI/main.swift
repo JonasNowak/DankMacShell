@@ -46,7 +46,6 @@ func printHelp() {
       dms settings [open|get|set|dump]  Material 3 configuration manager
       dms wellbeing [status|enable|disable|toggle|sync|open-system] Digital Wellbeing & Screen Time
       dms bar [reveal|hide|toggle|status]       DankBar controls
-      dms dock [reveal|hide|toggle|status]      Dock controls
       dms workspace [status|switch <num>|next|prev] Virtual workspace manager
       dms audio [status|setvolume <0-100>|mute|unmute|toggle]
       dms mic [status|mute|unmute|toggle]

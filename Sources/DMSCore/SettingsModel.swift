@@ -5,7 +5,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Sendable {
     case personalization = "Personalization"
     case primaryBar = "Primary Bar"
     case widgetsNotifications = "Widgets & Notifications"
-    case dockLauncher = "Dock & Launcher"
     case keyboardShortcuts = "Keyboard Shortcuts"
     case power = "Power & Sleep"
     case plugins = "Plugins"
@@ -18,7 +17,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Sendable {
         case .personalization: return "person.crop.circle"
         case .primaryBar: return "menubar.rectangle"
         case .widgetsNotifications: return "square.grid.2x2"
-        case .dockLauncher: return "dock.rectangle"
         case .keyboardShortcuts: return "keyboard"
         case .power: return "bolt.fill"
         case .plugins: return "puzzlepiece.extension"
@@ -51,9 +49,6 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
     case notifications = "Notifications"
     case osd = "On-screen Displays"
     case desktopWidgets = "Desktop Widgets"
-
-    // Dock & Launcher
-    case dock = "Dock"
     case launcher = "Launcher"
 
     // Shortcuts
@@ -85,7 +80,6 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .notifications: return "notifications"
         case .osd: return "osd"
         case .desktopWidgets: return "desktopWidgets"
-        case .dock: return "dock"
         case .launcher: return "launcher"
         case .shortcuts: return "shortcuts"
         case .power: return "power"
@@ -100,10 +94,8 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
             return .personalization
         case .barAppearance, .barSettings, .barWidgets, .barWorkspaces, .island:
             return .primaryBar
-        case .dashboard, .mediaPlayer, .notifications, .osd, .desktopWidgets:
+        case .dashboard, .mediaPlayer, .notifications, .osd, .desktopWidgets, .launcher:
             return .widgetsNotifications
-        case .dock, .launcher:
-            return .dockLauncher
         case .shortcuts:
             return .keyboardShortcuts
         case .power:
@@ -132,7 +124,6 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .notifications: return "bell.fill"
         case .osd: return "rectangle.inset.filled"
         case .desktopWidgets: return "macwindow.on.rectangle"
-        case .dock: return "dock.rectangle"
         case .launcher: return "sparkle.magnifyingglass"
         case .shortcuts: return "keyboard.fill"
         case .power: return "bolt.fill"
@@ -158,7 +149,6 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .notifications: return "Notification popout banners, display timeouts, and rules"
         case .osd: return "Floating on-screen display HUDs for volume and brightness"
         case .desktopWidgets: return "Interactive wallpaper desktop widgets and placement"
-        case .dock: return "App dock, parabolic magnification, pinned apps, and trash can"
         case .launcher: return "DLauncherV2 search frecency scoring, hotkeys, and web fallbacks"
         case .shortcuts: return "Global hotkey shortcuts for launcher, dash, clipboard, and apps"
         case .power: return "Display and system sleep caffeination and idle inhibitors"
@@ -184,7 +174,6 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .notifications: return ["notifications", "banner", "timeout", "rules", "dnd", "alert", "popups"]
         case .osd: return ["osd", "hud", "volume", "brightness", "indicator", "fade", "floating"]
         case .desktopWidgets: return ["desktop", "widgets", "clock", "sticky", "monitor", "notes", "canvas"]
-        case .dock: return ["dock", "icons", "magnification", "size", "auto-hide", "trash", "taskbar", "pinned"]
         case .launcher: return ["launcher", "hotkey", "frecency", "search", "math", "google", "tile", "list", "dlauncher"]
         case .shortcuts: return ["keyboard", "shortcuts", "hotkeys", "keybinds", "carbon", "option", "space", "hyper", "hyperkey", "launcher", "dash", "notepad", "clipboard", "wallpaper"]
         case .power: return ["power", "sleep", "caffeinate", "idle", "inhibit", "battery", "display", "timeout"]
@@ -236,8 +225,6 @@ public enum DMSSettingsTab: String, CaseIterable, Identifiable, Sendable {
             return .osd
         case "desktopwidgets", "desktop":
             return .desktopWidgets
-        case "dock", "docks":
-            return .dock
         case "launcher", "dlauncher":
             return .launcher
         case "shortcuts", "keyboard", "keybinds", "hotkeys":

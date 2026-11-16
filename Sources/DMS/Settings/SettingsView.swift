@@ -214,8 +214,6 @@ public struct SettingsView: View {
             osdTab(palette: palette)
         case .desktopWidgets:
             desktopWidgetsTab(palette: palette)
-        case .dock:
-            dockTab(palette: palette)
         case .launcher:
             launcherTab(palette: palette)
         case .shortcuts:
@@ -2871,93 +2869,7 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - 16. Dock & Launcher - Dock Tab
-    @ViewBuilder
-    private func dockTab(palette: DMSPalette) -> some View {
-        let dockConfig = configStore.config.dockConfigs.first ?? .default
-
-        SettingsCard(icon: "dock.rectangle", title: "Desktop Dock", palette: palette) {
-            SettingsToggleRow(
-                title: "Enable Dock",
-                subtitle: "Display macOS application dock with pinned apps",
-                isOn: Binding(
-                    get: { configStore.config.showDock },
-                    set: { val in configStore.update { $0.showDock = val } }
-                ),
-                palette: palette
-            )
-
-            Divider().opacity(0.3)
-
-            SettingsSliderRow(
-                title: "Icon Size",
-                valueFormatted: "\(dockConfig.iconSize) px",
-                value: Binding(
-                    get: { Double(dockConfig.iconSize) },
-                    set: { val in
-                        if !configStore.config.dockConfigs.isEmpty {
-                            configStore.update { $0.dockConfigs[0].iconSize = Int(val) }
-                        }
-                    }
-                ),
-                range: 32...64,
-                step: 2,
-                palette: palette
-            )
-
-            Divider().opacity(0.3)
-
-            SettingsSliderRow(
-                title: "Dock Opacity",
-                valueFormatted: "\(Int(dockConfig.transparency * 100))%",
-                value: Binding(
-                    get: { dockConfig.transparency },
-                    set: { val in
-                        if !configStore.config.dockConfigs.isEmpty {
-                            configStore.update { $0.dockConfigs[0].transparency = val }
-                        }
-                    }
-                ),
-                range: 0.0...1.0,
-                step: 0.05,
-                palette: palette
-            )
-
-            Divider().opacity(0.3)
-
-            SettingsToggleRow(
-                title: "Parabolic Magnification",
-                subtitle: "Smooth scale physics on mouse hover",
-                isOn: Binding(
-                    get: { dockConfig.magnification },
-                    set: { val in
-                        if !configStore.config.dockConfigs.isEmpty {
-                            configStore.update { $0.dockConfigs[0].magnification = val }
-                        }
-                    }
-                ),
-                palette: palette
-            )
-
-            SettingsSliderRow(
-                title: "Magnification Scale",
-                valueFormatted: "\(Int(dockConfig.magnificationScale))%",
-                value: Binding(
-                    get: { dockConfig.magnificationScale },
-                    set: { val in
-                        if !configStore.config.dockConfigs.isEmpty {
-                            configStore.update { $0.dockConfigs[0].magnificationScale = val }
-                        }
-                    }
-                ),
-                range: 105...160,
-                step: 5,
-                palette: palette
-            )
-        }
-    }
-
-    // MARK: - 17. Dock & Launcher - Launcher Tab
+    // MARK: - 16. Launcher Tab
     @ViewBuilder
     private func launcherTab(palette: DMSPalette) -> some View {
         SettingsCard(icon: "sparkle.magnifyingglass", title: "DLauncherV2 Hotkey", palette: palette) {

@@ -75,6 +75,7 @@ flowchart TD
   - Each widget entry: `{ id: string, enabled: bool, options: object }`.
 
 ### 3.3. Dock Instance Configuration Schema (`DockConfig.js`)
+> [Removed / N/A on macOS — native macOS Dock used]: `dockConfigs` is omitted/ignored on macOS because the native macOS Dock is used. Retained here as an upstream reference only.
 - `SETD-005`: `dockConfigs` is an array of objects matching:
   - `id`: String ID (`"dock"`).
   - `name`: String (`"Dock"`).
@@ -175,7 +176,7 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | `SETD-001` - `003` | **Partial** | `ConfigStore.swift` | Implements basic JSON reading and saving, but lacks `$include` fragment merging and schema validation. |
 | `SETD-004` | **Missing** | `Config.swift` | `DMSConfig` has no `barConfigs` array; it only has scalar properties (`barPosition`, `barAutoHide`, `barTransparent`). It cannot support multiple bars or per-bar widget options. |
-| `SETD-005` | **Missing** | `Config.swift` | `DMSConfig` has no `dockConfigs` array; it only has `showDock: Bool`. Magnification curves, profiles, and per-dock positions are missing. |
+| `SETD-005` | **Removed / N/A on macOS — native macOS Dock used** | `Config.swift` | `dockConfigs` is intentionally omitted/ignored on macOS (native macOS Dock used); upstream schema retained as reference only. |
 | `SETD-006` | **Divergent** | `Config.swift` | Out of 427 upstream keys, only 35 exist (~8.2% coverage). The remaining 392 keys have no representation in Swift models. |
 
 ### Audit Verdict:

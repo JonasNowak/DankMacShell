@@ -4,7 +4,7 @@ import MaterialMacLibrary
 
 /// Edit mode bottom toolbar with Add Tile, Undo, Redo, Reset, and Done actions.
 /// The Add Tile / Reset / Done bar chrome is delegated to
-/// `MaterialComponents.MaterialFloatingEditChrome` (`.bar` style) with the bridged
+/// `MaterialComponents.MaterialFloatingEditChrome` with the bridged
 /// `MaterialTheme`; Undo/Redo remain DMS-specific circular actions wired to the
 /// control-center undo stack.
 public struct CcEditChrome: View {
@@ -45,8 +45,7 @@ public struct CcEditChrome: View {
                 addTitle: "Add Tile",
                 onAdd: onAddTile,
                 onReset: onReset,
-                onDone: onDone,
-                style: .bar
+                onDone: onDone
             )
         }
         .materialTheme(themeStore.materialTheme)

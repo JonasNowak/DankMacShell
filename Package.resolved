@@ -1,5 +1,5 @@
 {
-  "originHash" : "410266f7ee70a60a87ea3555afb913400a9d98bb0950001b241a8ecb1d8ff2ff",
+  "originHash" : "b3e1065ebdb5bb92bed633205164c43b38c253be40b6d189cdf04af4f2692dec",
   "pins" : [
     {
       "identity" : "dank-theme-engine",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/JonasNowak/MaterialMacLibrary.git",
       "state" : {
-        "revision" : "7ef85648820b108df31ec40ba1f7c9640be5d6a9",
-        "version" : "0.2.0"
+        "revision" : "472b8fdb0f1ed75abaa0681b6b89176842235efc",
+        "version" : "0.3.0"
       }
     }
   ],

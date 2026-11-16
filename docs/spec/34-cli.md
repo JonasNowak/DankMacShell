@@ -61,7 +61,6 @@ dms
 ├── theme [get|set|mode|seed]
 ├── matugen [run|template]
 ├── bar [list|toggle|reveal|hide]
-├── dock [list|toggle|reveal|hide]
 ├── island [toggle|open|close|move|center]
 ├── dash [toggle|openTab]
 ├── controlcenter [toggle|openSection]

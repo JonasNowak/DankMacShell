@@ -238,8 +238,6 @@ public enum IPCCommandExecutor {
                 ThemeStore.shared.sync(with: ConfigStore.shared.config)
             } else if lower.contains("bar") {
                 DankBarController.shared.updateBarFrame()
-            } else if lower.contains("dock") {
-                DockController.shared.updateDocks()
             } else if lower.contains("island") {
                 DIslandController.shared.refreshSettings()
             }
@@ -278,29 +276,6 @@ public enum IPCCommandExecutor {
                 return "visible: \(DankBarController.shared.isVisible), position: \(ConfigStore.shared.config.barPosition)"
             default:
                 return "Unknown bar action \(act)"
-            }
-
-        case .dock(let act, _):
-            switch act.lowercased() {
-            case "toggle":
-                ConfigStore.shared.update { $0.showDock.toggle() }
-                DockController.shared.toggle()
-                return "Dock toggled: \(ConfigStore.shared.config.showDock)"
-            case "hide":
-                ConfigStore.shared.update { $0.showDock = false }
-                DockController.shared.hide()
-                return "Dock hidden"
-            case "reveal", "show":
-                ConfigStore.shared.update { $0.showDock = true }
-                DockController.shared.show()
-                return "Dock revealed"
-            case "reposition", "update":
-                DockController.shared.reposition()
-                return "Dock repositioned"
-            case "status":
-                return "dock visible: \(ConfigStore.shared.config.showDock)"
-            default:
-                return "Unknown dock action \(act)"
             }
 
         case .workspace(let act, let val):

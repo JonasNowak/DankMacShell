@@ -42,10 +42,8 @@ struct DMSCoreTests {
             barPosition: "top",
             barAutoHide: true,
             barTransparent: true,
-            showDock: false,
             showTelemetry: true,
-            launcherHotkey: true,
-            pinnedApps: ["com.apple.Safari"]
+            launcherHotkey: true
         )
 
         let data = try original.encodeJSON()
@@ -55,7 +53,6 @@ struct DMSCoreTests {
         #expect(decoded.isLightMode == true)
         #expect(decoded.barPosition == "top")
         #expect(decoded.barAutoHide == true)
-        #expect(decoded.pinnedApps == ["com.apple.Safari"])
     }
 
     @Test("App Search Fuzzy Matching")
@@ -257,64 +254,6 @@ struct DMSCoreTests {
         #expect(ws.apps.first?.name == "Kitty")
     }
 
-    @Test("Dock Magnification Physics and Spans")
-    func testDockMagnificationEngine() {
-        let baseSize = 42.0
-
-        // 1. Radius calculations
-        let rParabolic = DockMagnificationEngine.magnificationRadius(baseSize: baseSize, profile: "parabolic")
-        let rGaussian = DockMagnificationEngine.magnificationRadius(baseSize: baseSize, profile: "gaussian")
-        let rCosine = DockMagnificationEngine.magnificationRadius(baseSize: baseSize, profile: "cosine")
-
-        #expect(abs(rParabolic - (baseSize * 1.8)) < 0.001)
-        #expect(abs(rGaussian - (baseSize * 2.2)) < 0.001)
-        #expect(abs(rCosine - (baseSize * 2.5)) < 0.001)
-
-        // 2. Magnification factor at center (dist = 0) must be 1.0
-        #expect(abs(DockMagnificationEngine.magnificationFactor(dist: 0, radius: rParabolic, profile: "parabolic") - 1.0) < 0.001)
-        #expect(abs(DockMagnificationEngine.magnificationFactor(dist: 0, radius: rGaussian, profile: "gaussian") - 1.0) < 0.001)
-        #expect(abs(DockMagnificationEngine.magnificationFactor(dist: 0, radius: rCosine, profile: "cosine") - 1.0) < 0.001)
-
-        // 3. Magnification factor beyond radius must be 0.0
-        #expect(DockMagnificationEngine.magnificationFactor(dist: rParabolic + 10, radius: rParabolic, profile: "parabolic") == 0.0)
-        #expect(DockMagnificationEngine.magnificationFactor(dist: rGaussian + 10, radius: rGaussian, profile: "gaussian") == 0.0)
-        #expect(DockMagnificationEngine.magnificationFactor(dist: rCosine + 10, radius: rCosine, profile: "cosine") == 0.0)
-
-        // 4. Magnification scale with 130% zoom
-        let centerScale = DockMagnificationEngine.magnificationScale(
-            dist: 0,
-            baseSize: baseSize,
-            maxScalePercent: 130.0,
-            profile: "parabolic"
-        )
-        #expect(abs(centerScale - 1.30) < 0.001)
-
-        let farScale = DockMagnificationEngine.magnificationScale(
-            dist: rParabolic + 50,
-            baseSize: baseSize,
-            maxScalePercent: 130.0,
-            profile: "parabolic"
-        )
-        #expect(abs(farScale - 1.0) < 0.001)
-
-        // 5. Unit target midpoint hysteresis swapping
-        let spans: [(id: String, start: Double, end: Double)] = [
-            (id: "app_1", start: 0, end: 50),
-            (id: "app_2", start: 50, end: 100),
-            (id: "app_3", start: 100, end: 150)
-        ]
-        // app_1 dragging past midpoint of app_2 (75)
-        let swapForward = DockMagnificationEngine.unitTarget(spans: spans, id: "app_1", offset: 30) // end 50 + 30 = 80 > 75
-        #expect(swapForward == "app_2")
-
-        let stayPut = DockMagnificationEngine.unitTarget(spans: spans, id: "app_1", offset: 10) // end 50 + 10 = 60 < 75
-        #expect(stayPut == "app_1")
-
-        // 6. Geometry derivations
-        #expect(DockMagnificationEngine.effectiveThickness(iconSize: 42, spacing: 8) == 58)
-        #expect(DockMagnificationEngine.indicatorLane(iconSize: 42) >= 8)
-    }
-
     @Test("Grid Packing 2D Solver with Gravity")
     func testGridPackingSolver() {
         let cards = [
@@ -440,7 +379,7 @@ struct DMSCoreTests {
         {
             "theme": "espresso",
             "isLightMode": false,
-            "dockDeadZone": 18,
+            "customIntOption": 18,
             "customFloatOption": 42.5,
             "customArrayOption": ["foo", "bar"],
             "controlCenterColumns": 10
@@ -453,19 +392,19 @@ struct DMSCoreTests {
         #expect(config.controlCenterColumns == 10)
 
         // Verify arbitrary keys decoded into rawSettings
-        #expect(config.getSetting("dockDeadZone")?.intValue == 18)
+        #expect(config.getSetting("customIntOption")?.intValue == 18)
         #expect(config.getSetting("customFloatOption")?.doubleValue == 42.5)
         #expect(config.getSetting("customArrayOption")?.arrayValue?.compactMap(\.stringValue) == ["foo", "bar"])
 
         // Mutate both strongly-typed and arbitrary keys
         var mutableConfig = config
         mutableConfig.setSetting("theme", value: AnyCodable("nord"))
-        mutableConfig.setSetting("dockDeadZone", value: AnyCodable(24))
+        mutableConfig.setSetting("customIntOption", value: AnyCodable(24))
         mutableConfig.setSetting("newDynamicKey", value: AnyCodable("dynamicValue"))
 
         #expect(mutableConfig.theme == "nord")
         #expect(mutableConfig.getSetting("theme")?.stringValue == "nord")
-        #expect(mutableConfig.getSetting("dockDeadZone")?.intValue == 24)
+        #expect(mutableConfig.getSetting("customIntOption")?.intValue == 24)
         #expect(mutableConfig.getSetting("newDynamicKey")?.stringValue == "dynamicValue")
 
         // Re-encode and verify roundtrip preserves dynamic keys
@@ -473,7 +412,7 @@ struct DMSCoreTests {
         let reloadedConfig = DMSConfig.load(from: encodedData)
 
         #expect(reloadedConfig.theme == "nord")
-        #expect(reloadedConfig.getSetting("dockDeadZone")?.intValue == 24)
+        #expect(reloadedConfig.getSetting("customIntOption")?.intValue == 24)
         #expect(reloadedConfig.getSetting("newDynamicKey")?.stringValue == "dynamicValue")
         #expect(reloadedConfig.getSetting("customFloatOption")?.doubleValue == 42.5)
     }
@@ -526,29 +465,5 @@ struct DMSCoreTests {
         #expect(stressLayout.totalHeight > 0)
     }
 
-    @Test("Dock Magnification Unit Target Edge Cases")
-    func testDockMagnificationEngineBoundaryAndEmpty() {
-        // 1. Empty spans - defaults back to original ID
-        let emptyResult = DockMagnificationEngine.unitTarget(spans: [], id: "test", offset: 20)
-        #expect(emptyResult == "test")
-
-        // 2. Single span - stays put on self
-        let singleSpan = [(id: "app_1", start: 0.0, end: 50.0)]
-        let singleResult = DockMagnificationEngine.unitTarget(spans: singleSpan, id: "app_1", offset: 100)
-        #expect(singleResult == "app_1")
-
-        // 3. Target not found in spans - defaults back to original ID
-        let notFound = DockMagnificationEngine.unitTarget(spans: singleSpan, id: "nonexistent", offset: 10)
-        #expect(notFound == "nonexistent")
-
-        // 4. Zero-width span boundary
-        let zeroSpans = [
-            (id: "app_1", start: 0.0, end: 50.0),
-            (id: "zero", start: 50.0, end: 50.0),
-            (id: "app_2", start: 50.0, end: 100.0)
-        ]
-        let zeroResult = DockMagnificationEngine.unitTarget(spans: zeroSpans, id: "app_1", offset: 30)
-        #expect(zeroResult == "app_2")
-    }
 }
 
