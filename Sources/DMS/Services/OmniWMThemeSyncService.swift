@@ -42,27 +42,14 @@ public final class OmniWMThemeSyncService: ObservableObject {
     /// Surgically applies the palette and gradient options to OmniWM's `settings.toml`.
     @discardableResult
     public func syncTheme(palette: ThemePalette, secondarySeed: M3Color? = nil, config: DMSConfig? = nil, force: Bool = false) -> Bool {
-        let fileURL = Self.settingsURL
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            logger.info("OmniWM settings.toml not found at \(fileURL.path); skipping sync")
-            return false
-        }
-
-        isSyncing = true
-        defer { isSyncing = false }
-
-        // Ensure safety backup exists on first synchronization
-        let backupURL = Self.backupURL
-        if !FileManager.default.fileExists(atPath: backupURL.path) {
-            try? FileManager.default.copyItem(at: fileURL, to: backupURL)
-            logger.info("Created initial OmniWM settings backup at \(backupURL.path)")
-        }
-
-        do {
-            let currentContent = try String(contentsOf: fileURL, encoding: .utf8)
-            let effectiveConfig = config ?? ConfigStore.shared.config
-
-            let updatedContent = OmniWMThemeUpdater.applyTheme(
+        let effectiveConfig = config ?? ConfigStore.shared.config
+        return updateSettingsFile(
+            at: Self.settingsURL,
+            backupURL: Self.backupURL,
+            skipIfUnchanged: !force,
+            successMessage: "Successfully updated OmniWM borders with theme '\(palette.name)' (mode: \(effectiveConfig.omniwmGradientMode.rawValue))"
+        ) { currentContent in
+            OmniWMThemeUpdater.applyTheme(
                 to: currentContent,
                 palette: palette,
                 secondarySeed: secondarySeed,
@@ -71,12 +58,79 @@ public final class OmniWMThemeSyncService: ObservableObject {
                 syncOverview: effectiveConfig.omniwmSyncOverview,
                 syncWorkspaceBar: effectiveConfig.omniwmSyncWorkspaceBar
             )
+        }
+    }
+
+    /// Surgically updates `[gaps.outer]` in OmniWM's `settings.toml` when DankBar moves between screen edges.
+    @discardableResult
+    public func syncBarPositionMargins(
+        from oldPosition: String,
+        to newPosition: String,
+        barMargin: Double = OmniWMMarginUpdater.defaultBarReservedMargin,
+        settingsURL: URL? = nil,
+        backupURL: URL? = nil
+    ) -> Bool {
+        guard let oldEdge = OmniWMBarEdge(position: oldPosition),
+              let newEdge = OmniWMBarEdge(position: newPosition),
+              oldEdge != newEdge else {
+            return false
+        }
+
+        return updateSettingsFile(
+            at: settingsURL ?? Self.settingsURL,
+            backupURL: backupURL ?? Self.backupURL,
+            skipIfUnchanged: true,
+            successMessage: "Updated OmniWM [gaps.outer] margins for bar move \(oldEdge.rawValue) -> \(newEdge.rawValue)"
+        ) { currentContent in
+            OmniWMMarginUpdater.updateOuterGaps(
+                in: currentContent,
+                from: oldEdge.rawValue,
+                to: newEdge.rawValue,
+                barMargin: barMargin
+            )
+        }
+    }
+
+    private func updateSettingsFile(
+        at fileURL: URL,
+        backupURL: URL,
+        skipIfUnchanged: Bool,
+        successMessage: String,
+        transform: (String) -> String
+    ) -> Bool {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            logger.info("OmniWM settings.toml not found at \(fileURL.path); skipping sync")
+            return false
+        }
+
+        if TerminalThemeSecurity.isManagedSymlink(path: fileURL.path) {
+            logger.warning("Skipping OmniWM sync at \(fileURL.path, privacy: .public): symlink resolves into /nix/store")
+            return false
+        }
+
+        isSyncing = true
+        defer { isSyncing = false }
+
+        // Ensure safety backup exists on first synchronization
+        if !FileManager.default.fileExists(atPath: backupURL.path) {
+            try? FileManager.default.copyItem(at: fileURL, to: backupURL)
+            logger.info("Created initial OmniWM settings backup at \(backupURL.path)")
+        }
+
+        do {
+            let currentContent = try String(contentsOf: fileURL, encoding: .utf8)
+            let updatedContent = transform(currentContent)
+
+            if skipIfUnchanged && updatedContent == currentContent {
+                lastSyncError = nil
+                return true
+            }
 
             // Write atomically to trigger OmniWM's settingsFileWatcher
             try updatedContent.write(to: fileURL, atomically: true, encoding: .utf8)
             lastSyncDate = Date()
             lastSyncError = nil
-            logger.info("Successfully updated OmniWM borders with theme '\(palette.name)' (mode: \(effectiveConfig.omniwmGradientMode.rawValue))")
+            logger.info("\(successMessage)")
             return true
         } catch {
             lastSyncError = error.localizedDescription

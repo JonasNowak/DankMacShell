@@ -267,9 +267,12 @@ public enum IPCCommandExecutor {
                 return "DankBar toggled"
             case "setposition":
                 if let pos = val {
-                    ConfigStore.shared.update { $0.barPosition = pos }
+                    guard let edge = OmniWMBarEdge(position: pos) else {
+                        return "Invalid bar position '\(pos)'. Valid positions: top, bottom, left, right"
+                    }
+                    ConfigStore.shared.update { $0.barPosition = edge.rawValue }
                     DankBarController.shared.updateBarFrame()
-                    return "Bar position set to \(pos)"
+                    return "Bar position set to \(edge.rawValue)"
                 }
                 return "Missing position"
             case "status":

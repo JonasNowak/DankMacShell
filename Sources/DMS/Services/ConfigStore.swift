@@ -96,10 +96,13 @@ public final class ConfigStore: ObservableObject {
 
     public func update(immediate: Bool = true, _ block: (inout DMSConfig) -> Void) {
         var next = config
+        let previousBarPosition = next.barPosition
         block(&next)
         guard next != config else { return }
+        let nextBarPosition = next.barPosition
         config = next
         ThemeStore.shared.sync(with: config)
+        OmniWMThemeSyncService.shared.syncBarPositionMargins(from: previousBarPosition, to: nextBarPosition)
         if immediate {
             flushSave()
         } else {
