@@ -4,7 +4,7 @@ import DMSCore
 import EditLine
 import EditLine.readline
 
-let version = "0.7.0"
+let version = "0.8"
 
 func printHelp() {
     print("""
