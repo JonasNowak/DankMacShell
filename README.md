@@ -1,47 +1,77 @@
 <h1 align="center">DankMacShell</h1>
 
 <p align="center">
-  <em>A Material 3 shell for macOS — the tiling window-manager adjacent shell experience, natively on your Mac.</em>
+  <em>The Material 3 window-manager shell experience — natively on macOS.</em>
 </p>
 
 <p align="center">
   <a href="https://github.com/JonasNowak/DankMacShell/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/JonasNowak/DankMacShell/build.yml?branch=main&style=for-the-badge&label=build" alt="CI build status"></a>
   <a href="https://github.com/JonasNowak/DankMacShell/releases"><img src="https://img.shields.io/github/v/release/JonasNowak/DankMacShell?style=for-the-badge&label=release" alt="Latest release"></a>
   <a href="https://github.com/JonasNowak/DankMacShell/blob/main/LICENSE"><img src="https://img.shields.io/github/license/JonasNowak/DankMacShell?style=for-the-badge&color=2ea44f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/macOS-14%2B%20(App%2026%2B)-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14+, app bundle requires macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6">
-  <img src="https://img.shields.io/badge/OmniWM-required-7A5AF8?style=for-the-badge" alt="Requires OmniWM">
+  <img src="https://img.shields.io/badge/OmniWM-optional-7A5AF8?style=for-the-badge" alt="Optional OmniWM integration">
 </p>
 
-<p align="center">
-  <img src="docs/dankmacshell-screenshot.jpg" width="1100" alt="DankMacShell desktop screenshot">
-</p>
-
----
+<!-- TODO: record a 15-30s demo GIF showing the launcher (⌥Space), DankDash (⌥D), and dynamic wallpaper theming — save it as assets/demo.gif (create the assets/ directory first). -->
+![DankMacShell demo](assets/demo.gif)
 
 ## 📑 Contents
 
 - [What is DankMacShell?](#what-is-dankmacshell)
+- [Install](#install)
 - [Features](#features)
-- [SymbianOS Plugin (WIP)](#symbianos-plugin-wip)
-- [Quick Start](#quick-start)
-- [Global Hotkeys](#global-hotkeys)
-- [DMS CLI (`dms`)](#dms-cli)
-- [Terminal Theme Sync & home-manager](#terminal-themes)
 - [Configuration](#configuration)
-- [URL Scheme (`dms://`)](#url-scheme)
+- [URL scheme (`dms://`)](#url-scheme)
+- [Advanced topics](#advanced-topics)
+- [Roadmap](#roadmap)
+- [SymbianOS plugin — bonus experiment](#symbianos-plugin)
+- [Contributing](#contributing)
 - [License](#license)
 
 <a id="what-is-dankmacshell"></a>
 
 ## ✨ What is DankMacShell?
 
-This is built as an adaptation of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) for macOS. This project has not been endorsed nor is it related to DankMaterialShell or AvengeMedia.
+DankMacShell (DMS) is a native macOS shell written in Swift/SwiftUI — an adaptation of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) for the Mac. It brings the Linux window-manager "rice" experience (status bar, launcher, dashboard, dynamic Material You theming) to macOS. **This project is not affiliated with or endorsed by DankMaterialShell or AvengeMedia.**
 
-DankMacShell is an additional shell for macOS with [OmniWM](https://github.com/OmniNull/OmniWM). It adds the features that make macOS feel more akin to the typical WM experience on Linux systems.
+It runs on **stock macOS** on its own. If you use the tiling window manager [OmniWM](https://github.com/OmniNull/OmniWM), DMS integrates with it for tiling, workspaces, and border sync — but OmniWM is optional, never required (without it, DMS falls back to native SkyLight spaces).
 
-> [!WARNING]
-> Everything in this repository will change, some LLM-written parts will be stripped out. There are major bugs.
+> Early **v0.8.x** — features are landing fast and the config format may change between minor versions. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
+
+<p align="center">
+  <img src="docs/dankmacshell-screenshot.jpg" width="1100" alt="DankMacShell desktop screenshot">
+</p>
+
+<a id="install"></a>
+
+## 🚀 Install
+
+### ⬇️ 1. Download the DMG (recommended)
+
+- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.8.2.dmg`)
+- [ ] Open the DMG and drag **DankMacShell** into `/Applications`
+- [ ] First launch: the DMG is not signed/notarized — right-click the app and choose **Open**, or run `xattr -cr /Applications/DankMacShell.app`, then grant Accessibility & Input Monitoring when prompted
+
+### 🍺 2. Homebrew cask
+
+```bash
+brew tap jonasnowak/dankmac https://github.com/JonasNowak/DankMacShell.git
+brew install --cask jonasnowak/dankmac/dankmacshell
+brew services start dms-gop   # optional: companion REST API on :63484
+```
+
+The tap also ships the `dms-gop` and `dank-theme-engine` formulae the cask depends on.
+
+### 🔨 3. Build from source
+
+```bash
+git clone https://github.com/JonasNowak/DankMacShell.git
+cd DankMacShell
+./build.sh        # or: make build
+```
+
+You need macOS with Xcode or the Command Line Tools (Swift 6 toolchain); plain `swift build` works too — it's a Swift Package. The package targets macOS 14+, but the assembled app bundle currently sets `LSMinimumSystemVersion` to 26.0. Run the tests with `./test.sh`.
 
 <a id="features"></a>
 
@@ -51,207 +81,152 @@ At a glance:
 
 | Component | Hotkey | TL;DR |
 | --- | --- | --- |
-| DankBar | — | Material 3 status bar & dock |
-| DLauncherV2 | `⌥Space` | Spotlight-style app launcher |
-| DankDash | `⌥D` | Dashboard: weather, calendar, media, wellbeing |
-| Control Center | — | Quick toggles, sliders & theme switcher |
-| Wallpaper Browser | — | Set wallpapers & sync OmniWM borders |
-| Notepad | `⌥N` | Multi-note scratchpad |
-| Clipboard History | `⌥V` | Searchable clipboard store |
+| DankBar | — | Multi-edge Material 3 status bar |
+| Dynamic Island (`DIsland`) | — | Spring-animated notch / floating pill |
+| DLauncherV2 | `⌥Space` | App launcher, calculator, file search & `dmenu` |
+| DankDash | `⌥D` | Dashboard: weather, calendar, media, lyrics, wellbeing |
+| Control Center | — | Drag-and-drop grid tiles, sliders & detail pages |
+| Native OSD | — | Floating volume/brightness pill with bezel suppression |
+| Wallpaper Picker & Sync | `⌃⌥⇧⌘W` | Slanted carousel switcher & OmniWM border sync |
+| Notepad | `⌥N` | Multi-note window with Markdown preview & Find/Replace |
+| Clipboard History | `⌥V` | Searchable clipboard store with sensitive filtering |
 | ProcessList | — | Activity-monitor-style task manager |
-| ColorPicker | — | Screen eyedropper |
-| QR Generator | — | QR codes from any text or URL |
-| Keybinds Cheatsheet | — | Every shortcut in one dialog |
-| Settings | — | Multi-tab configuration window |
-| Dynamic Theming | — | Material You palettes from your wallpaper |
+| ColorPicker | — | Screen eyedropper (`NSColorSampler`) |
+| QR Generator | — | QR codes from text, URLs, or current Wi-Fi |
+| Keybinds Cheatsheet | — | Searchable shortcuts reference dialog |
+| Plugins & Applets | — | Built-in registry, lockfile (`plugins.lock.json`) & bar toggles |
+| Settings | — | 20-tab configuration window across 7 categories |
+| Dynamic Theming | — | Rust-backed M3 Expressive palettes from wallpaper or seed |
 
-### 📊 1. DankBar (Top/Bottom Status Bar & Dock)
-- **Material 3 Design:** Rounded pill chips, dynamic tonal elevation surfaces, and fluid spring animations.
-- **Top or Bottom Docking:** Position as a top status bar or bottom floating dock with instant hot-repositioning.
-- **Launcher Pill Button:** Direct trigger for the Material 3 Spotlight-style launcher.
-- **Spaces / Desktops Pill:** Fast desktop spaces switcher with active workspace indication (OmniWM virtual workspace integration via `omniwmctl subscribe` & Darwin kernel detection).
-- **Active App Indicator:** Live display of the currently focused application name and icon.
-- **Apps Dock / Taskbar:** Pinned and running applications with live indicator dots, click-to-activate, and context menus (Pin/Unpin, Hide, Quit).
-- **Dynamic Island / Clock & Media Pill:** Real-time clock with date tooltip, expandable now-playing snippet with inline pause/play, native volume/brightness/backlight OSD bezel swallowing with fluid capsule expansion, and live weather pill.
-- **Hardware Telemetry:** Real-time CPU usage, RAM usage, and battery indicators with live charge states.
-- **Quick Controls:** Direct toggles for Control Center, Power Menu, Microphone mute, and Caffeinate (Idle Inhibit).
-- **Smart Auto-Hide & Multi-Monitor Layout:** Automatic edge-avoidance and independent status bar managers across secondary monitors and display notches.
+### 📊 DankBar — multi-edge status bar
+Material 3 Expressive pill chips with dynamic tonal surfaces (`surface`, `glass`, `transparent`, `island`) and corner styles (`capsule`, `gothic`, `rounded`, `square`). Place bars on any of the four screen edges across multiple monitors via `barConfigs`, with notch-aware safe zones, fullscreen-aware `smartAutoHide`, and hover reveal.
+- **35+ catalog widgets:** workspaces, running/focused app pills, clock, media + live LRC lyric ticker, audio visualizer, weather, CPU/RAM/GPU/disk/network, temperatures, battery, Wi-Fi, volume, mic, idle inhibitor, keyboard layout, caps lock, privacy, VPN, updates, tray, notifications, Control Center, power menu, and applet triggers.
 
-### 🔍 2. DLauncherV2 (Spotlight App Launcher)
-- **Multi-Category Tabs:** `All`, `Apps`, `Files`, `Calc`, `Clipboard`, and `Emojis`.
-- **Spotlight-Style Search:** Instant fuzzy scoring across `/Applications`, `/System/Applications`, `~/Applications`, and user documents.
-- **Integrated Calculator:** Evaluates math expressions (`24 * 60`, `15% of 80`, powers, scientific operations) directly in the search bar.
-- **Clipboard & Emoji Search:** Instant clipboard item recall and searchable Unicode emoji catalog with copy-to-clipboard.
-- **Web Search Fallbacks:** Configurable default search engines (Google, DuckDuckGo, Bing, GitHub, YouTube).
-- **Global Hotkey:** Press `⌥Space` (Option + Space) anywhere to toggle the launcher.
+### 🏝️ Dynamic Island (`DIsland`) & native OSD
+An 8-DOF spring-solver surface in `mainBar`, `notch`, `float`, or `off` modes, with live compact pills and expandable panels for Home, Media (with lyrics), Weather, OSD, Notifications, Clipboard, Power, Control Center, and DankDash. It replaces the macOS volume/brightness bezel (`SystemOSDManager` + `MediaKeyInterceptor`) via event-tap swallowing, passive Input Monitoring, or a zero-permission CoreAudio fallback.
 
-### 📈 3. DankDash (Dashboard Overview)
-- **Personalized Header:** Dynamic greeting with username and high-resolution live clock.
-- **Interactive Calendar:** Full month view with live day highlight.
-- **Live Weather Card:** Open-Meteo REST API integration with SF Symbols, temperature in °C/°F, and weather descriptions.
-- **Celestial Engine & Weather v2:** Day progress arc with sunrise/sunset/twilight visualization, dew point calculation, and surface pressure.
-- **Digital Wellbeing Tab:** Local screen time tracking synchronized with macOS Screen Time (`ScreenTimeAgent`), active app usage breakdown, daily app quotas, 7-day weekly comparison bar charts, and 92-day retention pruning.
-- **Now Playing Media Player:** Full media controls (playback progress bar, elapsed/duration time, play/pause, next/previous) for Apple Music and Spotify.
-- **Hardware Telemetry Gauges:** Detailed CPU, RAM, and Battery circular/linear progress gauges.
-- **Quick Scratchpad:** Embedded mini-notepad synchronized with the main Notepad store.
-- **Global Hotkey:** Press `⌥D` (Option + D) anywhere to toggle DankDash.
+### 🔍 DLauncherV2 — launcher, calculator, file search & `dmenu`
+Press `⌥Space` (customizable) anywhere. List or 5-column tile views with frecency scoring; an inline calculator (`24 * 60`, `sqrt(144)`, hex, trig/log) with web-search fallback; `file:`/`f:`/`/`/`~` prefixes search via Spotlight. The `Tab` action panel focuses, hides, quits, reveals, or edits apps (`apps.perApp`), and `dms dmenu` turns the launcher into a scriptable stdin picker.
 
-### 🎛️ 4. Material 3 Control Center
-- **Quick Action Tiles:** Rounded toggle chips for:
-  - **Modular Drag-and-Drop Editing:** In-situ arrangement chrome with tile library picker sheet and 50-step undo/redo stack.
-  - **Avatar Shape Masking:** Shape cycler (Circle, Rounded Hexagon, Star, Diamond, Shield, Blob).
-  - **Dedicated Detail Pages:** Expandable detail pages for Do Not Disturb and Caffeinate (Idle Inhibit presets).
-  - Wi-Fi (CoreWLAN status & toggle)
-  - Bluetooth (IOBluetooth status & toggle)
-  - Dark / Light Mode
-  - Inhibit Sleep (IOPMAssertion caffeinate toggle)
-  - Microphone Mute
-  - Screen Capture (`screencapture -i`)
-  - Do Not Disturb (Focus)
-  - Night Shift (`CBBlueLightClient` dynamic lookup)
-  - macOS System Settings shortcut
-- **Material 3 Sliders:**
-  - Audio Volume with audio output device selector (CoreAudio)
-  - Display Brightness (`DisplayServices` private framework dynamic lookup)
-- **Theme Switcher:** Live switching between dynamic wallpaper-extracted theme and stock M3 themes (Purple, Blue, Green, Orange, Red, Yellow, Neutral).
+### 📈 DankDash — dashboard
+Press `⌥D` (customizable). Six tabs: **Overview** (clock, CPU/thermal/RAM gauges, weather, calendar, wellbeing, media card), **Media** (Apple Music/Spotify/VLC/web players with 10 Hz synchronized LRC lyrics from LRCLIB), **Weather** (Open-Meteo forecasts, sun arc, moon phases), **Wallpapers**, **Wellbeing** (Screen Time sync, app quotas, 92-day retention), and **Settings**.
 
-### 🖼️ 5. Desktop Wallpaper Browser & OmniWM Theme Sync
-- **Wallpapers Tab:** Integrated wallpaper browser with tag/category filters, thumbnail grid, and instant desktop background setting.
-- **OmniWM Window Border Sync:** Real-time synchronization of OmniWM focused and inactive window border gradients matching active Material 3 theme palettes (`dms omniwm ...`).
+### 🎛️ Control Center
+Drag-and-drop tile grid — rearrange, resize (`1x1`, `2x1`, `4x1`), add/remove via the Tile Library, 50-step undo/redo. Twelve expressive avatar shapes, six detail pages (Wi-Fi, Bluetooth, Audio, Battery, DND, Idle Inhibit), quick tiles, and master Volume/Brightness sliders plus Night Shift and dark/light.
 
-### 📝 6. Notepad (Scratchpad & Notes Manager)
-- **Material 3 Scratchpad Editor:** Autosaving markdown/plain-text editor with word and character counters.
-- **Multi-Note Drawer:** Create, switch between, and delete notes.
-- **Persistent Storage:** Stored locally in JSON format (`~/Library/Application Support/DMS/notes.json`).
-- **Global Hotkey:** Press `⌥N` (Option + N) anywhere to toggle Notepad.
+### 🖼️ Wallpaper browser, slanted switcher & OmniWM sync
+Browse `~/Pictures`, system pictures, custom folders, and gradients in DankDash/Settings, or flip through the slanted carousel with `⌃⌥⇧⌘W` (`F` filter, `R` shuffle, `Esc` revert). `dms omniwm sync` writes M3 gradient border colors into `~/.config/omniwm/settings.toml` (with a `.dms-backup`).
 
-### 📋 7. Clipboard History Manager
-- **Clipboard Store:** Real-time NSPasteboard observer maintaining search-indexed history.
-- **History Modal:** Search past text clippings, view preview snippets, copy back to pasteboard, or clear history.
-- **Persistent Storage:** Stored locally in JSON format (`~/Library/Application Support/DMS/clipboard_history.json`).
-- **Global Hotkey:** Press `⌥V` (Option + V) anywhere to toggle Clipboard history.
+### 📝 Notepad
+Press `⌥N` (customizable). A normal, tileable macOS window with a multi-note sidebar, Markdown preview modes (`none`/`split`/`full`), Find & Replace (`⌘F`), and word/character counters. Notes persist in `~/Library/Application Support/DMS/notes.json`.
 
-### ⚙️ 8. ProcessList (Activity Monitor / Task Manager)
-- **Process Enumeration:** Real-time listing of running processes with PID, CPU %, RAM usage (MB), and user.
-- **Sorting & Filtering:** Sort by CPU % or RAM usage, and filter by process name or PID.
-- **Process Termination:** Terminate misbehaving tasks (`kill -15` / `kill -9`) directly from the UI.
+### 📋 Clipboard history
+Press `⌥V` (customizable). Searchable text/URL history in `clipboard_history.json` (default `clipboardMaxItems: 200`) with keyboard navigation and optional synthetic `⌘V` auto-paste (Accessibility). Concealed/transient pasteboard types and copies from 1Password, Bitwarden, and KeePassXC are filtered out (`clipboardFilterSensitive`).
 
-### 💧 9. ColorPicker (Screen Eyedropper)
-- **Magnifying Eyedropper:** Native `NSColorSampler` for pixel sampling across any display.
-- **Color Format Conversion:** Instant conversion to HEX, RGB, and HSL values with click-to-copy chips.
-- **Recent Swatches:** History strip of recently sampled colors.
+### ⚙️ ProcessList, power menu, ColorPicker, QR & keybinds
+ProcessList shows live PID/CPU/RAM with search, sorting, and `SIGTERM`/`SIGKILL`. The power menu covers Lock/Sleep/Restart/Shut Down/Log Out with floating M3 toasts. ColorPicker is a native `NSColorSampler` eyedropper with HEX/RGB/HSL copy; the QR generator renders `CIQRCodeGenerator` codes (including one-click Wi-Fi QR) with PNG export; the keybinds cheatsheet is a searchable shortcuts modal.
 
-### 📱 10. QR Generator
-- **CoreImage CIQRCodeGenerator:** Generates crisp QR codes in real-time from arbitrary text or URLs.
-- **Wi-Fi QR Shortcut:** One-click button to format current connected Wi-Fi SSID into standard Wi-Fi QR syntax.
-- **Export Options:** Copy QR image directly to clipboard or save as PNG.
+### 🧩 Plugins, applets & Settings
+Browse and install plugins from the built-in registry, lock/restore `plugins.lock.json`, and toggle DankBar applets. The Settings window organizes **20 tabs across 7 categories** (Personalization, Primary Bar, Widgets & Notifications, Keyboard Shortcuts, Power & Sleep, Plugins, About) with live subsystem diagnostics.
 
-### ⌨️ 11. Keybinds Cheatsheet
-- Searchable quick-reference dialog listing all DMS shell shortcuts and macOS system keybinds.
+### 🌈 Dynamic & Expressive theming
+The Rust-backed `DankThemeEngine` and `MaterialMacLibrary` generate full dark/light Material 3 tonal palettes from the active wallpaper or a custom hex seed, with selectable Matugen schemes (`tonalSpot`, `vibrant`, `expressive`, `fidelity`, `neutral`, `monochrome`) and contrast levels. Ships with **7 stock themes** (`purple`, `blue`, `green`, `orange`, `red`, `yellow`, `neutral`) and **6 community themes** (`catppuccin-mocha`, `catppuccin-latte`, `nord`, `gruvbox`, `tokyo-night`, `everforest`).
 
-### 🎨 12. Material 3 Settings Window
-- Multi-tab configuration interface:
-  - **Appearance:** Theme selection (Dynamic Wallpaper, Purple, Blue, Green, Orange, Red, Yellow, Neutral), Dark/Light toggle.
-  - **Bar & Dock:** Top vs Bottom position, Auto-hide toggle, Transparent bar toggle, Show Dock toggle, Show Telemetry toggle.
-  - **Launcher:** Hotkey toggle, Weather units (°C/°F), Default web search engine.
-  - **Power & Session:** Display sleep timeout, sleep prevention options.
-  - **Diagnostics:** Subsystem connectivity check, configuration reset, hot-reload.
-  - **About:** Version info, upstream credits, and quick links.
+<a id="configuration"></a>
 
-### 🌈 13. Dynamic Wallpaper Theming (Material You)
-- Automatically samples the current desktop wallpaper using `CoreImage`.
-- Mathematically generates full Material 3 tonal palettes (Primary, Secondary, Tertiary, Surface, Container, Outline, Error tones) for both Dark and Light modes.
-- Updates the shell in real time whenever the wallpaper or display appearance changes.
+## ⚙️ Configuration
 
-<a id="symbianos-plugin-wip"></a>
+Settings are stored at:
+`~/Library/Application Support/DMS/settings.json`
 
-## 📱 SymbianOS Plugin — Nokia Belle USB Sync (WIP)
+*(Legacy `~/Library/Application Support/DMS/config.json` files are automatically migrated on first launch and mirrored on save. Config fragment composition via `"$include": [...]` is also supported.)*
 
-DankMacShell ships a standalone, crash-isolated companion app — `dms-symbian` — for syncing Nokia Belle / Symbian OS phones (like the Nokia C7-00) over USB Mass Storage mode. This shipped with **v0.5.1, the "hello hello belle update"**.
+The configuration file is automatically created with defaults (`version: 2`) on first launch and hot-reloads immediately upon disk changes:
 
-Quick feature overview:
-
-- **Device Overview:** Live device hero card with the real Nokia C7 photo, firmware (Symbian OS v9.5 / Belle Refresh), drive letter, 8 GB mass memory, 3.5" AMOLED display and USB 2.0 High Speed badges.
-- **MP3 Sync:** Scan local music folders and push tracks to the phone over USB mass storage, with live on-phone track counts.
-- **App Installer:** Stage `.sis` / `.sisx` packages onto the phone's install drive for one-tap installation on the device.
-- **Storage & Tools:** Storage overview by category (Music, Photos & Video, Apps (SISX), System, Other), dotfile cleanup, and safe eject.
-- **DankBar Widget:** Dedicated Symbian pill in DankBar showing connection state and opening the sync window.
-
-<p align="center">
-  <img src="docs/symbian-usb-sync.png" width="1100" alt="Nokia Belle USB Sync window on macOS">
-</p>
-
-> [!NOTE]
-> The SymbianOS plugin is a work in progress (WIP) — expect rough edges while it matures.
->
-> For all future releases, i plan to improve the symbianOS support for mac
-
-<a id="quick-start"></a>
-
-## 🚀 Quick Start
-
-### ⬇️ 1. Prebuilt Binary
-
-Download the prebuilt `.dmg` from [Releases](https://github.com/JonasNowak/DankMacShell/releases).
-
-### 🔨 2. Build from Source
-
-#### Requirements
-- macOS 14+ (macOS 26+ compatible)
-- Apple Command Line Tools or Xcode
-- OmniWM with IPC turned on!
-
-#### Build & Run
-```bash
-./build.sh
-# Or using make:
-make build
-```
-This builds both release binaries, packages `~/Applications/DankMacShell.app`, signs it, installs `dms` into `~/.local/bin/dms`, and launches the application.
-
-To build without launching:
-```bash
-./build.sh --no-launch
-# Or:
-make build-no-launch
+```json
+{
+  "version": 2,
+  "theme": "purple",
+  "isLightMode": false,
+  "barConfigs": [
+    {
+      "id": "primary-bar",
+      "name": "Primary Bar",
+      "position": "bottom",
+      "autoHide": false,
+      "smartAutoHide": false,
+      "backgroundStyle": "surface",
+      "cornerStyle": "gothic",
+      "adaptToNotch": true
+    }
+  ],
+  "weatherLocation": "auto",
+  "weatherUnits": "celsius",
+  "webSearchProvider": "google",
+  "launcherAttachment": "center",
+  "clipboardFilterSensitive": true,
+  "clipboardAutoPaste": false,
+  "clipboardMaxItems": 200,
+  "notepadPreviewMode": "none",
+  "enableLyrics": true,
+  "mediaPlayerLayout": "bento",
+  "autoThemeOmniWM": true,
+  "terminalThemeSync": true,
+  "terminalThemeGhostty": true,
+  "terminalThemeKitty": true,
+  "terminalThemeAlacritty": true,
+  "terminalThemeITerm2": false
+}
 ```
 
-#### Run Unit Tests
-```bash
-./test.sh
-# Or:
-make test
-```
+<a id="url-scheme"></a>
 
-#### Package Distributable DMG
-```bash
-./scripts/create-dmg.sh [version]
-# Or:
-make dmg
-```
-Creates a signed, distributable `.dmg` in `dist/`.
+## 🔗 URL Scheme (`dms://`)
 
-#### Clean Build Artifacts
-```bash
-./build.sh --clean
-# Or:
-make clean
-```
+DMS registers the `dms://` URL scheme for system integration:
+- `open -g dms://toggleLauncher` (supports `?action=open&q=...`)
+- `open -g dms://dash` (supports `?tab=overview|media|wallpapers|weather|wellbeing|settings`)
+- `open -g dms://toggleControlCenter`
+- `open -g dms://powerMenu` (supports `?action=lock|sleep|restart|shutdown|logout`)
+- `open -g dms://notepad` (`open`, `close`, `get`, `set`, `append`)
+- `open -g dms://clipboard` (`open`, `list`, `clear`, `copy`)
+- `open -g dms://processlist` (`open`, `list`, `kill`)
+- `open -g dms://colorpicker` (`pick`)
+- `open -g dms://qr` (supports `?text=...`)
+- `open -g dms://keybinds`
+- `open -g dms://settings` (supports `?tab=...`, `?key=...`, `?value=...`, `dump`)
+- `open -g dms://bar/toggle` (`reveal`, `hide`, `setposition`)
+- `open -g dms://island/toggle` (`expand?activity=home|media|notification|osd|dash|clipboard|weather`, `collapse`, `media`, `weather`)
+- `open -g "dms://setTheme?name=dynamic"` (`dms://theme/list`, `dms://toggleThemeMode`)
+- `open -g dms://wallpaper/picker` (`get`, `set`, `list`, `next`, `prev`, `random`)
+- `open -g dms://omniwm/sync` (`get`, `mode`, `direction`, `toggle`)
+- `open -g dms://mpris/play` / `open -g dms://lyrics/current`
+- `open -g dms://wellbeing/status` / `open -g dms://symbian/open`
+- `open -g dms://plugins/list` / `open -g dms://weather/status`
+- `open -g dms://screenshot` (`region`, `full`, `window`)
+- `open -g dms://reloadConfig`
+
+<a id="advanced-topics"></a>
+
+## 🧰 Advanced topics
 
 <a id="global-hotkeys"></a>
 
-## ⌨️ Global Hotkeys
+### ⌨️ Global Hotkeys
 
-| Action | Hotkey |
+All 5 global hotkeys are customizable in **Settings → Keyboard Shortcuts** (with `Hyper Key` `⌃⌥⇧⌘` and `Meh` presets):
+
+| Action | Default Hotkey |
 | --- | --- |
 | Toggle DLauncherV2 (Spotlight launcher) | `⌥Space` |
 | Toggle DankDash | `⌥D` |
 | Toggle Notepad | `⌥N` |
 | Toggle Clipboard History | `⌥V` |
+| Toggle Slanted Wallpaper Picker | `⌃⌥⇧⌘W` (`Hyper+W`) |
 
 <a id="dms-cli"></a>
 
-## 🖥️ DMS CLI (`dms`)
+### 🖥️ DMS CLI (`dms`)
 
 A dedicated command-line utility is installed to `~/.local/bin/dms` for controlling the shell via Unix domain socket (`~/Library/Application Support/DMS/dms.sock`):
 
@@ -267,40 +242,57 @@ dms restart                      # Restart DankMacShell
 dms status                       # Show running status of DMS daemon and socket
 dms doctor                       # Run diagnostics check on permissions and subsystems
 dms permission                   # Open Accessibility / Device Control settings to grant event swallowing
+dms reload                       # Reload configuration from disk
+dms version                      # Show version info
 
-# Direct Shortcuts
+# Windows, Overlays & App Control
 dms spotlight [toggle|open|close]
 dms launcher [toggle|open|close]
 dms dash [toggle|open|close]
-dms control-center [toggle]
-dms powermenu [action]
-dms notepad [open|toggle|get|set <text>]
-dms clipboard [open|list|clear]
-dms processlist [open|list|kill <pid>]
+dms control-center [toggle|open|close]
+dms powermenu [open|lock|sleep|restart|shutdown|logout]
+dms notepad [toggle|open|close|get|set <text>|append <text>]
+dms clipboard [toggle|open|list|clear|copy <text>]
+dms processlist [toggle|open|list|kill <pid>]
+dms unhide <bundleID> [--background]
+dms unhide-all [--background]
+dms hide <bundleID>
+dms activate <bundleID>
 dms colorpicker [pick]
-dms qr <text>
-dms keybinds [open]
-dms settings [open|get|set|dump]
-dms wellbeing [status|enable|disable|toggle|sync|open-system]
-dms bar [reveal|hide|toggle|status|setposition <top|bottom>]
-dms dock [reveal|hide|toggle|status]
+dms qr [text]
+dms keybinds [toggle|open|close]
+dms settings [toggle|open [tab]|close|get <key>|set <key> <val>|dump]
+
+# Bar, Island & Workspaces
+dms bar [reveal|hide|toggle|status|setposition <top|bottom|left|right>]
+dms island [toggle|open [activity]|close|expand [activity]|collapse|media|weather|status]
 dms workspace [status|switch <num>|next|prev]
-dms audio [status|setvolume <0-100>|mute|unmute|toggle]
+
+# Hardware, Media, Lyrics & Weather
+dms audio [status|setvolume <0-100>|increment|decrement|mute|unmute|toggle|list-devices|set-device <name>]
 dms mic [status|mute|unmute|toggle]
 dms brightness [get|set <0-100>|increment|decrement]
-dms inhibit [toggle|status]
-dms mpris [status|play|pause|next|prev]
-dms theme [get|set <name>|list|toggle-mode]
+dms inhibit [toggle|enable|disable|status]
+dms mpris [status|play|pause|toggle|next|prev|seek <sec>|lyrics]
+dms lyrics [status|current|refresh|clear-cache|offset <ms>]
 dms weather [status|refresh|location <city|lat,lon>]
-dms wallpaper [get|set <path>|list]
+dms wellbeing [status|enable|disable|toggle|sync [true|false]|open-system|check]
+
+# Themes, Wallpapers, OmniWM, Plugins & Companion
+dms theme [get|set <name>|list|toggle-mode]
+dms wallpaper [get|set <path>|list|picker|next|prev|random]
 dms omniwm [get|sync|mode <mode>|direction <dir>|toggle]
+dms plugins [search [query]|list|install <id>|uninstall <id>|enable <id>|disable <id>|lock|restore [path]]
+dms applets [list|toggle <name>]
+dms danksearch [status|diagnostics|reset|search <query>]
+dms symbian [open|close|toggle|status|clean|eject|install <path>|sync]
 dms screenshot [region|full|window]
 dms toast <info|warn|error> <message>
-dms version
+dms ipc call <target> <action> [args...]
 
 # CLI Pipelines (v0.7)
 dms dmenu [--prompt <text>]     # Read candidates from stdin, pick one in the launcher, print it to stdout
-                                 # (exit 0 on selection, exit 1 on Esc/cancel)
+                                 # (exit 0 on selection, exit 1 on Esc/cancel, exit 3 if daemon unreachable)
 dms listen [topic]               # Stream newline-delimited JSON events from the daemon (default topic: *)
                                  # topics: events.audio, events.battery, events.wifi, events.workspaces,
                                  #         events.media, events.theme
@@ -335,12 +327,14 @@ dms> theme get
 dms> audio setvolume 50
 ```
 
+`dms.sock` also accepts `SUBSCRIBE <topic>` / `UNSUBSCRIBE <topic>` and single-line REST commands (`GET /api/v1/audio/volume`, `POST /api/v1/audio/volume`, `GET|POST /api/v1/audio/sinks`, `GET /api/v1/network/wifi/scan`, `POST /api/v1/network/wifi/connect`, `GET /api/v1/bluetooth/devices`, `POST /api/v1/brightness/set`, `GET /api/v1/settings`, `POST /api/v1/settings`).
+
 <a id="terminal-themes"></a>
 
-## 🖥️ Terminal Theme Sync & home-manager (v0.7)
+### 🖥️ Terminal Theme Sync & home-manager
 
 When the DMS theme changes, the shell live-exports the current palette to your terminal emulators
-(master switch `terminalThemeSync`, per-emulator toggles in Settings → Theme; Ghostty, Kitty and
+(master switch `terminalThemeSync`, per-emulator toggles in **Settings → Theme & Colors**; Ghostty, Kitty and
 Alacritty default ON, iTerm2 OFF):
 
 | Emulator | File written |
@@ -357,7 +351,7 @@ In addition, DMS always writes a canonical machine-readable document to
 + dark/light flag, atomic tmp+rename write). This is the read-only interface for
 home-manager / stylix-style setups.
 
-### home-manager / Nix compatibility
+#### home-manager / Nix compatibility
 
 DMS never writes a file that home-manager manages: before writing, each target is resolved and if
 it is a symlink into `/nix/store` (read-only), that emulator is skipped with a warning in the
@@ -389,61 +383,63 @@ iTerm2 Dynamic Profiles work natively — that directory is not home-manager man
 For stylix-style pipelines, read `~/Library/Application Support/DMS/theme.json` — it always exists
 and is always writable, regardless of which emulator targets are managed.
 
+### ❄️ Nix (nix-darwin & home-manager)
 
+One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`dgop`), and `dank-theme-engine` (`dte`) with their `launchd` LaunchAgents — or, via home-manager, just the app plus terminal theme targets:
 
-<a id="configuration"></a>
+```nix
+# flake.nix (nix-darwin)
+{ inputs.dankmacshell.url = "github:JonasNowak/DankMacShell";
+  outputs = { nix-darwin, dankmacshell, ... }: {
+    darwinConfigurations."my-mac" = nix-darwin.lib.darwinSystem {
+      system = "aarch64-darwin";
+      modules = [ dankmacshell.darwinModules.default { programs.dankmacshell = {
+        enable = true;
+        launchd.enable = true;              # auto-start the app in the Aqua session
+        dmsGop.server.enable = true;        # dms-gop REST API on :63484
+        themeEngine.launchd.enable = false; # optional background `dte watch`
+      }; } ];
+    }; }; }
 
-## ⚙️ Configuration
-
-Settings are stored at:
-`~/Library/Application Support/DMS/config.json`
-
-The configuration file is automatically created with defaults on first launch and hot-reloads immediately upon disk changes:
-
-```json
-{
-  "theme": "purple",
-  "isLightMode": false,
-  "barPosition": "bottom",
-  "barAutoHide": false,
-  "barTransparent": false,
-  "showDock": true,
-  "showTelemetry": true,
-  "launcherHotkey": true,
-  "weatherUnits": "celsius",
-  "searchProvider": "google",
-  "terminalThemeSync": true,
-  "terminalThemeGhostty": true,
-  "terminalThemeKitty": true,
-  "terminalThemeAlacritty": true,
-  "terminalThemeITerm2": false,
-  "pinnedApps": [
-    "com.apple.Terminal",
-    "com.apple.Safari",
-    "com.apple.finder"
-  ]
-}
+# home-manager
+{ imports = [ inputs.dankmacshell.homeManagerModules.default ];
+  programs.dankmacshell = { enable = true; themeEngine.targets = {
+    kitty.enable = true; ghostty.enable = true; tmux.enable = true; neovim.enable = true; }; }; }
 ```
 
-<a id="url-scheme"></a>
+<a id="roadmap"></a>
 
-## 🔗 URL Scheme (`dms://`)
+## 🗺️ Roadmap
 
-DMS registers the `dms://` URL scheme for system integration:
-- `open -g dms://toggleLauncher`
-- `open -g dms://dash`
-- `open -g dms://toggleControlCenter`
-- `open -g dms://powerMenu`
-- `open -g dms://notepad`
-- `open -g dms://clipboard`
-- `open -g dms://processlist`
-- `open -g dms://colorpicker`
-- `open -g dms://keybinds`
-- `open -g dms://settings`
-- `open -g "dms://setTheme?name=dynamic"`
-- `open -g dms://toggleThemeMode`
-- `open -g dms://screenshot`
-- `open -g dms://reloadConfig`
+Status: **v0.8.x**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: M3 Expressive theming via `MaterialMacLibrary` + the Rust theme engine (v0.8), OmniWM margin auto-adjust when the bar changes edge (v0.8.1), customizable Control Center tile grid + Homebrew/Nix packaging (v0.8.2), terminal theme exporters & CLI pipelines (v0.7).
+
+- Next up: mature the SymbianOS plugin, deeper OmniWM workspace integration, more bar widgets and launcher actions.
+- The full port plan lives in [PLAN.md](PLAN.md); the v0.2–v0.7 feature-parity roadmap (all shipped) lives in [ROADMAP.md](ROADMAP.md).
+- While v0.x, the config format may change between minor versions — watch the release notes.
+
+<a id="symbianos-plugin"></a>
+
+## 📱 SymbianOS plugin — a bonus experiment
+
+DankMacShell bundles a standalone, crash-isolated companion — `dms-symbian` (inside `DankMacShell.app/Contents/MacOS/`, also installed to `~/.local/bin/dms-symbian`) — for syncing Nokia Belle / Symbian OS phones (like the Nokia C7-00) over USB Mass Storage mode. It shipped with **v0.5.1, the "hello hello belle update"**.
+
+- **Device overview:** live hero card with the real Nokia C7 photo, firmware (Symbian OS v9.5 / Belle Refresh), drive letter, 8 GB mass memory, 3.5" AMOLED display and USB 2.0 badges.
+- **MP3 sync & app installer:** scan local music folders and push tracks to the phone, or stage `.sis` / `.sisx` packages for one-tap installation on the device.
+- **Storage & tools:** storage overview by category, dotfile cleanup, and safe eject.
+- **DankBar pill & CLI:** dedicated Symbian widget (`showSymbianApplet`) and `dms symbian` commands (`open`, `status`, `sync`, `install`, `clean`, `eject`).
+
+<p align="center">
+  <img src="docs/symbian-usb-sync.png" width="1100" alt="Nokia Belle USB Sync window on macOS">
+</p>
+
+> [!NOTE]
+> The SymbianOS plugin is a work in progress — expect rough edges while it matures.
+
+<a id="contributing"></a>
+
+## 🤝 Contributing
+
+Issues and PRs are welcome — [open an issue](https://github.com/JonasNowak/DankMacShell/issues) for bugs or feature ideas, and check the issue tracker for good first issues. For larger changes, open an issue first so we can align on direction. Run `./test.sh` before submitting a PR.
 
 <a id="license"></a>
 
