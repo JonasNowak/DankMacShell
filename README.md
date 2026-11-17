@@ -8,7 +8,7 @@
   <a href="https://github.com/JonasNowak/DankMacShell/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/JonasNowak/DankMacShell/build.yml?branch=main&style=for-the-badge&label=build" alt="CI build status"></a>
   <a href="https://github.com/JonasNowak/DankMacShell/releases"><img src="https://img.shields.io/github/v/release/JonasNowak/DankMacShell?style=for-the-badge&label=release" alt="Latest release"></a>
   <a href="https://github.com/JonasNowak/DankMacShell/blob/main/LICENSE"><img src="https://img.shields.io/github/license/JonasNowak/DankMacShell?style=for-the-badge&color=2ea44f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B%20(App%2026%2B)-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14+, app bundle requires macOS 26+">
+  <img src="https://img.shields.io/badge/macOS-26%2B-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6">
   <a href="https://github.com/OmniNull/OmniWM"><img src="https://img.shields.io/badge/OmniWM-optional-7A5AF8?style=for-the-badge" alt="Optional OmniWM integration"></a>
 </p>
@@ -117,7 +117,7 @@ cd DankMacShell
 ./build.sh        # or: make build
 ```
 
-You need macOS with Xcode or the Command Line Tools (Swift 6 toolchain); plain `swift build` works too — it's a Swift Package. The package targets macOS 14+, but the assembled app bundle currently sets `LSMinimumSystemVersion` to 26.0. Run the tests with `./test.sh`.
+You need macOS 26+ with Xcode or the Command Line Tools (Swift 6 toolchain); plain `swift build` works too — it's a Swift Package. Run the tests with `./test.sh`.
 
 <a id="features"></a>
 
