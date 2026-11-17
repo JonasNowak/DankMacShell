@@ -227,6 +227,7 @@ Import `github:JonasNowak/DankMacShell` to install `DankMacShell.app`, `dms`, `d
 ### ⬇️ 3. Prebuilt DMG
 
 Download the prebuilt `.dmg` from [Releases](https://github.com/JonasNowak/DankMacShell/releases).
+Note that it does not have all features, like native OSD supression. 
 
 ### 🔨 4. Build from Source
 
