@@ -109,6 +109,8 @@ One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`d
 - [ ] Open the DMG and drag **DankMacShell** into `/Applications`
 - [ ] First launch: the DMG is not signed/notarized — right-click the app and choose **Open**, or run `xattr -cr /Applications/DankMacShell.app`, then grant Accessibility & Input Monitoring when prompted
 
+> Note that it does not have all features, like native OSD suppression.
+
 ### 🔨 4. Build from source
 
 ```bash
