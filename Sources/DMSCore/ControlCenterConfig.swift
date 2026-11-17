@@ -51,6 +51,9 @@ public struct ControlCenterWidgetConfig: Sendable, Codable, Equatable, Identifia
         ControlCenterWidgetConfig(id: "nightMode", col: 4, row: 6, w: 2, h: 1),
         ControlCenterWidgetConfig(id: "darkMode", col: 6, row: 6, w: 2, h: 1)
     ]
+
+    /// Default middle-grid tiles for the customizable Control Center grid (canonical hardware tiles).
+    public static let defaultGridTiles: [ControlCenterWidgetConfig] = ControlCenterUtils.canonicalHardwareTiles
 }
 
 /// 50-step undo/redo stack recording Control Center grid snapshots.
@@ -152,6 +155,10 @@ public enum ControlCenterUtils: Sendable {
     public static let buttonIds: [String] = actionIds + [editId]
     public static let optionIds: [String] = ["diskUsage", "brightnessSlider", "idleInhibitor", "user", "battery", "quickTiles"]
 
+    /// Fixed chrome tiles that always live outside the customizable middle grid
+    /// (header buttons and full-width sliders).
+    public static let fixedChromeIds: Set<String> = ["user", "lock", "power", "settings", "edit", "volumeSlider", "brightnessSlider", "inputVolumeSlider"]
+
     public static func nextUserShape(_ current: String) -> String {
         guard let idx = userShapes.firstIndex(of: current) else {
             return userShapes[0]
@@ -193,13 +200,22 @@ public enum ControlCenterUtils: Sendable {
             let clampedH = max(1, min(widget.h, rows))
             return (clampedW, clampedH)
         }
+        if widget.id == "quickTiles" {
+            let clampedW = max(min(4, columns), min(widget.w, columns))
+            return (clampedW, 1)
+        }
         let clampedW = max(1, min(widget.w, columns))
         let clampedH = max(1, min(widget.h, rows))
         return (clampedW, clampedH)
     }
 
     /// Cycles tile span between 1x1, 2x1, and 4x1 (standard) respecting `canShrink` and `clampSize`.
+    /// `quickTiles` toggles between full-width (`min(columns, 8)`) and half-width (`min(columns, 4)`).
     public static func nextSpan(for widget: ControlCenterWidgetConfig, columns: Int) -> (w: Int, h: Int) {
+        if widget.id == "quickTiles" {
+            let targetW = widget.w > 4 ? min(columns, 4) : min(columns, 8)
+            return (targetW, 1)
+        }
         guard canShrink(widget.id) else {
             return clampSize(widget: widget, columns: columns)
         }
@@ -241,6 +257,25 @@ public enum ControlCenterUtils: Sendable {
         ControlCenterWidgetConfig(id: "settings", col: 7, row: 0, w: 1, h: 1, small: true)
     ]
 
+    /// The 14 middle-grid-eligible tiles with their canonical spans
+    /// (`nightMode`/`darkMode`/`theme` at 2 wide, `quickTiles` at 8 wide, the rest at 4 wide).
+    public static let gridCatalogWidgets: [ControlCenterWidgetConfig] = [
+        ControlCenterWidgetConfig(id: "wifi", col: 0, row: 0, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "bluetooth", col: 0, row: 1, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "audioOutput", col: 0, row: 2, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "audioInput", col: 0, row: 3, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "battery", col: 0, row: 4, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "diskUsage", col: 0, row: 5, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "colorPicker", col: 0, row: 6, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "idleInhibitor", col: 0, row: 7, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "doNotDisturb", col: 0, row: 8, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "nightMode", col: 0, row: 9, w: 2, h: 1),
+        ControlCenterWidgetConfig(id: "darkMode", col: 0, row: 10, w: 2, h: 1),
+        ControlCenterWidgetConfig(id: "theme", col: 0, row: 11, w: 2, h: 1),
+        ControlCenterWidgetConfig(id: "media", col: 0, row: 12, w: 4, h: 1),
+        ControlCenterWidgetConfig(id: "quickTiles", col: 0, row: 13, w: 8, h: 1)
+    ]
+
     /// Canonical 8 hardware tiles in the 2-column grid matching cc.png 1:1.
     public static let canonicalHardwareTiles: [ControlCenterWidgetConfig] = [
         ControlCenterWidgetConfig(id: "wifi", col: 0, row: 0, w: 4, h: 1),
@@ -253,25 +288,39 @@ public enum ControlCenterUtils: Sendable {
         ControlCenterWidgetConfig(id: "idleInhibitor", col: 4, row: 3, w: 4, h: 1)
     ]
 
+    /// Normalizes a widget list into a valid middle-grid tile set: filters out fixed chrome
+    /// and disabled tiles, normalizes legacy aliases (`network` -> `wifi`, `caffeine` ->
+    /// `idleInhibitor`, `audioDevice` -> `audioOutput`), deduplicates by `id` (keeping the
+    /// first occurrence), and clamps each tile's size. Unlike the legacy `hardwareTiles`,
+    /// this preserves `doNotDisturb`, `nightMode`, `darkMode`, `theme`, `media`, and
+    /// `quickTiles`, and allows an empty result without falling back to `canonicalHardwareTiles`.
+    public static func normalizedGridTiles(from widgets: [ControlCenterWidgetConfig], columns: Int = CcMetrics.defaultColumns) -> [ControlCenterWidgetConfig] {
+        var seen: Set<String> = []
+        var result: [ControlCenterWidgetConfig] = []
+        for var widget in widgets {
+            if fixedChromeIds.contains(widget.id) || !widget.enabled { continue }
+            // Normalize aliases
+            if widget.id == "network" {
+                widget.id = "wifi"
+            } else if widget.id == "caffeine" {
+                widget.id = "idleInhibitor"
+            } else if widget.id == "audioDevice" {
+                widget.id = "audioOutput"
+            }
+            if seen.contains(widget.id) { continue }
+            seen.insert(widget.id)
+            let (w, h) = clampSize(widget: widget, columns: columns)
+            widget.w = w
+            widget.h = h
+            widget.small = (w == 1)
+            result.append(widget)
+        }
+        return result
+    }
+
     /// Extracts and normalizes hardware tiles for the 2D grid, filtering out permanent header and slider widgets.
     public static func hardwareTiles(from widgets: [ControlCenterWidgetConfig]) -> [ControlCenterWidgetConfig] {
-        let excluded: Set<String> = ["user", "lock", "power", "settings", "edit", "volumeSlider", "brightnessSlider", "doNotDisturb", "nightMode", "darkMode", "theme"]
-        var filtered = widgets.filter { !excluded.contains($0.id) && $0.enabled }
-        // If empty or only contains partial/corrupt legacy data missing core hardware tiles, restore canonical 8 tiles
-        if filtered.isEmpty || (!filtered.contains(where: { $0.id == "audioOutput" || $0.id == "audioDevice" }) && !filtered.contains(where: { $0.id == "colorPicker" })) {
-            return canonicalHardwareTiles
-        }
-        // Normalize aliases
-        for i in 0..<filtered.count {
-            if filtered[i].id == "network" {
-                filtered[i].id = "wifi"
-            } else if filtered[i].id == "caffeine" {
-                filtered[i].id = "idleInhibitor"
-            } else if filtered[i].id == "audioDevice" {
-                filtered[i].id = "audioOutput"
-            }
-        }
-        return filtered
+        return normalizedGridTiles(from: widgets)
     }
 
     public static func title(for id: String) -> String {
@@ -373,5 +422,178 @@ public enum ControlCenterUtils: Sendable {
         let usedStr = String(format: "%.1fG", used)
         let totalStr = String(format: "%.1fG", total)
         return (summary, usedStr, totalStr, percent)
+    }
+}
+
+/// Grid layout planner for the customizable Control Center middle grid.
+/// Normalizes tiles via `ControlCenterUtils.normalizedGridTiles` and packs them with
+/// `GridPackingSolver.packCards` (`step: 1.0`, gravity on) to produce collision-free layouts.
+public enum ControlCenterGridPlanner: Sendable {
+
+    /// Packs normalized widgets, clamping each widget's `col` to `0...max(0, columns - w)`
+    /// and `row` to `max(0, row)`.
+    public static func layoutResult(
+        for widgets: [ControlCenterWidgetConfig],
+        columns: Int,
+        width: Double,
+        gap: Double = Double(CcMetrics.gridGap),
+        rowUnit: Double = Double(CcMetrics.tileHeight)
+    ) -> GridPackingSolver.LayoutResult {
+        let normalized = ControlCenterUtils.normalizedGridTiles(from: widgets, columns: columns)
+        return pack(normalized, columns: columns, width: width, gap: gap, rowUnit: rowUnit)
+    }
+
+    /// Moves a tile to `(toCol, toRow)`. Pass 1 packs the remaining tiles so the vacated
+    /// slot closes up; pass 2 places the moved tile first at the requested slot so colliding
+    /// neighbors settle cleanly downward.
+    public static func move(
+        widgetID: String,
+        toCol: Int,
+        toRow: Int,
+        in widgets: [ControlCenterWidgetConfig],
+        columns: Int,
+        width: Double,
+        gap: Double = Double(CcMetrics.gridGap),
+        rowUnit: Double = Double(CcMetrics.tileHeight)
+    ) -> [ControlCenterWidgetConfig] {
+        let normalized = ControlCenterUtils.normalizedGridTiles(from: widgets, columns: columns)
+        guard let movedIndex = normalized.firstIndex(where: { $0.id == widgetID }) else {
+            return normalizeLayout(widgets, columns: columns, width: width, gap: gap, rowUnit: rowUnit)
+        }
+        let moved = normalized[movedIndex]
+        let others = normalized.enumerated().filter { $0.offset != movedIndex }.map(\.element)
+
+        // Pass 1: close up the vacated slot.
+        let pass1 = pack(others, columns: columns, width: width, gap: gap, rowUnit: rowUnit)
+        let compactedOthers = sync(others, with: pass1)
+
+        // Pass 2: place the moved tile first at the requested slot.
+        var movedTile = moved
+        movedTile.col = max(0, min(max(0, columns - movedTile.w), toCol))
+        movedTile.row = max(0, toRow)
+        let pass2Widgets = [movedTile] + compactedOthers
+        let pass2 = pack(pass2Widgets, columns: columns, width: width, gap: gap, rowUnit: rowUnit)
+        return sync(pass2Widgets, with: pass2)
+    }
+
+    /// Inserts a new tile into the earliest open slot found by `GridPackingSolver.firstFit`.
+    public static func insert(
+        _ tile: ControlCenterWidgetConfig,
+        into widgets: [ControlCenterWidgetConfig],
+        columns: Int,
+        width: Double,
+        gap: Double = Double(CcMetrics.gridGap),
+        rowUnit: Double = Double(CcMetrics.tileHeight)
+    ) -> [ControlCenterWidgetConfig] {
+        let normalized = ControlCenterUtils.normalizedGridTiles(from: widgets, columns: columns)
+        var newTile = tile
+        if newTile.id == "network" {
+            newTile.id = "wifi"
+        } else if newTile.id == "caffeine" {
+            newTile.id = "idleInhibitor"
+        } else if newTile.id == "audioDevice" {
+            newTile.id = "audioOutput"
+        }
+        if ControlCenterUtils.fixedChromeIds.contains(newTile.id)
+            || normalized.contains(where: { $0.id == newTile.id }) {
+            return normalizeLayout(widgets, columns: columns, width: width, gap: gap, rowUnit: rowUnit)
+        }
+        let (w, h) = ControlCenterUtils.clampSize(widget: newTile, columns: columns)
+        newTile.w = w
+        newTile.h = h
+        newTile.small = (w == 1)
+        newTile.enabled = true
+
+        // Existing tiles keep their fixed (col, row); the new tile gets nil so firstFit finds the earliest open slot.
+        let existingCards = normalized.map { card(for: $0, columns: columns) }
+        let newCard = GridPackingSolver.CardItem(id: newTile.id, col: nil, row: nil, w: Double(w), h: Double(h), small: newTile.small)
+        let result = GridPackingSolver.packCards(cards: existingCards + [newCard], columns: columns, width: width, gap: gap, rowUnit: rowUnit, step: 1.0, gravity: true)
+        return sync(normalized + [newTile], with: result)
+    }
+
+    /// Cycles a tile's span via `ControlCenterUtils.nextSpan`, repacking with the resized
+    /// tile first (others in `(row, col)` order) so neighbors settle cleanly.
+    public static func cycleSpan(
+        widgetID: String,
+        in widgets: [ControlCenterWidgetConfig],
+        columns: Int,
+        width: Double,
+        gap: Double = Double(CcMetrics.gridGap),
+        rowUnit: Double = Double(CcMetrics.tileHeight)
+    ) -> [ControlCenterWidgetConfig] {
+        let normalized = ControlCenterUtils.normalizedGridTiles(from: widgets, columns: columns)
+        guard let index = normalized.firstIndex(where: { $0.id == widgetID }) else {
+            return normalizeLayout(widgets, columns: columns, width: width, gap: gap, rowUnit: rowUnit)
+        }
+        var resized = normalized[index]
+        let (newW, newH) = ControlCenterUtils.nextSpan(for: resized, columns: columns)
+        resized.col = max(0, min(resized.col, max(0, columns - newW)))
+        resized.w = newW
+        resized.h = newH
+        resized.small = (newW == 1)
+        let others = normalized.enumerated()
+            .filter { $0.offset != index }
+            .map(\.element)
+            .sorted { ($0.row, $0.col) < ($1.row, $1.col) }
+        let ordered = [resized] + others
+        let result = pack(ordered, columns: columns, width: width, gap: gap, rowUnit: rowUnit)
+        return sync(ordered, with: result)
+    }
+
+    /// Packs normalized widgets with `step: 1.0, gravity: true`, syncs `(col, row)` from the
+    /// layout result, and sorts by `(row, col)`.
+    public static func normalizeLayout(
+        _ widgets: [ControlCenterWidgetConfig],
+        columns: Int,
+        width: Double,
+        gap: Double = Double(CcMetrics.gridGap),
+        rowUnit: Double = Double(CcMetrics.tileHeight)
+    ) -> [ControlCenterWidgetConfig] {
+        let normalized = ControlCenterUtils.normalizedGridTiles(from: widgets, columns: columns)
+        let result = pack(normalized, columns: columns, width: width, gap: gap, rowUnit: rowUnit)
+        return sync(normalized, with: result)
+    }
+
+    // MARK: - Helpers
+
+    private static func card(for widget: ControlCenterWidgetConfig, columns: Int) -> GridPackingSolver.CardItem {
+        let clampedCol = max(0, min(max(0, columns - widget.w), widget.col))
+        return GridPackingSolver.CardItem(
+            id: widget.id,
+            col: Double(clampedCol),
+            row: Double(max(0, widget.row)),
+            w: Double(widget.w),
+            h: Double(widget.h),
+            small: widget.small
+        )
+    }
+
+    private static func pack(
+        _ widgets: [ControlCenterWidgetConfig],
+        columns: Int,
+        width: Double,
+        gap: Double,
+        rowUnit: Double
+    ) -> GridPackingSolver.LayoutResult {
+        let cards = widgets.map { card(for: $0, columns: columns) }
+        return GridPackingSolver.packCards(cards: cards, columns: columns, width: width, gap: gap, rowUnit: rowUnit, step: 1.0, gravity: true)
+    }
+
+    private static func sync(_ widgets: [ControlCenterWidgetConfig], with result: GridPackingSolver.LayoutResult) -> [ControlCenterWidgetConfig] {
+        var slotsById: [String: GridPackingSolver.GridSlot] = [:]
+        for slot in result.slots {
+            slotsById[slot.id] = slot
+        }
+        return widgets.map { widget in
+            var updated = widget
+            if let slot = slotsById[widget.id] {
+                updated.col = Int(slot.col.rounded())
+                updated.row = Int(slot.row.rounded())
+            }
+            return updated
+        }.sorted { lhs, rhs in
+            if lhs.row != rhs.row { return lhs.row < rhs.row }
+            return lhs.col < rhs.col
+        }
     }
 }

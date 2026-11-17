@@ -50,15 +50,22 @@ fi
 BUILD_NUMBER=${BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)}
 
 rm -rf "$APP"
+BIN_DIR=$(dirname "$BINARY")
+
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY" "$APP/Contents/MacOS/DankMaterialShell"
-ln -sf "DankMaterialShell" "$APP/Contents/MacOS/DMS"
 ln -sf "DankMaterialShell" "$APP/Contents/MacOS/DankMacShell"
 cp "$PLIST" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
 
-# Copy SPM resource bundle if present
-BIN_DIR=$(dirname "$BINARY")
+# Copy SPM resource bundle and companion CLIs if present
+# On case-insensitive APFS, `dms` and `DMS` collide; only create the `DMS` symlink when `dms` isn't bundled.
+if [ -f "$BIN_DIR/dms" ]; then
+    cp "$BIN_DIR/dms" "$APP/Contents/MacOS/dms"
+    chmod +x "$APP/Contents/MacOS/dms"
+else
+    ln -sf "DankMaterialShell" "$APP/Contents/MacOS/DMS"
+fi
 if [ -f "$BIN_DIR/dms-symbian" ]; then
     cp "$BIN_DIR/dms-symbian" "$APP/Contents/MacOS/dms-symbian"
     chmod +x "$APP/Contents/MacOS/dms-symbian"

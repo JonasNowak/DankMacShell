@@ -159,11 +159,76 @@ Quick feature overview:
 
 ## 🚀 Quick Start
 
-### ⬇️ 1. Prebuilt Binary
+### 🍺 1. Homebrew (`brew` / `brew services` / `Brewfile`)
+
+Install the full **DankMacShell** stack (`DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` / `dgop`, and `dank-theme-engine` / `dte`) via the built-in tap:
+
+```bash
+brew tap jonasnowak/dankmac https://github.com/JonasNowak/DankMacShell.git
+brew install --cask jonasnowak/dankmac/dankmacshell
+brew services start dms-gop
+
+# Optional: persist Accessibility & Input Monitoring TCC permissions across updates
+dms setup-cert
+```
+
+Or install everything and start services in one command from a checkout using [`Brewfile`](Brewfile):
+
+```bash
+brew bundle
+# or: make brew
+```
+
+### ❄️ 2. Nix (`nix-darwin` / Home Manager — Single Import)
+
+Import `github:JonasNowak/DankMacShell` to install `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`dgop`), and `dank-theme-engine` (`dte`) along with their `launchd` LaunchAgents:
+
+**`nix-darwin` (`flake.nix`):**
+```nix
+{
+  inputs.dankmacshell.url = "github:JonasNowak/DankMacShell";
+
+  outputs = { self, nix-darwin, dankmacshell, ... }: {
+    darwinConfigurations."my-mac" = nix-darwin.lib.darwinSystem {
+      system = "aarch64-darwin";
+      modules = [
+        dankmacshell.darwinModules.default
+        {
+          programs.dankmacshell = {
+            enable = true;
+            launchd.enable = true;              # Auto-start DankMacShell.app in Aqua session
+            dmsGop.server.enable = true;        # Auto-start dms-gop REST API (:63484)
+            themeEngine.launchd.enable = false; # Optional background `dte watch` agent
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+**Home Manager:**
+```nix
+{
+  imports = [ inputs.dankmacshell.homeManagerModules.default ];
+
+  programs.dankmacshell = {
+    enable = true;
+    themeEngine.targets = {
+      kitty.enable = true;
+      ghostty.enable = true;
+      tmux.enable = true;
+      neovim.enable = true;
+    };
+  };
+}
+```
+
+### ⬇️ 3. Prebuilt DMG
 
 Download the prebuilt `.dmg` from [Releases](https://github.com/JonasNowak/DankMacShell/releases).
 
-### 🔨 2. Build from Source
+### 🔨 4. Build from Source
 
 #### Requirements
 - macOS (`Package.swift` targets macOS 14+; `Support/Info.plist` currently sets `LSMinimumSystemVersion` to `26.0`)
@@ -175,17 +240,25 @@ Download the prebuilt `.dmg` from [Releases](https://github.com/JonasNowak/DankM
 ./build.sh
 # Or using make:
 make build
+
+# Full stack (DankMacShell + dms-gop + dte + launchd LaunchAgents):
+./build.sh --with-companions --install-services
+# Or:
+make install-all
 ```
-This builds all three release binaries (`DankMacShell`, `dms`, and `dms-symbian`), packages `~/Applications/DankMacShell.app` (with a `DankMaterialShell.app` symlink), signs with a persistent `dms-cert` identity (to preserve macOS permissions across rebuilds), installs `dms` and `dms-symbian` (+ `DMS_DMSSymbian.bundle`) into `~/.local/bin/`, and launches the application.
+This builds all three release binaries (`DankMacShell`, `dms`, and `dms-symbian`), packages `~/Applications/DankMacShell.app` (embedding `dms`, `dms-symbian`, and `DMS_DMSSymbian.bundle`), signs with a persistent `dms-cert` identity (to preserve macOS permissions across rebuilds), installs `dms` and `dms-symbian` into `~/.local/bin/`, and launches the application.
 
 Other build & dev commands:
 ```bash
-./build.sh --no-launch       # or: make build-no-launch
-./build.sh --debug --no-launch  # or: make debug
-./test.sh                    # or: make test
-./scripts/create-dmg.sh [version]  # or: make dmg (outputs to dist/)
-make icon                    # regenerate AppIcon.icns from Support/appicon.svg
-./build.sh --clean           # or: make clean
+./build.sh --no-launch                    # or: make build-no-launch
+./build.sh --with-companions --no-launch  # also install dms-gop (dgop) and dte
+./build.sh --install-services --no-launch # or: make services
+./build.sh --uninstall-services           # or: make uninstall-services
+./build.sh --debug --no-launch            # or: make debug
+./test.sh                                 # or: make test
+./scripts/create-dmg.sh [version]         # or: make dmg (outputs to dist/)
+make icon                                 # regenerate AppIcon.icns from Support/appicon.svg
+./build.sh --clean                        # or: make clean
 ```
 
 <a id="global-hotkeys"></a>

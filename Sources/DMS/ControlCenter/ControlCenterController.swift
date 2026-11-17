@@ -7,6 +7,26 @@ public final class ControlCenterController {
     public static let shared = ControlCenterController()
     public static let standardSheetHeight: CGFloat = 368.0
 
+    /// Non-editing root dashboard height, matching `ControlCenterView.sheetHeight`
+    /// (header 36 + sliders 40 + grid + bottom 44 + spacing + padding, min 180).
+    public static func preferredSheetHeight(for config: DMSConfig? = nil) -> CGFloat {
+        let effectiveConfig = config ?? ConfigStore.shared.config
+        let columns = CcMetrics.clampColumns(effectiveConfig.controlCenterColumns)
+        let sheetWidth: CGFloat = columns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
+        let gridWidth = Double(sheetWidth - (CcMetrics.sheetPadding * 2.0))
+        let widgets = ControlCenterUtils.normalizedGridTiles(from: effectiveConfig.controlCenterGridTiles, columns: columns)
+        let layout = ControlCenterGridPlanner.layoutResult(for: widgets, columns: columns, width: gridWidth)
+
+        let headerH: CGFloat = 36.0
+        let slidersH: CGFloat = 40.0
+        let gridOmitted = widgets.isEmpty
+        let gridH: CGFloat = gridOmitted ? 0.0 : CGFloat(layout.totalHeight)
+        let bottomH: CGFloat = 44.0
+        let spacing: CGFloat = gridOmitted ? 8.0 * 2.0 : 8.0 * 3.0
+        let padding: CGFloat = CcMetrics.sheetPadding * 2.0
+        return max(180.0, headerH + slidersH + gridH + bottomH + spacing + padding)
+    }
+
     public let panel: ShellPanel
     public private(set) var isVisible = false
     public private(set) var currentSheetHeight: CGFloat = standardSheetHeight
@@ -47,11 +67,11 @@ public final class ControlCenterController {
         guard let targetScreen = screen else { return }
 
         let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
-        let bodyWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
-        currentSheetHeight = Self.standardSheetHeight
+        let bodyWidth: CGFloat = columns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
+        currentSheetHeight = Self.preferredSheetHeight()
         let targetFrame = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
-            bodyHeight: Self.standardSheetHeight,
+            bodyHeight: currentSheetHeight,
             screen: targetScreen,
             isControlCenter: true
         )

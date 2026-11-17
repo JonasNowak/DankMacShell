@@ -15,7 +15,16 @@ public enum SafeResourceBundle {
         }
         candidates.append(Bundle.main.bundleURL)
         if let executableURL = Bundle.main.executableURL {
+            let resolvedExe = executableURL.resolvingSymlinksInPath()
             candidates.append(executableURL.deletingLastPathComponent())
+            candidates.append(resolvedExe.deletingLastPathComponent())
+            // Symlinked CLI inside an .app bundle: <App>.app/Contents/MacOS/<exe> -> <App>.app/Contents/Resources
+            candidates.append(
+                resolvedExe
+                    .deletingLastPathComponent()
+                    .deletingLastPathComponent()
+                    .appendingPathComponent("Resources")
+            )
         }
         // Executable inside an .app bundle: Contents/MacOS/<exe> -> Contents/Resources
         candidates.append(

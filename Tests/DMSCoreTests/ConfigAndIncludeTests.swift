@@ -411,4 +411,66 @@ struct ConfigAndIncludeTests {
         #expect(dynamicCfg.clipboardHotkeyKey == "v")
         #expect(dynamicCfg.getSetting("clipboardHotkeyKey")?.stringValue == "v")
     }
+
+    @Test("Deprecated controlCenterWidgets Key Ignored on Load and Not Re-Encoded")
+    func testDeprecatedControlCenterWidgetsIgnoredOnLoad() throws {
+        let legacyJSON = """
+        {
+            "version": 2,
+            "theme": "blue",
+            "controlCenterWidgets": [
+                { "id": "wifi", "col": 0, "row": 0, "w": 4, "h": 1, "small": false, "enabled": true, "options": {} }
+            ]
+        }
+        """
+
+        let config = DMSConfig.load(from: Data(legacyJSON.utf8))
+
+        // The deprecated key does not populate the grid; the default grid tiles apply instead
+        #expect(config.controlCenterGridTiles == ControlCenterWidgetConfig.defaultGridTiles)
+        #expect(config.controlCenterGridTiles == ControlCenterUtils.canonicalHardwareTiles)
+
+        // The deprecated key is NOT captured into rawSettings
+        #expect(config.rawSettings["controlCenterWidgets"] == nil)
+        #expect(config.getSetting("controlCenterWidgets") == nil)
+
+        // And it is NOT re-encoded by encodeJSON()
+        let encoded = try config.encodeJSON()
+        let json = String(data: encoded, encoding: .utf8) ?? ""
+        #expect(!json.contains("\"controlCenterWidgets\""))
+        #expect(json.contains("\"controlCenterGridTiles\""))
+    }
+
+    @Test("Custom controlCenterGridTiles Round-Trips Through Encode and Decode")
+    func testControlCenterGridTilesRoundTrip() throws {
+        // An empty grid stays empty (no snap back to the default tiles)
+        let emptyJSON = """
+        {
+            "version": 2,
+            "controlCenterGridTiles": []
+        }
+        """
+        let emptyConfig = DMSConfig.load(from: Data(emptyJSON.utf8))
+        #expect(emptyConfig.controlCenterGridTiles.isEmpty)
+        let emptyEncoded = try emptyConfig.encodeJSON()
+        let emptyRedecoded = DMSConfig.load(from: emptyEncoded)
+        #expect(emptyRedecoded.controlCenterGridTiles.isEmpty)
+
+        // Unlocked catalog tiles round-trip cleanly
+        let customJSON = """
+        {
+            "version": 2,
+            "controlCenterGridTiles": [
+                { "id": "nightMode", "col": 0, "row": 0, "w": 2, "h": 1, "small": false, "enabled": true, "options": {} },
+                { "id": "doNotDisturb", "col": 2, "row": 0, "w": 4, "h": 1, "small": false, "enabled": true, "options": {} }
+            ]
+        }
+        """
+        let custom = DMSConfig.load(from: Data(customJSON.utf8))
+        #expect(custom.controlCenterGridTiles.map { $0.id } == ["nightMode", "doNotDisturb"])
+        let encoded = try custom.encodeJSON()
+        let decoded = DMSConfig.load(from: encoded)
+        #expect(decoded.controlCenterGridTiles == custom.controlCenterGridTiles)
+        #expect(decoded.controlCenterGridTiles.map { $0.id } == ["nightMode", "doNotDisturb"])
+    }
 }

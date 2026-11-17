@@ -16,7 +16,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
 
     // MARK: - Multi-Instance Layout Arrays
     public var barConfigs: [BarConfig]
-    public var controlCenterWidgets: [ControlCenterWidgetConfig]
+    public var controlCenterGridTiles: [ControlCenterWidgetConfig]
     public var controlCenterColumns: Int
     public var controlCenterAvatarShape: String
     public var wallpaperPath: String
@@ -171,7 +171,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         theme: String = "purple",
         isLightMode: Bool = false,
         barConfigs: [BarConfig] = [.default],
-        controlCenterWidgets: [ControlCenterWidgetConfig] = ControlCenterWidgetConfig.defaultWidgets,
+        controlCenterGridTiles: [ControlCenterWidgetConfig] = ControlCenterWidgetConfig.defaultGridTiles,
         controlCenterColumns: Int = 8,
         barPosition: String? = nil,
         barAutoHide: Bool = false,
@@ -250,7 +250,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             bars[0].transparency = barTransparent ? 0.7 : 1.0
         }
         self.barConfigs = bars
-        self.controlCenterWidgets = controlCenterWidgets
+        self.controlCenterGridTiles = controlCenterGridTiles
         self.controlCenterColumns = max(6, controlCenterColumns)
         self.controlCenterAvatarShape = controlCenterAvatarShape
         self.wallpaperPath = wallpaperPath
@@ -322,7 +322,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case theme
         case isLightMode
         case barConfigs
-        case controlCenterWidgets
+        case controlCenterGridTiles
         case controlCenterColumns
         case controlCenterAvatarShape
         case wallpaperPath
@@ -439,7 +439,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.weatherUnits = try container.decodeIfPresent(String.self, forKey: .weatherUnits) ?? "celsius"
         self.webSearchProvider = try container.decodeIfPresent(String.self, forKey: .webSearchProvider) ?? "google"
         self.apps = try container.decodeIfPresent(AppOverrides.self, forKey: .apps) ?? AppOverrides()
-        self.controlCenterWidgets = try container.decodeIfPresent([ControlCenterWidgetConfig].self, forKey: .controlCenterWidgets) ?? ControlCenterWidgetConfig.defaultWidgets
+        self.controlCenterGridTiles = try container.decodeIfPresent([ControlCenterWidgetConfig].self, forKey: .controlCenterGridTiles) ?? ControlCenterWidgetConfig.defaultGridTiles
         self.controlCenterColumns = try container.decodeIfPresent(Int.self, forKey: .controlCenterColumns) ?? 8
         self.controlCenterAvatarShape = try container.decodeIfPresent(String.self, forKey: .controlCenterAvatarShape) ?? "circle"
         self.wallpaperPath = try container.decodeIfPresent(String.self, forKey: .wallpaperPath) ?? ""
@@ -484,11 +484,13 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         // Dynamically decode any arbitrary root-level settings from SettingsSpec.js into rawSettings
         var raw: [String: AnyCodable] = [:]
         if let dynamicContainer = try? decoder.container(keyedBy: AnyKey.self) {
-            // "dockConfigs", "showDock", "pinnedApps" are legacy removed Dock keys, kept in
-            // knownKeys so existing settings.json files migrate cleanly without polluting rawSettings.
+            // "dockConfigs", "showDock", "pinnedApps" are legacy removed Dock keys, and
+            // "controlCenterWidgets" is the deprecated legacy Control Center key (renamed to
+            // "controlCenterGridTiles"); all are kept in knownKeys so existing settings.json
+            // files load cleanly without polluting rawSettings and without re-encoding them.
             let knownKeys = Set([
                 "version", "theme", "isLightMode", "barConfigs", "dockConfigs",
-                "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
+                "controlCenterWidgets", "controlCenterGridTiles", "controlCenterColumns", "controlCenterAvatarShape",
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
                 "wallpaperPickerHotkey", "wallpaperPickerHotkeyKey", "wallpaperPickerHotkeyModifiers",
                 "wallpaperPickerFolder", "wallpaperPickerOnlyFolder", "wallpaperPickerSkew",
@@ -571,7 +573,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(theme, forKey: .theme)
         try container.encode(isLightMode, forKey: .isLightMode)
         try container.encode(barConfigs, forKey: .barConfigs)
-        try container.encode(controlCenterWidgets, forKey: .controlCenterWidgets)
+        try container.encode(controlCenterGridTiles, forKey: .controlCenterGridTiles)
         try container.encode(controlCenterColumns, forKey: .controlCenterColumns)
         try container.encode(controlCenterAvatarShape, forKey: .controlCenterAvatarShape)
         try container.encode(wallpaperPath, forKey: .wallpaperPath)
@@ -641,11 +643,13 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         // Encode raw settings at root level to maintain 1:1 format parity with SettingsSpec.js
         if !rawSettings.isEmpty {
             var dynamicContainer = encoder.container(keyedBy: AnyKey.self)
-            // "dockConfigs", "showDock", "pinnedApps" are legacy removed Dock keys, kept in
-            // knownKeys so existing settings.json files migrate cleanly without polluting rawSettings.
+            // "dockConfigs", "showDock", "pinnedApps" are legacy removed Dock keys, and
+            // "controlCenterWidgets" is the deprecated legacy Control Center key (renamed to
+            // "controlCenterGridTiles"); all are kept in knownKeys so existing settings.json
+            // files load cleanly without polluting rawSettings and without re-encoding them.
             let knownKeys = Set([
                 "version", "theme", "isLightMode", "barConfigs", "dockConfigs",
-                "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
+                "controlCenterWidgets", "controlCenterGridTiles", "controlCenterColumns", "controlCenterAvatarShape",
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
                 "wallpaperPickerHotkey", "wallpaperPickerHotkeyKey", "wallpaperPickerHotkeyModifiers",
                 "wallpaperPickerFolder", "wallpaperPickerOnlyFolder", "wallpaperPickerSkew",
