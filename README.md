@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/OmniWM-optional-7A5AF8?style=for-the-badge" alt="Optional OmniWM integration">
 </p>
 
-![DankMacShell demo](assets/demo.gif)
+![DankMacShell desktop screenshot](docs/dankmacshell-screenshot.jpg)
 
 ## 📑 Contents
 
@@ -39,7 +39,7 @@ It runs on **stock macOS** on its own. If you use the tiling window manager [Omn
 > Early **v0.8.x**: features are landing fast and the config format may change between minor versions. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
 
 <p align="center">
-  <img src="docs/dankmacshell-screenshot.jpg" width="1100" alt="DankMacShell desktop screenshot">
+  <img src="assets/demo.gif" width="1100" alt="DankMacShell demo — launcher, DankDash and dynamic wallpaper theming">
 </p>
 
 <a id="install"></a>
