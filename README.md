@@ -13,7 +13,6 @@
   <img src="https://img.shields.io/badge/OmniWM-optional-7A5AF8?style=for-the-badge" alt="Optional OmniWM integration">
 </p>
 
-<!-- TODO: record a 15-30s demo GIF showing the launcher (⌥Space), DankDash (⌥D), and dynamic wallpaper theming — save it as assets/demo.gif (create the assets/ directory first). -->
 ![DankMacShell demo](assets/demo.gif)
 
 ## 📑 Contents
@@ -25,7 +24,7 @@
 - [URL scheme (`dms://`)](#url-scheme)
 - [Advanced topics](#advanced-topics)
 - [Roadmap](#roadmap)
-- [SymbianOS plugin — bonus experiment](#symbianos-plugin)
+- [SymbianOS plugin](#symbianos-plugin)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -33,11 +32,11 @@
 
 ## ✨ What is DankMacShell?
 
-DankMacShell (DMS) is a native macOS shell written in Swift/SwiftUI — an adaptation of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) for the Mac. It brings the Linux window-manager "rice" experience (status bar, launcher, dashboard, dynamic Material You theming) to macOS. **This project is not affiliated with or endorsed by DankMaterialShell or AvengeMedia.**
+DankMacShell (DMS) is a native macOS shell written in Swift. It is highly inspired by [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell). It brings the Linux window-manager "rice" experience (status bar, launcher, dashboard, dynamic Material You theming) to macOS. **This project is not affiliated with or endorsed by DankMaterialShell or AvengeMedia.**
 
-It runs on **stock macOS** on its own. If you use the tiling window manager [OmniWM](https://github.com/OmniNull/OmniWM), DMS integrates with it for tiling, workspaces, and border sync — but OmniWM is optional, never required (without it, DMS falls back to native SkyLight spaces).
+It runs on **stock macOS** on its own. If you use the tiling window manager [OmniWM](https://github.com/OmniNull/OmniWM), DMS integrates with it for tiling, workspaces, and border sync, but OmniWM is optional, never required (without it, DMS falls back to native SkyLight spaces).
 
-> Early **v0.8.x** — features are landing fast and the config format may change between minor versions. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
+> Early **v0.8.x**: features are landing fast and the config format may change between minor versions. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
 
 <p align="center">
   <img src="docs/dankmacshell-screenshot.jpg" width="1100" alt="DankMacShell desktop screenshot">
@@ -47,13 +46,7 @@ It runs on **stock macOS** on its own. If you use the tiling window manager [Omn
 
 ## 🚀 Install
 
-### ⬇️ 1. Download the DMG (recommended)
-
-- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.8.2.dmg`)
-- [ ] Open the DMG and drag **DankMacShell** into `/Applications`
-- [ ] First launch: the DMG is not signed/notarized — right-click the app and choose **Open**, or run `xattr -cr /Applications/DankMacShell.app`, then grant Accessibility & Input Monitoring when prompted
-
-### 🍺 2. Homebrew cask
+### 🍺 1. Homebrew cask
 
 ```bash
 brew tap jonasnowak/dankmac https://github.com/JonasNowak/DankMacShell.git
@@ -61,9 +54,62 @@ brew install --cask jonasnowak/dankmac/dankmacshell
 brew services start dms-gop   # optional: companion REST API on :63484
 ```
 
-The tap also ships the `dms-gop` and `dank-theme-engine` formulae the cask depends on.
+The tap also ships the `dms-gop` and `dank-theme-engine` formulae the cask depends on. It is the best experience.
 
-### 🔨 3. Build from source
+### ❄️ 2. Nix Flake
+
+One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`dgop`), and `dank-theme-engine` (`dte`) along with their `launchd` LaunchAgents:
+
+#### a) Flake
+
+```nix
+{
+  inputs.dankmacshell.url = "github:JonasNowak/DankMacShell";
+
+  outputs = { self, nix-darwin, dankmacshell, ... }: {
+    darwinConfigurations."my-mac" = nix-darwin.lib.darwinSystem {
+      system = "aarch64-darwin";
+      modules = [
+        dankmacshell.darwinModules.default
+        {
+          programs.dankmacshell = {
+            enable = true;
+            launchd.enable = true;              # auto-start DankMacShell.app in the Aqua session
+            dmsGop.server.enable = true;        # auto-start dms-gop REST API (:63484)
+            themeEngine.launchd.enable = false; # optional background `dte watch` agent
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+#### b) Home manager
+
+```nix
+{
+  imports = [ inputs.dankmacshell.homeManagerModules.default ];
+
+  programs.dankmacshell = {
+    enable = true;
+    themeEngine.targets = {
+      kitty.enable = true;
+      ghostty.enable = true;
+      tmux.enable = true;
+      neovim.enable = true;
+    };
+  };
+}
+```
+
+### ⬇️ 3. Download the DMG (reduced experience)
+
+- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.8.2.dmg`)
+- [ ] Open the DMG and drag **DankMacShell** into `/Applications`
+- [ ] First launch: the DMG is not signed/notarized — right-click the app and choose **Open**, or run `xattr -cr /Applications/DankMacShell.app`, then grant Accessibility & Input Monitoring when prompted
+
+### 🔨 4. Build from source
 
 ```bash
 git clone https://github.com/JonasNowak/DankMacShell.git
@@ -214,7 +260,7 @@ DMS registers the `dms://` URL scheme for system integration:
 
 ### ⌨️ Global Hotkeys
 
-All 5 global hotkeys are customizable in **Settings → Keyboard Shortcuts** (with `Hyper Key` `⌃⌥⇧⌘` and `Meh` presets):
+All 5 global hotkeys are customizable in **Settings → Keyboard Shortcuts** (it supports hyper key):
 
 | Action | Default Hotkey |
 | --- | --- |
@@ -343,6 +389,11 @@ Alacritty default ON, iTerm2 OFF):
 | Kitty | `$XDG_CONFIG_HOME/kitty/dms-theme.conf` |
 | Alacritty | `$XDG_CONFIG_HOME/alacritty/dms-theme.toml` |
 | iTerm2 | `~/Library/Application Support/iTerm2/DynamicProfiles/dms.json` |
+| tmux | `$XDG_CONFIG_HOME/tmux/dms.conf` |
+| Neovim | `$XDG_CONFIG_HOME/nvim/colors/dms.lua` |
+
+tmux and Neovim files are written by the Rust theme engine (`dank-theme-engine`) and wired into your
+configs by the home-manager module's `themeEngine.targets` (fish and zsh targets exist too).
 
 Config dirs resolve via `XDG_CONFIG_HOME` when set, else `~/.config` — never hardcoded.
 
@@ -383,44 +434,18 @@ iTerm2 Dynamic Profiles work natively — that directory is not home-manager man
 For stylix-style pipelines, read `~/Library/Application Support/DMS/theme.json` — it always exists
 and is always writable, regardless of which emulator targets are managed.
 
-### ❄️ Nix (nix-darwin & home-manager)
-
-One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`dgop`), and `dank-theme-engine` (`dte`) with their `launchd` LaunchAgents — or, via home-manager, just the app plus terminal theme targets:
-
-```nix
-# flake.nix (nix-darwin)
-{ inputs.dankmacshell.url = "github:JonasNowak/DankMacShell";
-  outputs = { nix-darwin, dankmacshell, ... }: {
-    darwinConfigurations."my-mac" = nix-darwin.lib.darwinSystem {
-      system = "aarch64-darwin";
-      modules = [ dankmacshell.darwinModules.default { programs.dankmacshell = {
-        enable = true;
-        launchd.enable = true;              # auto-start the app in the Aqua session
-        dmsGop.server.enable = true;        # dms-gop REST API on :63484
-        themeEngine.launchd.enable = false; # optional background `dte watch`
-      }; } ];
-    }; }; }
-
-# home-manager
-{ imports = [ inputs.dankmacshell.homeManagerModules.default ];
-  programs.dankmacshell = { enable = true; themeEngine.targets = {
-    kitty.enable = true; ghostty.enable = true; tmux.enable = true; neovim.enable = true; }; }; }
-```
-
 <a id="roadmap"></a>
 
 ## 🗺️ Roadmap
 
-Status: **v0.8.x**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: M3 Expressive theming via `MaterialMacLibrary` + the Rust theme engine (v0.8), OmniWM margin auto-adjust when the bar changes edge (v0.8.1), customizable Control Center tile grid + Homebrew/Nix packaging (v0.8.2), terminal theme exporters & CLI pipelines (v0.7).
+Status: **v0.8.x**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: M3 Expressive theming via `MaterialMacLibrary` + the Rust theme engine (v0.8), OmniWM margin auto-adjust when the bar changes edge (v0.8.1), customizable Control Center tile grid + Homebrew/Nix packaging (v0.8.2), terminal theme exporters & CLI pipelines (v0.7). 
 
-- Next up: mature the SymbianOS plugin, deeper OmniWM workspace integration, more bar widgets and launcher actions.
-- The full port plan lives in [PLAN.md](PLAN.md); the v0.2–v0.7 feature-parity roadmap (all shipped) lives in [ROADMAP.md](ROADMAP.md).
-- While v0.x, the config format may change between minor versions — watch the release notes.
+- Next up: To be announced soon.
+- Originally I wanted to ship basic DMS parity, but the original plan was completed with v0.7. 
 
 <a id="symbianos-plugin"></a>
 
-## 📱 SymbianOS plugin — a bonus experiment
-
+## 📱 SymbianOS plugin
 DankMacShell bundles a standalone, crash-isolated companion — `dms-symbian` (inside `DankMacShell.app/Contents/MacOS/`, also installed to `~/.local/bin/dms-symbian`) — for syncing Nokia Belle / Symbian OS phones (like the Nokia C7-00) over USB Mass Storage mode. It shipped with **v0.5.1, the "hello hello belle update"**.
 
 - **Device overview:** live hero card with the real Nokia C7 photo, firmware (Symbian OS v9.5 / Belle Refresh), drive letter, 8 GB mass memory, 3.5" AMOLED display and USB 2.0 badges.
@@ -433,7 +458,7 @@ DankMacShell bundles a standalone, crash-isolated companion — `dms-symbian` (i
 </p>
 
 > [!NOTE]
-> The SymbianOS plugin is a work in progress — expect rough edges while it matures.
+> The SymbianOS plugin is a work in progress, I want to port the full symbian suite from Windows XP.
 
 <a id="contributing"></a>
 
