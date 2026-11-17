@@ -10,7 +10,7 @@
   <a href="https://github.com/JonasNowak/DankMacShell/blob/main/LICENSE"><img src="https://img.shields.io/github/license/JonasNowak/DankMacShell?style=for-the-badge&color=2ea44f" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B%20(App%2026%2B)-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14+, app bundle requires macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6">
-  <img src="https://img.shields.io/badge/OmniWM-optional-7A5AF8?style=for-the-badge" alt="Optional OmniWM integration">
+  <a href="https://github.com/OmniNull/OmniWM"><img src="https://img.shields.io/badge/OmniWM-optional-7A5AF8?style=for-the-badge" alt="Optional OmniWM integration"></a>
 </p>
 
 ![DankMacShell desktop screenshot](docs/dankmacshell-screenshot.jpg)
