@@ -45,7 +45,7 @@ DLauncherV2 is a unified command palette and application launcher:
 3. **Frecency Scoring (`Scorer.js`)**:
    - Adapts to user habits over time, prioritizing frequently and recently launched apps.
 4. **App Actions & In-Place Editing**:
-   - Pressing `Tab` or right-clicking reveals the `ActionPanel`: Pin to Bar, Pin to Dock, Run in Terminal, Launch as Root, or Edit Desktop Entry.
+   - Pressing `Tab` or right-clicking reveals the `ActionPanel`: Pin to Bar, Run in Terminal, Launch as Root, or Edit Desktop Entry. (`Pin to Dock` omitted — [Removed / N/A on macOS — native macOS Dock used].)
 
 ---
 
@@ -115,7 +115,7 @@ Type Bonuses:
 | :--- | :--- | :--- | :--- |
 | `LAUNCH-001` - `002` | **Partial** | `LauncherView.swift` (515 lines) | Simple list view exists. **Lacks Grid/Tile mode, Island attachment mode, dynamic height expansion, and ActionPanel sidebar.** |
 | Scoring Engine | **Divergent** | `AppSearch.swift` | Implements basic prefix/contains matching. **Completely lacks the weighted Scorer.js algorithm and frecency decay model.** |
-| Context Menu & Edit | **Missing** | None | Right-click context menu (Pin to Dock, Pin to Bar) and in-launcher app editing do not exist. |
+| Context Menu & Edit | **Missing** | None | Right-click context menu (Pin to Bar; `Pin to Dock` [Removed / N/A on macOS — native macOS Dock used]) and in-launcher app editing do not exist. |
 | DMenu Protocol | **Missing** | None | DMenu socket integration does not exist in port. |
 
 ### Audit Verdict:

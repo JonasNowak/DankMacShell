@@ -1,0 +1,18 @@
+{
+  "dankmacshell": {
+    "version": "0.8.1",
+    "url": "https://github.com/JonasNowak/DankMacShell/releases/download/v0.8.1/DankMacShell-0.8.1.dmg",
+    "sha256": "a231b03864cebb4b735a1baa7504e67c1e297cec59ada54ae705c675fc94f863"
+  },
+  "dms-gop": {
+    "version": "2.1.0",
+    "url": "https://github.com/JonasNowak/dms-gop/archive/f8cb7bba68a92c8e000ce0e1427ba110e2026ff1.tar.gz",
+    "sha256": "087680f688abdd2f25ef09e227a9f966797ebc14af7ec2b4020eecf30a5cce25",
+    "vendorHash": "sha256-ajtmBCQ4OdIpjOQeiL+hj3e6PL2Np4NLnMAcA1AsW/w="
+  },
+  "dank-theme-engine": {
+    "version": "0.1.1",
+    "url": "https://github.com/JonasNowak/dank-theme-engine/releases/download/v0.1.1/dte-macos-universal.tar.gz",
+    "sha256": "850ef9a283031dd21706b2724a9332c16fe0129a796a47895c7cb99e8df8c690"
+  }
+}

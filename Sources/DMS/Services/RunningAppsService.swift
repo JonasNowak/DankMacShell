@@ -3,7 +3,7 @@ import ApplicationServices
 import Observation
 import DMSCore
 
-/// Manages running applications, currently active focused app, unhiding/hiding, and pinned dock applications.
+/// Manages running applications, currently active focused app, unhiding/hiding.
 @MainActor
 @Observable
 public final class RunningAppsService {
@@ -11,7 +11,6 @@ public final class RunningAppsService {
 
     public private(set) var activeApp: AppItem?
     public private(set) var runningApps: [AppItem] = []
-    public private(set) var dockApps: [AppItem] = []
 
     public var hiddenApps: [AppItem] {
         runningApps.filter(\.isHidden)
@@ -64,45 +63,15 @@ public final class RunningAppsService {
         for app in running {
             guard let name = app.localizedName, let bid = app.bundleIdentifier else { continue }
             let path = app.bundleURL?.path ?? ""
-            let isPinned = ConfigStore.shared.config.pinnedApps.contains(bid)
             apps.append(AppItem(
                 name: name,
                 bundleID: bid,
                 path: path,
                 isRunning: true,
-                isHidden: app.isHidden,
-                isPinned: isPinned
+                isHidden: app.isHidden
             ))
         }
         self.runningApps = apps
-
-        // Combine pinned apps with running apps
-        let pinnedIDs = ConfigStore.shared.config.pinnedApps
-        var dockList: [AppItem] = []
-
-        // Add pinned apps first
-        for pid in pinnedIDs {
-            if let runningMatch = apps.first(where: { $0.bundleID == pid }) {
-                dockList.append(runningMatch)
-            } else if let url = workspace.urlForApplication(withBundleIdentifier: pid) {
-                let name = FileManager.default.displayName(atPath: url.path)
-                dockList.append(AppItem(
-                    name: name,
-                    bundleID: pid,
-                    path: url.path,
-                    isRunning: false,
-                    isHidden: false,
-                    isPinned: true
-                ))
-            }
-        }
-
-        // Add unpinned running apps
-        for app in apps where !pinnedIDs.contains(app.bundleID) {
-            dockList.append(app)
-        }
-
-        self.dockApps = dockList
     }
 
     public func isRunning(bundleID: String) -> Bool {
@@ -243,21 +212,6 @@ public final class RunningAppsService {
 
     public func quit(app: AppItem) {
         quit(bundleID: app.bundleID, fallbackPath: app.path)
-    }
-
-    public func togglePin(bundleID: String) {
-        ConfigStore.shared.update { cfg in
-            if let idx = cfg.pinnedApps.firstIndex(of: bundleID) {
-                cfg.pinnedApps.remove(at: idx)
-            } else {
-                cfg.pinnedApps.append(bundleID)
-            }
-        }
-        refresh()
-    }
-
-    public func togglePinned(bundleID: String) {
-        togglePin(bundleID: bundleID)
     }
 
     @discardableResult

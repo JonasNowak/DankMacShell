@@ -52,7 +52,7 @@ However, a systematic architectural and code-level audit reveals that while cert
 | **Settings Keys** | 427 keys (`SettingsSpec.js`) | 35 keys (`Config.swift`) | **8.2% parity** | 392 settings keys missing; multi-instance schemas missing |
 | **DankBar Engine** | Modular, horizontal/vertical, true center, segment roles, 30+ widgets | Fixed horizontal `HStack`, 6 pills, top/bottom only | **Divergent** | Rebuild bar layout engine; implement all 30+ widgets |
 | **DankBar Widgets** | 33 distinct widgets | 6 hardcoded pill types | **18.2% parity** | 27 widgets missing (AudioVisualizer, CapsLock, Disk, CPU temp, GPU, etc.) |
-| **Desktop Dock** | Multi-dock, 4 edges, magnification bounce, grouping, trash, edit chrome | Pinned app row inside DankBar or separate dock | **Partial** | Window grouping, bounce physics, trash menu, per-dock configs |
+| **Desktop Dock** | Multi-dock, 4 edges, magnification bounce, grouping, trash, edit chrome | [Removed / N/A on macOS — native macOS Dock used]; running apps shown inside DankBar | **Removed** | Standalone dock stripped (Phase 4); macOS provides the native Dock |
 | **Dynamic Island** | Morphing surface, activity routing, spring physics, notch modes | None (misattributed name) | **Missing (0%)** | Build complete `DIsland` NSPanel with spring animations & activity bus |
 | **Control Center** | Tile grid, reorder edit mode, 12+ rich detail subpages | Static 2-column grid of basic toggle buttons | **Divergent** | Build all 12+ detail subpages (Wi-Fi picker, BT codecs, Audio routes, etc.) |
 | **DankDash** | 6 full tabs (Overview, Media, Notifs, Wallpaper, Weather, Wellbeing) | Single static 2-column card | **Divergent** | Build 6 tab views, calendar widget, lyrics engine, wellbeing tracker |
@@ -100,7 +100,7 @@ docs/spec/
 ├── 18-launcher.md                           (LAUNCH: DLauncherV2, Scorer.js, tile/list modes, app editing, dmenu)
 ├── 19-bar-core.md                           (BAR: DankBar layout engine, horizontal/vertical, true center, roles)
 ├── 20-bar-widgets.md                        (BARW: Exhaustive spec of all 33 DankBar widgets & popouts)
-├── 21-dock.md                               (DOCK: Desktop dock, bounce physics, grouping, trash, edit chrome)
+├── 21-dock.md                               (DOCK: Desktop dock, bounce physics, grouping, trash, edit chrome — [Removed / N/A on macOS — native macOS Dock used])
 ├── 22-control-center.md                     (CC: Dynamic tile grid, reordering, all 12+ detail subpages)
 ├── 23-dash-weather-calendar.md              (DASH: DankDash 6 tabs, calendar engine, weather providers, wellbeing)
 ├── 24-island-surface-widgets.md             (ISLAND: Dynamic Island notch pill, morphing springs, activity bus)
@@ -136,7 +136,7 @@ To achieve genuine 1-to-1 parity while embracing macOS system conventions, the r
   - File / Config changes: `DispatchSourceFileSystemObject`.
 
 ### 4.2. Precision Windowing (`ShellPanel`)
-- All floating surfaces (DankBar, Dock, DIsland, ControlCenter, DLauncherV2, OSD, Toasts) must subclass `NSPanel` with:
+- All floating surfaces (DankBar, DIsland, ControlCenter, DLauncherV2, OSD, Toasts) must subclass `NSPanel` with: *(Dock omitted — [Removed / N/A on macOS — native macOS Dock used])*
   - `styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView]`
   - `level: .statusBar` or `.floating` (above standard windows)
   - `collectionBehavior: [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]`

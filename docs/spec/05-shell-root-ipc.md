@@ -75,7 +75,7 @@ The following table provides the exhaustive specification of all IPC targets reg
 | `mpris` | `playPause()`, `next()`, `previous()`, `status()` | Controls currently active media player | `MEDIA` |
 | `keybinds` | `open()`, `close()`, `toggle()` | Opens visual Keybinds Cheatsheet modal | `KEYB` |
 | `bar` | `reveal()`, `hide()`, `toggle()`, `status()`, `setPosition(edge)` | Controls DankBar visibility and screen position | `BAR` |
-| `dock` | `reveal()`, `hide()`, `toggle()`, `status()` | Controls Dock visibility and auto-hide | `DOCK` |
+| `dock` | — | [Removed / N/A on macOS — native macOS Dock used]; IPC target stripped, no `dms dock` CLI | `DOCK` |
 | `settings` | `open(tab)`, `close()`, `toggle()` | Opens Settings app to optional category tab | `SETUI-A` |
 | `file` | `open(path)` | Opens path in default file manager | `FILE` |
 | `widget` | `editMode(enabled)` | Toggles desktop widget placement and edit layer | `PLUG` |

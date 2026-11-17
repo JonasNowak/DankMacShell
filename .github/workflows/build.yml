@@ -43,7 +43,7 @@ jobs:
           else
             COUNT=$(git rev-list --count HEAD)
             SHORT_SHA=$(git rev-parse --short HEAD)
-            VER="0.6.0-dev.${COUNT}+${SHORT_SHA}"
+            VER="0.8.2-dev.${COUNT}+${SHORT_SHA}"
           fi
           echo "VERSION=${VER}" >> "$GITHUB_OUTPUT"
           echo "Determined build version: ${VER}"
@@ -72,3 +72,38 @@ jobs:
             dist/*.dmg
             dist/checksums.txt
           generate_release_notes: true
+
+      - name: Update Homebrew Cask & Nix Sources on Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          VER: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          DMG_SHA=$(awk '{print $1}' dist/checksums.txt | head -n 1)
+          python3 - "$VER" "$DMG_SHA" <<'PY'
+          import json, pathlib, re, sys
+          ver, sha = sys.argv[1], sys.argv[2]
+
+          cask = pathlib.Path("Casks/dankmacshell.rb")
+          if cask.exists():
+              txt = cask.read_text()
+              txt = re.sub(r'version\s+"[^"]+"', f'version "{ver}"', txt, count=1)
+              txt = re.sub(r'sha256\s+"[^"]+"', f'sha256 "{sha}"', txt, count=1)
+              cask.write_text(txt)
+
+          sources_path = pathlib.Path("nix/sources.json")
+          if sources_path.exists():
+              data = json.loads(sources_path.read_text())
+              data["dankmacshell"] = {
+                  "version": ver,
+                  "url": f"https://github.com/JonasNowak/DankMacShell/releases/download/v{ver}/DankMacShell-{ver}.dmg",
+                  "sha256": sha,
+              }
+              sources_path.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet Casks/dankmacshell.rb nix/sources.json; then
+            git add Casks/dankmacshell.rb nix/sources.json
+            git commit -m "chore(release): update Homebrew cask and Nix sources for v${VER}"
+            git push origin HEAD:main || true
+          fi

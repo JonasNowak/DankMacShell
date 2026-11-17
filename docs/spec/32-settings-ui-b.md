@@ -4,7 +4,7 @@
 - `quickshell/Modules/Settings/DBarTab.qml` (705 lines) & `DBarAppearanceTab.qml` (804 lines) — Master DankBar configuration: multi-bar instance management, monitor assignment rules, placement edge (Top, Bottom, Left, Right), thickness, segment distribution, and autohide physics.
 - `quickshell/Modules/Settings/BarWidgetTab.qml` (208 lines) & `BarWidgetOptions/*` (16 files) — Detailed inspector sheets for each bar widget:
   - `AppsDockOptions.qml` (330 lines), `BatteryOptions.qml` (101 lines), `ClockOptions.qml` (49 lines), `ControlCenterOptions.qml` (168 lines), `FocusedWindowOptions.qml` (40 lines), `IslandOptions.qml` (39 lines), `KeyboardLayoutOptions.qml` (159 lines), `LauncherButtonOptions.qml` (141 lines), `MusicOptions.qml` (93 lines), `NetworkMonitorOptions.qml` (30 lines), `PrivacyOptions.qml` (38 lines), `RunningAppsOptions.qml` (40 lines), `SystemMonitorOptions.qml` (97 lines), `SystemTrayOptions.qml` (102 lines), `SystemUpdateOptions.qml` (29 lines), `WorkspaceSwitcherOptions.qml` (220 lines).
-- `quickshell/Modules/Settings/DockGeneralTab.qml` (127 lines), `DockAppearanceTab.qml` (265 lines), `DockWidgetsTab.qml` (240 lines), `DockAdvancedTab.qml` (96 lines) — Desktop Dock manager: multi-dock instances, placement edge, icon size, magnification factor, pinned applications, group window indicators, and trash can toggle.
+- `quickshell/Modules/Settings/DockGeneralTab.qml` (127 lines), `DockAppearanceTab.qml` (265 lines), `DockWidgetsTab.qml` (240 lines), `DockAdvancedTab.qml` (96 lines) — Desktop Dock manager: multi-dock instances, placement edge, icon size, magnification factor, pinned applications, group window indicators, and trash can toggle. [Removed / N/A on macOS — native macOS Dock used]
 - `quickshell/Modules/Settings/WidgetsTab.qml` (820 lines) & `WidgetsTabSection.qml` (242 lines) — Widget catalog manager: enables/disables bar widgets, Control Center tiles, and Dash cards.
 - `quickshell/Modules/Settings/DesktopWidgetsTab.qml` (307 lines) & `DesktopWidgetSettings/*` (5 files) — Desktop wallpaper widget instances manager and properties inspector.
 - `quickshell/Modules/Settings/LauncherTab.qml` (868 lines) — DLauncherV2 configuration: scoring weights (`titleWeight`, `execWeight`, `keywordWeight`, `frecencyFactor`), presentation mode (Tile Grid vs List), screen anchor (Center vs Island attached), hidden app blacklist, and action keywords.
@@ -25,8 +25,8 @@ Key user-visible behaviors include:
    - Users can create multiple independent DankBars across multiple displays.
    - Each bar can be attached to any display edge (Top, Bottom, Left, Right).
    - Segments (Left, Center, Right) can be populated with widgets via drag-and-drop.
-2. **Multi-Dock Configuration**:
-   - Supports creating separate application docks with independent icon sizes, magnification levels, and pinned applications.
+2. **Multi-Dock Configuration** — [Removed / N/A on macOS — native macOS Dock used]:
+   - Upstream supports creating separate application docks with independent icon sizes, magnification levels, and pinned applications; intentionally omitted on macOS.
 3. **Interactive Multi-Monitor Visual Canvas**:
    - A scaled-down 2D canvas allows users to drag monitors to match physical desk placement.
    - Clicking "Identify Displays" flashes large numeric badges across all connected monitors.
@@ -59,7 +59,7 @@ Key user-visible behaviors include:
 | Settings Key | Type | Default | Description |
 |---|---|---|---|
 | `bars` | array | `[...]` | List of configured bar instances |
-| `docks` | array | `[...]` | List of configured dock instances |
+| `docks` | array | `[...]` | [Removed / N/A on macOS — native macOS Dock used]; list of configured dock instances (upstream reference only) |
 | `launcher.viewMode` | string | `"list"` | Launcher mode (`list`, `tile`) |
 | `launcher.attachMode` | string | `"center"` | Placement (`center`, `island`) |
 | `launcher.frecencyEnabled`| bool | `true` | Weight results by historical usage |
@@ -92,7 +92,7 @@ Key user-visible behaviors include:
 | Upstream File / Subsystem | Status in Port | Verdict | Details of Gap |
 |---|---|---|---|
 | `DBarTab.qml`, `BarWidgetOptions/*` (16 files) | Absent | **Missing (0%)** | Port has no multi-bar management and no per-widget options configuration tabs. |
-| `DockGeneralTab.qml`, `DockAppearanceTab.qml` | Absent | **Missing (0%)** | Port lacks multi-dock management and dock appearance customization. |
+| `DockGeneralTab.qml`, `DockAppearanceTab.qml` | Absent | **Removed / N/A on macOS — native macOS Dock used** | `DockSettingsView` and all Dock tabs intentionally omitted; macOS provides the native Dock. |
 | `DisplayConfigTab.qml` & `DisplayConfigState.qml` (2,450 lines) | Absent | **Missing (0%)** | Visual multi-monitor arrangement canvas, resolution/Hz picker, and monitor identification overlay are 100% missing in port. |
 | `LauncherTab.qml` (868 lines) | Partially Insp. | **Major Gap** | Port has a simple search tab without scoring weights, tile mode toggles, or blacklist management. |
 
@@ -101,7 +101,7 @@ Key user-visible behaviors include:
 ## 8. Reimplementation Checklist
 - [ ] Implement `DBarSettingsView` supporting multi-bar creation, edge selection, and segment widget ordering.
 - [ ] Build per-widget options dialogs for all bar widget types.
-- [ ] Build `DockSettingsView` for configuring icon sizes, magnification, and pinned application lists.
+- [ ] Build `DockSettingsView` for configuring icon sizes, magnification, and pinned application lists. — [Removed / N/A on macOS — native macOS Dock used]
 - [ ] Implement `DisplayArrangementCanvas` allowing interactive dragging of display rectangles with snap guides.
 - [ ] Build `DisplayIdentifyOverlay` flashing large display numbers across active screens.
 - [ ] Add `dms bar [list|add|remove]` and `dms display [list|identify]` CLI commands.

@@ -10,7 +10,6 @@ public struct AppItem: Sendable, Identifiable, Equatable, Hashable, Codable {
     public let category: String
     public let isRunning: Bool
     public let isHidden: Bool
-    public let isPinned: Bool
     public let launchCount: Int
     public let lastLaunchedAt: Date?
 
@@ -23,7 +22,6 @@ public struct AppItem: Sendable, Identifiable, Equatable, Hashable, Codable {
         category: String = "",
         isRunning: Bool = false,
         isHidden: Bool = false,
-        isPinned: Bool = false,
         launchCount: Int = 0,
         lastLaunchedAt: Date? = nil
     ) {
@@ -35,13 +33,12 @@ public struct AppItem: Sendable, Identifiable, Equatable, Hashable, Codable {
         self.category = category
         self.isRunning = isRunning
         self.isHidden = isHidden
-        self.isPinned = isPinned
         self.launchCount = launchCount
         self.lastLaunchedAt = lastLaunchedAt
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, bundleID, path, subtitle, category, isRunning, isHidden, isPinned, launchCount, lastLaunchedAt
+        case id, name, bundleID, path, subtitle, category, isRunning, isHidden, launchCount, lastLaunchedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -54,7 +51,6 @@ public struct AppItem: Sendable, Identifiable, Equatable, Hashable, Codable {
         self.category = try container.decodeIfPresent(String.self, forKey: .category) ?? ""
         self.isRunning = try container.decodeIfPresent(Bool.self, forKey: .isRunning) ?? false
         self.isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
-        self.isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         self.launchCount = try container.decodeIfPresent(Int.self, forKey: .launchCount) ?? 0
         self.lastLaunchedAt = try container.decodeIfPresent(Date.self, forKey: .lastLaunchedAt)
     }

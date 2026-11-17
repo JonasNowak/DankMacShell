@@ -1,7 +1,10 @@
 import SwiftUI
 import AppKit
 import DMSCore
+import MaterialMacLibrary
 
+/// Floating toast overlay. The pill chrome (frosted glass capsule, border, shadow) is
+/// delegated to `MaterialComponents.MaterialToastCard` with the bridged `MaterialTheme`.
 public struct ToastOverlayView: View {
     @ObservedObject private var theme = ThemeStore.shared
     private let toastCenter = ToastCenter.shared
@@ -11,26 +14,9 @@ public struct ToastOverlayView: View {
     public var body: some View {
         Group {
             if let toast = toastCenter.activeToast {
-                HStack(spacing: 10) {
-                    Image(systemName: toast.icon)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(theme.primary)
-
-                    Text(toast.message)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.onSurface)
-
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(GlassSurfaceBackground(forceGlass: true))
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(theme.panelBorderColor, lineWidth: 1)
-                )
-                .shadow(color: theme.adaptiveShadowColor(baseOpacity: 0.28), radius: 15, x: 0, y: 6)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                MaterialToastCard(icon: toast.icon, message: toast.message, blurEnabled: true)
+                    .materialTheme(theme.materialTheme)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             } else {
                 Color.clear
             }

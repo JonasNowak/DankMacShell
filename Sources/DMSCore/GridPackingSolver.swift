@@ -280,7 +280,8 @@ public enum GridPackingSolver: Sendable {
         let rowPitch = (layout.rowUnit + layout.gap) * step
         let rawRow = (y / rowPitch).rounded() * step
 
-        let clampedCol = max(0.0, min(Double(layout.columns) - cols, rawCol))
+        let maxCol = max(0.0, Double(layout.columns) - cols)
+        let clampedCol = max(0.0, min(maxCol, rawCol))
         let clampedRow = max(0.0, rawRow)
 
         return (clampedCol, clampedRow)

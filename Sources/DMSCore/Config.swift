@@ -2,7 +2,7 @@ import Foundation
 
 /// User configuration for DankMaterialShell (DMS).
 /// Implements the hierarchical multi-instance schema matching `SettingsSpec.js` (427 keys),
-/// with support for multi-bar, multi-dock, widget options, $include fragments, and v1->v2 migrations.
+/// with support for multi-bar, widget options, $include fragments, and v1->v2 migrations.
 public struct DMSConfig: Sendable, Codable, Equatable {
     public var version: Int
     public var theme: String
@@ -16,8 +16,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
 
     // MARK: - Multi-Instance Layout Arrays
     public var barConfigs: [BarConfig]
-    public var dockConfigs: [DockConfig]
-    public var controlCenterWidgets: [ControlCenterWidgetConfig]
+    public var controlCenterGridTiles: [ControlCenterWidgetConfig]
     public var controlCenterColumns: Int
     public var controlCenterAvatarShape: String
     public var wallpaperPath: String
@@ -92,17 +91,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         }
     }
     public var barMarginX: Double
-    public var showDock: Bool {
-        get { dockConfigs.first?.enabled ?? false }
-        set {
-            if dockConfigs.isEmpty {
-                dockConfigs = [DockConfig(enabled: newValue)]
-            } else {
-                dockConfigs[0].enabled = newValue
-            }
-        }
-    }
-
     public var showTelemetry: Bool
     public var showWeather: Bool
     public var showMedia: Bool
@@ -136,7 +124,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var weatherLocation: String
     public var weatherUnits: String // "celsius" or "fahrenheit"
     public var webSearchProvider: String // "google", "duckduckgo", "bing"
-    public var pinnedApps: [String]
     public var apps: AppOverrides
 
     // Dynamic key storage for remaining 427-key SettingsSpec options
@@ -184,14 +171,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         theme: String = "purple",
         isLightMode: Bool = false,
         barConfigs: [BarConfig] = [.default],
-        dockConfigs: [DockConfig] = [.default],
-        controlCenterWidgets: [ControlCenterWidgetConfig] = ControlCenterWidgetConfig.defaultWidgets,
+        controlCenterGridTiles: [ControlCenterWidgetConfig] = ControlCenterWidgetConfig.defaultGridTiles,
         controlCenterColumns: Int = 8,
         barPosition: String? = nil,
         barAutoHide: Bool = false,
         barTransparent: Bool = false,
         barMarginX: Double = 8.0,
-        showDock: Bool = false,
         showTelemetry: Bool = true,
         showWeather: Bool = true,
         showMedia: Bool = true,
@@ -225,11 +210,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         weatherLocation: String = "auto",
         weatherUnits: String = "celsius",
         webSearchProvider: String = "google",
-        pinnedApps: [String] = [
-            "com.apple.Terminal",
-            "com.apple.Safari",
-            "com.apple.finder"
-        ],
         apps: AppOverrides = AppOverrides(),
         controlCenterAvatarShape: String = "circle",
         wallpaperPath: String = "",
@@ -270,12 +250,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             bars[0].transparency = barTransparent ? 0.7 : 1.0
         }
         self.barConfigs = bars
-        var docks = dockConfigs
-        if showDock, !docks.isEmpty {
-            docks[0].enabled = true
-        }
-        self.dockConfigs = docks
-        self.controlCenterWidgets = controlCenterWidgets
+        self.controlCenterGridTiles = controlCenterGridTiles
         self.controlCenterColumns = max(6, controlCenterColumns)
         self.controlCenterAvatarShape = controlCenterAvatarShape
         self.wallpaperPath = wallpaperPath
@@ -337,7 +312,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.weatherLocation = weatherLocation
         self.weatherUnits = weatherUnits
         self.webSearchProvider = webSearchProvider
-        self.pinnedApps = pinnedApps
         self.apps = apps
         self.rawSettings = rawSettings
         self.includes = includes
@@ -348,8 +322,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case theme
         case isLightMode
         case barConfigs
-        case dockConfigs
-        case controlCenterWidgets
+        case controlCenterGridTiles
         case controlCenterColumns
         case controlCenterAvatarShape
         case wallpaperPath
@@ -381,7 +354,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case barAutoHide
         case barTransparent
         case barMarginX
-        case showDock
         case showTelemetry
         case showWeather
         case showMedia
@@ -415,7 +387,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case weatherLocation
         case weatherUnits
         case webSearchProvider
-        case pinnedApps
         case apps
         case rawSettings
         case includes = "$include"
@@ -467,13 +438,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.weatherLocation = try container.decodeIfPresent(String.self, forKey: .weatherLocation) ?? "auto"
         self.weatherUnits = try container.decodeIfPresent(String.self, forKey: .weatherUnits) ?? "celsius"
         self.webSearchProvider = try container.decodeIfPresent(String.self, forKey: .webSearchProvider) ?? "google"
-        self.pinnedApps = try container.decodeIfPresent([String].self, forKey: .pinnedApps) ?? [
-            "com.apple.Terminal",
-            "com.apple.Safari",
-            "com.apple.finder"
-        ]
         self.apps = try container.decodeIfPresent(AppOverrides.self, forKey: .apps) ?? AppOverrides()
-        self.controlCenterWidgets = try container.decodeIfPresent([ControlCenterWidgetConfig].self, forKey: .controlCenterWidgets) ?? ControlCenterWidgetConfig.defaultWidgets
+        self.controlCenterGridTiles = try container.decodeIfPresent([ControlCenterWidgetConfig].self, forKey: .controlCenterGridTiles) ?? ControlCenterWidgetConfig.defaultGridTiles
         self.controlCenterColumns = try container.decodeIfPresent(Int.self, forKey: .controlCenterColumns) ?? 8
         self.controlCenterAvatarShape = try container.decodeIfPresent(String.self, forKey: .controlCenterAvatarShape) ?? "circle"
         self.wallpaperPath = try container.decodeIfPresent(String.self, forKey: .wallpaperPath) ?? ""
@@ -518,9 +484,13 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         // Dynamically decode any arbitrary root-level settings from SettingsSpec.js into rawSettings
         var raw: [String: AnyCodable] = [:]
         if let dynamicContainer = try? decoder.container(keyedBy: AnyKey.self) {
+            // "dockConfigs", "showDock", "pinnedApps" are legacy removed Dock keys, and
+            // "controlCenterWidgets" is the deprecated legacy Control Center key (renamed to
+            // "controlCenterGridTiles"); all are kept in knownKeys so existing settings.json
+            // files load cleanly without polluting rawSettings and without re-encoding them.
             let knownKeys = Set([
                 "version", "theme", "isLightMode", "barConfigs", "dockConfigs",
-                "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
+                "controlCenterWidgets", "controlCenterGridTiles", "controlCenterColumns", "controlCenterAvatarShape",
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
                 "wallpaperPickerHotkey", "wallpaperPickerHotkeyKey", "wallpaperPickerHotkeyModifiers",
                 "wallpaperPickerFolder", "wallpaperPickerOnlyFolder", "wallpaperPickerSkew",
@@ -591,20 +561,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             }
         }
 
-        // Multi-Dock Schema & Migration from v1
-        if let docks = try container.decodeIfPresent([DockConfig].self, forKey: .dockConfigs), !docks.isEmpty {
-            self.dockConfigs = docks
-        } else {
-            let legacyDock = try container.decodeIfPresent(Bool.self, forKey: .showDock) ?? false
-            self.dockConfigs = [
-                DockConfig(
-                    id: "dock",
-                    name: "Dock",
-                    enabled: legacyDock
-                )
-            ]
-        }
-
         // Upgrade version to 2 if migrated
         if self.version < 2 {
             self.version = 2
@@ -617,8 +573,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(theme, forKey: .theme)
         try container.encode(isLightMode, forKey: .isLightMode)
         try container.encode(barConfigs, forKey: .barConfigs)
-        try container.encode(dockConfigs, forKey: .dockConfigs)
-        try container.encode(controlCenterWidgets, forKey: .controlCenterWidgets)
+        try container.encode(controlCenterGridTiles, forKey: .controlCenterGridTiles)
         try container.encode(controlCenterColumns, forKey: .controlCenterColumns)
         try container.encode(controlCenterAvatarShape, forKey: .controlCenterAvatarShape)
         try container.encode(wallpaperPath, forKey: .wallpaperPath)
@@ -680,7 +635,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         try container.encode(weatherLocation, forKey: .weatherLocation)
         try container.encode(weatherUnits, forKey: .weatherUnits)
         try container.encode(webSearchProvider, forKey: .webSearchProvider)
-        try container.encode(pinnedApps, forKey: .pinnedApps)
         try container.encode(apps, forKey: .apps)
         if !includes.isEmpty {
             try container.encode(includes, forKey: .includes)
@@ -689,9 +643,13 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         // Encode raw settings at root level to maintain 1:1 format parity with SettingsSpec.js
         if !rawSettings.isEmpty {
             var dynamicContainer = encoder.container(keyedBy: AnyKey.self)
+            // "dockConfigs", "showDock", "pinnedApps" are legacy removed Dock keys, and
+            // "controlCenterWidgets" is the deprecated legacy Control Center key (renamed to
+            // "controlCenterGridTiles"); all are kept in knownKeys so existing settings.json
+            // files load cleanly without polluting rawSettings and without re-encoding them.
             let knownKeys = Set([
                 "version", "theme", "isLightMode", "barConfigs", "dockConfigs",
-                "controlCenterWidgets", "controlCenterColumns", "controlCenterAvatarShape",
+                "controlCenterWidgets", "controlCenterGridTiles", "controlCenterColumns", "controlCenterAvatarShape",
                 "wallpaperPath", "wallpaperFolders", "autoGenerateWallpaperColors",
                 "wallpaperPickerHotkey", "wallpaperPickerHotkeyKey", "wallpaperPickerHotkeyModifiers",
                 "wallpaperPickerFolder", "wallpaperPickerOnlyFolder", "wallpaperPickerSkew",
@@ -802,7 +760,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case "barSmartAutoHide": return AnyCodable(barSmartAutoHide)
         case "barTransparent": return AnyCodable(barTransparent)
         case "barMarginX": return AnyCodable(barMarginX)
-        case "showDock": return AnyCodable(showDock)
         case "showTelemetry": return AnyCodable(showTelemetry)
         case "showWeather": return AnyCodable(showWeather)
         case "showMedia": return AnyCodable(showMedia)
@@ -842,7 +799,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         case "weatherLocation": return AnyCodable(weatherLocation)
         case "weatherUnits": return AnyCodable(weatherUnits)
         case "webSearchProvider": return AnyCodable(webSearchProvider)
-        case "pinnedApps": return AnyCodable(pinnedApps.map { AnyCodable($0) })
         case "controlCenterColumns": return AnyCodable(controlCenterColumns)
         case "autoThemeOmniWM": return AnyCodable(autoThemeOmniWM)
         case "terminalThemeSync": return AnyCodable(terminalThemeSync)
@@ -882,8 +838,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if let b = value.boolValue { self.barTransparent = b }
         case "barMarginX":
             if let d = value.doubleValue { self.barMarginX = d }
-        case "showDock":
-            if let b = value.boolValue { self.showDock = b }
         case "showTelemetry":
             if let b = value.boolValue { self.showTelemetry = b }
         case "showWeather":
@@ -994,8 +948,6 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             if let s = value.stringValue { self.webSearchProvider = s }
         case "controlCenterColumns":
             if let i = value.intValue { self.controlCenterColumns = max(6, i) }
-        case "pinnedApps":
-            if let arr = value.arrayValue?.compactMap(\.stringValue) { self.pinnedApps = arr }
         case "enabledPlugins":
             if let arr = value.arrayValue?.compactMap(\.stringValue) { self.enabledPlugins = arr }
         default:

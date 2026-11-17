@@ -28,6 +28,7 @@ public struct ControlCenterView: View {
     @ObservedObject private var inhibit = IdleInhibitService.shared
     @ObservedObject private var dnd = DoNotDisturbService.shared
     @ObservedObject private var nowPlaying = NowPlayingService.shared
+    private let nightShift = NightShiftService.shared
 
     @State private var navigationStack: [ControlCenterPage] = [.root]
     @State private var isEditingLayout: Bool = false
@@ -39,11 +40,17 @@ public struct ControlCenterView: View {
     @State private var draggingWidgetID: String? = nil
     @State private var dragOffset: CGSize = .zero
     @State private var previewWidgets: [ControlCenterWidgetConfig]? = nil
+    @State private var dragStartSlot: GridPackingSolver.GridSlot? = nil
+    @State private var dragStartWidgets: [ControlCenterWidgetConfig]? = nil
+    @State private var dragStartLayout: GridPackingSolver.LayoutResult? = nil
 
     // Undo Stack
     @State private var undoStack: ControlCenterUndoStack = ControlCenterUndoStack(
-        initialWidgets: ConfigStore.shared.config.controlCenterWidgets,
-        initialColumns: ConfigStore.shared.config.controlCenterColumns
+        initialWidgets: ControlCenterUtils.normalizedGridTiles(
+            from: ConfigStore.shared.config.controlCenterGridTiles,
+            columns: CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
+        ),
+        initialColumns: CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
     )
 
     private var currentColumns: Int {
@@ -54,32 +61,20 @@ public struct ControlCenterView: View {
         currentColumns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: currentColumns)
     }
 
+    private var gridWidth: Double {
+        Double(sheetWidth - (CcMetrics.sheetPadding * 2.0))
+    }
+
     private var gridWidgets: [ControlCenterWidgetConfig] {
-        let raw = previewWidgets ?? configStore.config.controlCenterWidgets
-        return ControlCenterUtils.hardwareTiles(from: raw)
+        let raw = previewWidgets ?? configStore.config.controlCenterGridTiles
+        return ControlCenterUtils.normalizedGridTiles(from: raw, columns: currentColumns)
     }
 
     private var currentLayout: GridPackingSolver.LayoutResult {
-        let minRow = gridWidgets.map(\.row).min() ?? 0
-        let cards = gridWidgets.map { w in
-            GridPackingSolver.CardItem(
-                id: w.id,
-                col: Double(w.col),
-                row: Double(max(0, w.row - minRow)),
-                w: Double(w.w),
-                h: Double(w.h),
-                small: w.small,
-                isAvailable: w.enabled
-            )
-        }
-        let gridWidth = Double(sheetWidth - (CcMetrics.sheetPadding * 2.0))
-        return GridPackingSolver.packCards(
-            cards: cards,
+        ControlCenterGridPlanner.layoutResult(
+            for: gridWidgets,
             columns: currentColumns,
-            width: gridWidth,
-            gap: Double(CcMetrics.gridGap),
-            rowUnit: Double(CcMetrics.tileHeight),
-            gravity: true
+            width: gridWidth
         )
     }
 
@@ -89,11 +84,12 @@ public struct ControlCenterView: View {
         }
         let headerH: CGFloat = 36.0
         let slidersH: CGFloat = 40.0
-        let gridH: CGFloat = currentLayout.totalHeight
+        let gridOmitted = gridWidgets.isEmpty && !isEditingLayout
+        let gridH: CGFloat = gridOmitted ? 0.0 : (gridWidgets.isEmpty ? 44.0 : currentLayout.totalHeight)
         let bottomH: CGFloat = isEditingLayout ? 50.0 : 44.0
-        let spacing: CGFloat = 8.0 * 3.0
+        let spacing: CGFloat = gridOmitted ? 8.0 * 2.0 : 8.0 * 3.0
         let padding: CGFloat = CcMetrics.sheetPadding * 2.0
-        return max(ControlCenterController.standardSheetHeight, headerH + slidersH + gridH + bottomH + spacing + padding)
+        return max(showTileLibrary ? 316.0 : 180.0, headerH + slidersH + gridH + bottomH + spacing + padding)
     }
 
     public init() {}
@@ -150,13 +146,23 @@ public struct ControlCenterView: View {
         }
         .onAppear {
             updateUptime()
-            undoStack.reset(widgets: gridWidgets, columns: currentColumns)
+            if !isEditingLayout {
+                undoStack.reset(widgets: gridWidgets, columns: currentColumns)
+            }
             ControlCenterController.shared.updateHeight(to: sheetHeight)
         }
         .onChange(of: sheetHeight) { _, newH in
             ControlCenterController.shared.updateHeight(to: newH)
         }
-        .onChange(of: isEditingLayout) { _, _ in
+        .onChange(of: isEditingLayout) { _, newValue in
+            if newValue {
+                undoStack.reset(widgets: gridWidgets, columns: currentColumns)
+            } else {
+                resetDragState()
+            }
+            ControlCenterController.shared.updateHeight(to: sheetHeight)
+        }
+        .onChange(of: showTileLibrary) { _, _ in
             ControlCenterController.shared.updateHeight(to: sheetHeight)
         }
         .onChange(of: activePage) { _, _ in
@@ -179,30 +185,68 @@ public struct ControlCenterView: View {
             dualSlidersRow
 
             // 3. Dynamic Interactive Hardware Grid (Wi-Fi, Bluetooth, Audio Out, Audio In, Battery, Storage, Color Picker, Keep Awake)
-            ZStack(alignment: .topLeading) {
-                Color.clear
-                    .frame(width: CGFloat(layout.width), height: CGFloat(layout.totalHeight))
+            if gridWidgets.isEmpty {
+                if isEditingLayout {
+                    // Empty-grid placeholder keeps the drop zone visible while editing
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(theme.primary.opacity(0.08))
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(theme.primary.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                        Text("No tiles — click + Add Tile")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundColor(theme.onSurfaceVariant)
+                    }
+                    .frame(height: 44)
+                }
+            } else {
+                ZStack(alignment: .topLeading) {
+                    Color.clear
+                        .frame(width: CGFloat(layout.width), height: CGFloat(layout.totalHeight))
 
-                ForEach(layout.slots) { slot in
-                    if let widget = gridWidgets.first(where: { $0.id == slot.id }) {
-                        let isDragging = (draggingWidgetID == widget.id)
-                        let xPos = slot.x + (isDragging ? dragOffset.width : 0)
-                        let yPos = slot.y + (isDragging ? dragOffset.height : 0)
+                    // Drop-target placeholder under the actively dragged tile
+                    if let activeId = draggingWidgetID,
+                       let targetSlot = layout.slots.first(where: { $0.id == activeId }) {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(theme.primary.opacity(0.12))
+                            .stroke(theme.primary.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                            .frame(width: CGFloat(targetSlot.w), height: CGFloat(targetSlot.h))
+                            .offset(x: CGFloat(targetSlot.x), y: CGFloat(targetSlot.y))
+                            .zIndex(0)
+                    }
 
-                        tileView(for: widget, slot: slot)
+                    ForEach(layout.slots.sorted(by: { $0.id < $1.id })) { slot in
+                        if let widget = gridWidgets.first(where: { $0.id == slot.id }) {
+                            let isDragging = (draggingWidgetID == widget.id)
+                            let xPos = (isDragging && dragStartSlot != nil) ? (dragStartSlot!.x + Double(dragOffset.width)) : slot.x
+                            let yPos = (isDragging && dragStartSlot != nil) ? (dragStartSlot!.y + Double(dragOffset.height)) : slot.y
+
+                            ZStack(alignment: .topLeading) {
+                                tileView(for: widget, slot: slot)
+                                    .allowsHitTesting(!isEditingLayout)
+                                    .frame(width: CGFloat(slot.w), height: CGFloat(slot.h))
+
+                                if isEditingLayout {
+                                    // Guaranteed interior hit-target behind corner edit buttons
+                                    Color.black.opacity(0.001)
+                                        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                        .gesture(tileDragGesture(for: widget))
+
+                                    editControlsOverlay(for: widget, slot: slot)
+                                }
+                            }
                             .frame(width: CGFloat(slot.w), height: CGFloat(slot.h))
+                            .scaleEffect(isDragging ? 1.02 : 1.0)
+                            .shadow(color: isDragging ? Color.black.opacity(0.25) : .clear, radius: isDragging ? 8 : 0, y: isDragging ? 4 : 0)
                             .offset(x: CGFloat(xPos), y: CGFloat(yPos))
                             .zIndex(isDragging ? 50 : 1)
-                            .overlay(
-                                isEditingLayout ? editControlsOverlay(for: widget, slot: slot) : nil
-                            )
-                            .gesture(
-                                isEditingLayout ? tileDragGesture(for: widget, layout: layout) : nil
-                            )
+                            .animation(isDragging ? nil : .spring(response: 0.22, dampingFraction: 0.85), value: slot)
+                        }
                     }
                 }
+                .coordinateSpace(name: "ccGrid")
+                .frame(width: CGFloat(layout.width), height: CGFloat(layout.totalHeight), alignment: .topLeading)
             }
-            .frame(width: CGFloat(layout.width), height: CGFloat(layout.totalHeight), alignment: .topLeading)
 
             // 4. Bottom Row / Edit Chrome
             if isEditingLayout {
@@ -495,6 +539,7 @@ public struct ControlCenterView: View {
                 isActive: wifi.isPowerOn && wifi.isConnected,
                 hasDetail: widget.w > 1,
                 isPillIcon: true,
+                tileWidthCols: widget.w,
                 onTap: { wifi.togglePower() },
                 onDetailTap: { pushPage(.network) }
             )
@@ -507,6 +552,7 @@ public struct ControlCenterView: View {
                 isActive: bluetooth.isOn,
                 hasDetail: widget.w > 1,
                 isPillIcon: true,
+                tileWidthCols: widget.w,
                 onTap: { bluetooth.toggle() },
                 onDetailTap: { pushPage(.bluetooth) }
             )
@@ -519,6 +565,7 @@ public struct ControlCenterView: View {
                 isActive: !audio.isMuted && audio.volume > 0,
                 hasDetail: widget.w > 1,
                 isPillIcon: true,
+                tileWidthCols: widget.w,
                 onTap: { audio.toggleMute() },
                 onDetailTap: { pushPage(.audio) }
             )
@@ -531,6 +578,7 @@ public struct ControlCenterView: View {
                 isActive: audio.inputVolume > 0,
                 hasDetail: widget.w > 1,
                 isPillIcon: true,
+                tileWidthCols: widget.w,
                 onTap: { audio.setInputVolume(audio.inputVolume > 0 ? 0 : 0.75) },
                 onDetailTap: { pushPage(.audio) }
             )
@@ -543,6 +591,7 @@ public struct ControlCenterView: View {
                 isActive: (battery.status?.isCharging ?? false) || (battery.status?.onACPower ?? false),
                 hasDetail: widget.w > 1,
                 isPillIcon: true,
+                tileWidthCols: widget.w,
                 onTap: { pushPage(.battery) },
                 onDetailTap: { pushPage(.battery) }
             )
@@ -556,6 +605,7 @@ public struct ControlCenterView: View {
                 isActive: true,
                 hasDetail: false,
                 isPillIcon: true,
+                tileWidthCols: widget.w,
                 onTap: {
                     if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.DiskUtility") {
                         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
@@ -571,6 +621,7 @@ public struct ControlCenterView: View {
                 isActive: true,
                 hasDetail: false,
                 isPillIcon: true,
+                tileWidthCols: widget.w,
                 onTap: { ColorPickerController.shared.show() }
             )
 
@@ -582,6 +633,7 @@ public struct ControlCenterView: View {
                 isActive: inhibit.isInhibited,
                 hasDetail: widget.w > 1,
                 isPillIcon: inhibit.isInhibited,
+                tileWidthCols: widget.w,
                 onTap: { inhibit.toggle() },
                 onDetailTap: { pushPage(.idleInhibitor) }
             )
@@ -594,68 +646,56 @@ public struct ControlCenterView: View {
                 isActive: dnd.isEnabled,
                 hasDetail: widget.w > 1,
                 isPillIcon: dnd.isEnabled,
+                tileWidthCols: widget.w,
                 onTap: { dnd.toggle() },
                 onDetailTap: { pushPage(.doNotDisturb) }
             )
 
         case "quickTiles":
-            QuickTilesGroup()
+            QuickTilesGroup(cols: widget.w)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case "media":
             mediaTileView(widget: widget)
 
         case "nightMode":
-            Button {
-                NightShiftService.shared.toggle()
-            } label: {
-                Image(systemName: "sun.max.trianglebadge.exclamationmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.onSurface)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(theme.surfaceContainerHigh)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
+            ControlCenterTile(
+                icon: "sun.and.horizon.fill",
+                title: "Night Shift",
+                subtitle: widget.w > 1 ? (nightShift.isOn ? "On" : "Off") : "",
+                isActive: nightShift.isOn,
+                hasDetail: false,
+                isPillIcon: true,
+                tileWidthCols: widget.w,
+                onTap: { nightShift.toggle() }
+            )
 
         case "darkMode":
-            Button {
-                theme.toggleLightMode()
-                ConfigStore.shared.update { $0.isLightMode = theme.isLightMode }
-            } label: {
-                Image(systemName: "moon")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.onSurface)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(theme.surfaceContainerHigh)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
+            ControlCenterTile(
+                icon: theme.isLightMode ? "sun.max.fill" : "moon.fill",
+                title: theme.isLightMode ? "Light Mode" : "Dark Mode",
+                subtitle: widget.w > 1 ? (theme.isLightMode ? "Light" : "Dark") : "",
+                isActive: !theme.isLightMode,
+                hasDetail: false,
+                isPillIcon: true,
+                tileWidthCols: widget.w,
+                onTap: {
+                    theme.toggleLightMode()
+                    ConfigStore.shared.update { $0.isLightMode = theme.isLightMode }
+                }
+            )
 
         case "theme":
-            Button {
-                cycleTheme()
-            } label: {
-                Image(systemName: "circle.lefthalf.filled")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.onSurface)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(theme.surfaceContainerHigh)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
+            ControlCenterTile(
+                icon: "circle.lefthalf.filled",
+                title: "Theme",
+                subtitle: widget.w > 1 ? theme.themeName.capitalized : "",
+                isActive: true,
+                hasDetail: false,
+                isPillIcon: true,
+                tileWidthCols: widget.w,
+                onTap: { cycleTheme() }
+            )
 
         default:
             ControlCenterTile(
@@ -665,6 +705,7 @@ public struct ControlCenterView: View {
                 isActive: widget.enabled,
                 hasDetail: false,
                 isPillIcon: true,
+                tileWidthCols: widget.w,
                 onTap: {}
             )
         }
@@ -736,128 +777,186 @@ public struct ControlCenterView: View {
         let isRemovable = ControlCenterUtils.isRemovable(widget)
         let canShrink = ControlCenterUtils.canShrink(widget.id)
 
-        return ZStack(alignment: .topTrailing) {
+        return ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color(hex: theme.palette.primary.hex), style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                .stroke(theme.primary, style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                .allowsHitTesting(false)
 
-            HStack(spacing: 3) {
-                // Resize Span Button
-                if canShrink {
-                    Button {
-                        resizeWidget(widget)
-                    } label: {
-                        Image(systemName: "arrow.left.and.right")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 18, height: 18)
-                            .background(Color(hex: theme.palette.primary.hex))
-                            .clipShape(Circle())
+            if slot.w < 60 {
+                // 1×1 tiles: pin badges to opposite corners so they never collide or overflow
+                HStack {
+                    if canShrink {
+                        Button {
+                            resizeWidget(widget)
+                        } label: {
+                            Image(systemName: "arrow.left.and.right")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 14, height: 14)
+                                .background(theme.primary)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                }
 
-                // Delete Button
-                if isRemovable {
-                    Button {
-                        removeWidget(widget)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 18, height: 18)
-                            .background(Color(hex: theme.palette.error.hex))
-                            .clipShape(Circle())
+                    Spacer(minLength: 0)
+
+                    if isRemovable {
+                        Button {
+                            removeWidget(widget)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 6, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 14, height: 14)
+                                .background(Color(hex: theme.palette.error.hex))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else {
+                HStack(spacing: 3) {
+                    // Resize Span Button
+                    if canShrink {
+                        Button {
+                            resizeWidget(widget)
+                        } label: {
+                            Image(systemName: "arrow.left.and.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 18, height: 18)
+                                .background(theme.primary)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // Delete Button
+                    if isRemovable {
+                        Button {
+                            removeWidget(widget)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 18, height: 18)
+                                .background(Color(hex: theme.palette.error.hex))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
-            .padding(4)
         }
     }
 
     // MARK: - Drag-and-Drop Gesture
-    private func tileDragGesture(for widget: ControlCenterWidgetConfig, layout: GridPackingSolver.LayoutResult) -> some Gesture {
-        DragGesture()
+    private func tileDragGesture(for widget: ControlCenterWidgetConfig) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("ccGrid"))
             .onChanged { value in
                 if draggingWidgetID == nil {
                     draggingWidgetID = widget.id
+                    dragStartSlot = currentLayout.slots.first(where: { $0.id == widget.id })
+                    dragStartWidgets = gridWidgets
+                    dragStartLayout = currentLayout
                 }
                 dragOffset = value.translation
 
-                if let currentSlot = layout.slots.first(where: { $0.id == widget.id }) {
-                    let destX = currentSlot.x + Double(value.translation.width)
-                    let destY = currentSlot.y + Double(value.translation.height)
-                    let (targetCol, targetRow) = GridPackingSolver.cellAt(
-                        layout: layout,
-                        x: destX,
-                        y: destY,
-                        cols: Double(widget.w),
-                        rows: Double(widget.h)
-                    )
+                guard let startSlot = dragStartSlot,
+                      let baseLayout = dragStartLayout,
+                      let baseWidgets = dragStartWidgets else { return }
 
-                    var updated = gridWidgets
-                    if let idx = updated.firstIndex(where: { $0.id == widget.id }) {
-                        updated[idx].col = Int(targetCol)
-                        updated[idx].row = Int(targetRow)
-                        previewWidgets = updated
-                    }
-                }
+                let destX = startSlot.x + Double(value.translation.width)
+                let destY = startSlot.y + Double(value.translation.height)
+                let rawCell = GridPackingSolver.cellAt(
+                    layout: baseLayout,
+                    x: destX,
+                    y: destY,
+                    cols: Double(widget.w),
+                    rows: Double(widget.h)
+                )
+                let targetCol = Int(rawCell.col.rounded())
+                let targetRow = Int(rawCell.row.rounded())
+
+                previewWidgets = ControlCenterGridPlanner.move(
+                    widgetID: widget.id,
+                    toCol: targetCol,
+                    toRow: targetRow,
+                    in: baseWidgets,
+                    columns: currentColumns,
+                    width: gridWidth
+                )
             }
             .onEnded { _ in
                 if let finalWidgets = previewWidgets {
                     recordAndSaveWidgets(finalWidgets)
                 }
-                draggingWidgetID = nil
-                dragOffset = .zero
-                previewWidgets = nil
+                resetDragState()
             }
+    }
+
+    private func resetDragState() {
+        draggingWidgetID = nil
+        dragOffset = .zero
+        previewWidgets = nil
+        dragStartSlot = nil
+        dragStartWidgets = nil
+        dragStartLayout = nil
     }
 
     // MARK: - Grid Modification Actions
     private func resizeWidget(_ widget: ControlCenterWidgetConfig) {
-        let (newW, newH) = ControlCenterUtils.nextSpan(for: widget, columns: currentColumns)
-        var updated = gridWidgets
-        if let idx = updated.firstIndex(where: { $0.id == widget.id }) {
-            updated[idx].w = newW
-            updated[idx].h = newH
-            updated[idx].small = (newW == 1)
-            recordAndSaveWidgets(updated)
-        }
+        let updated = ControlCenterGridPlanner.cycleSpan(
+            widgetID: widget.id,
+            in: gridWidgets,
+            columns: currentColumns,
+            width: gridWidth
+        )
+        recordAndSaveWidgets(updated)
     }
 
     private func removeWidget(_ widget: ControlCenterWidgetConfig) {
         guard ControlCenterUtils.isRemovable(widget) else { return }
-        let updated = gridWidgets.filter { $0.id != widget.id }
+        let remaining = gridWidgets.filter { $0.id != widget.id }
+        let updated = ControlCenterGridPlanner.normalizeLayout(
+            remaining,
+            columns: currentColumns,
+            width: gridWidth
+        )
         recordAndSaveWidgets(updated)
         ToastCenter.shared.show(icon: "trash", message: "Removed \(ControlCenterUtils.title(for: widget.id))")
     }
 
     private func addWidget(_ tile: ControlCenterWidgetConfig) {
-        var updated = gridWidgets
-        var toAdd = tile
-        toAdd.col = 0
-        toAdd.row = 100 // Gravity will pack it to first fit
-        toAdd.enabled = true
-        updated.append(toAdd)
+        let updated = ControlCenterGridPlanner.insert(
+            tile,
+            into: gridWidgets,
+            columns: currentColumns,
+            width: gridWidth
+        )
         recordAndSaveWidgets(updated)
         ToastCenter.shared.show(icon: "plus.circle.fill", message: "Added \(ControlCenterUtils.title(for: tile.id))")
     }
 
     private func resetToDefaults() {
-        let defaults = ControlCenterUtils.canonicalHardwareTiles
-        recordAndSaveWidgets(defaults)
+        recordAndSaveWidgets(ControlCenterWidgetConfig.defaultGridTiles)
         ToastCenter.shared.show(icon: "arrow.counterclockwise", message: "Reset Control Center to defaults")
     }
 
     private func recordAndSaveWidgets(_ widgets: [ControlCenterWidgetConfig]) {
         undoStack.record(widgets: widgets, columns: currentColumns)
-        configStore.update { $0.controlCenterWidgets = widgets }
+        configStore.update { $0.controlCenterGridTiles = widgets }
         previewWidgets = nil
     }
 
     private func applySnapshot(_ snapshot: ControlCenterUndoStack.Snapshot) {
         configStore.update {
-            $0.controlCenterWidgets = snapshot.widgets
+            $0.controlCenterGridTiles = snapshot.widgets
             $0.controlCenterColumns = snapshot.columns
         }
         previewWidgets = nil
@@ -871,9 +970,65 @@ public struct ControlCenterView: View {
     }
 
     // MARK: - Media Tile View
+    @ViewBuilder
     private func mediaTileView(widget: ControlCenterWidgetConfig) -> some View {
         let track = nowPlaying.currentTrack
-        return HStack(spacing: 8) {
+
+        if widget.w == 1 {
+            // 1×1: centered play/pause button filling the tile
+            Button {
+                nowPlaying.playPause()
+            } label: {
+                Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(track.isPlaying ? theme.onPrimary : theme.onSurfaceVariant)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(track.isPlaying ? theme.primary : theme.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(track.title.isEmpty ? "Now Playing" : track.title)
+        } else if widget.w == 2 {
+            // 2-col: compact 28×28 squircle + single-line title
+            HStack(spacing: 8) {
+                Button {
+                    nowPlaying.playPause()
+                } label: {
+                    Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(track.isPlaying ? theme.onPrimary : theme.onSurfaceVariant)
+                        .frame(width: 28, height: 28)
+                        .background(track.isPlaying ? theme.primary : theme.surfaceContainerHighest)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Text(track.title.isEmpty ? "Media" : track.title)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.onSurface)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
+            .background(theme.surfaceContainerHigh)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
+            )
+        } else {
+            // 3+ cols: 58×32 pill + title + artist
+            mediaTileWideView(track: track)
+        }
+    }
+
+    private func mediaTileWideView(track: NowPlayingTrack) -> some View {
+        HStack(spacing: 8) {
             Button {
                 nowPlaying.playPause()
             } label: {
@@ -1150,6 +1305,7 @@ public struct ControlCenterTile: View {
     public let isActive: Bool
     public let hasDetail: Bool
     public let isPillIcon: Bool
+    public let tileWidthCols: Int
     public let onTap: () -> Void
     public let onDetailTap: () -> Void
 
@@ -1162,6 +1318,7 @@ public struct ControlCenterTile: View {
         isActive: Bool,
         hasDetail: Bool = false,
         isPillIcon: Bool = true,
+        tileWidthCols: Int = 4,
         onTap: @escaping () -> Void,
         onDetailTap: @escaping () -> Void = {}
     ) {
@@ -1171,11 +1328,76 @@ public struct ControlCenterTile: View {
         self.isActive = isActive
         self.hasDetail = hasDetail
         self.isPillIcon = isPillIcon
+        self.tileWidthCols = tileWidthCols
         self.onTap = onTap
         self.onDetailTap = onDetailTap
     }
 
     public var body: some View {
+        if tileWidthCols == 1 {
+            // 1×1: centered icon button filling the tile
+            Button {
+                onTap()
+            } label: {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor((isPillIcon && isActive) ? theme.onPrimary : theme.onSurfaceVariant)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background((isPillIcon && isActive) ? theme.primary : theme.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(title)
+        } else if tileWidthCols == 2 {
+            // 2-col: compact 28×28 icon pill + single-line title, split tap vs detail tap
+            HStack(spacing: 8) {
+                Button {
+                    onTap()
+                } label: {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor((isPillIcon && isActive) ? theme.onPrimary : theme.onSurfaceVariant)
+                        .frame(width: 28, height: 28)
+                        .background((isPillIcon && isActive) ? theme.primary : theme.surfaceContainerHighest)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    if hasDetail {
+                        onDetailTap()
+                    } else {
+                        onTap()
+                    }
+                } label: {
+                    Text(title)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(theme.onSurface)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
+            .background(theme.surfaceContainerHigh)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(theme.outlineVariant.opacity(0.15), lineWidth: 1)
+            )
+        } else {
+            // 3+ cols: 58×32 pill + title + subtitle
+            wideTileContent
+        }
+    }
+
+    private var wideTileContent: some View {
         HStack(spacing: 8) {
             Button {
                 onTap()

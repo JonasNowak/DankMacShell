@@ -4,6 +4,7 @@ import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 @testable import DMSCore
+import DankThemeEngine
 
 @Suite("WallpaperSeedColor Tests")
 struct WallpaperSeedColorTests {
@@ -55,5 +56,29 @@ struct WallpaperSeedColorTests {
     func dominantColorOfMissingFile() {
         let url = URL(fileURLWithPath: "/tmp/definitely-not-there-\(UUID().uuidString).png")
         #expect(WallpaperSeedColor.dominantColor(from: url) == nil)
+    }
+
+    @Test("DankThemeEngine parity: wallpaper seed extraction matches DMSCore adapter")
+    func testDankThemeEngineParity() throws {
+        let url = try solidColorImageURL(r: 30, g: 100, b: 200)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        // Dominant seed: engine FFI result == DMSCore adapter result.
+        let dteSeed = try DankThemeEngine.extractWallpaperSeed(from: url.path)
+        let localSeed = WallpaperSeedColor.dominantColor(from: url)
+        #expect(localSeed != nil)
+        #expect(dteSeed.hex == localSeed?.hex)
+
+        // Palette seeds: same count and same order (dominant first).
+        let dteSeeds = try DankThemeEngine.extractPaletteSeeds(from: url.path, count: 2)
+        let localSeeds = WallpaperSeedColor.paletteSeeds(from: url, count: 2)
+        #expect(localSeeds?.count == dteSeeds.count)
+        #expect(localSeeds?.first?.hex == dteSeeds.first?.hex)
+
+        // Missing files throw in the engine and surface as nil through the adapter.
+        let missing = "/tmp/definitely-not-there-\(UUID().uuidString).png"
+        #expect((try? DankThemeEngine.extractWallpaperSeed(from: missing)) == nil)
+        #expect((try? DankThemeEngine.extractPaletteSeeds(from: missing, count: 2)) == nil)
+        #expect(WallpaperSeedColor.paletteSeeds(from: URL(fileURLWithPath: missing)) == nil)
     }
 }

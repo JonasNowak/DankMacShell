@@ -1,5 +1,8 @@
 # 21 — Desktop Dock Specification (`DOCK`)
 
+> [!NOTE]
+> **macOS Disposition — Removed / N/A on macOS:** The standalone Desktop Dock (`DockController`, `DockConfig`, `DockMagnificationEngine`, Settings `Dock` tab, `dms dock` CLI, and `pinnedApps` pinning) was stripped from DankMacShell because macOS already provides a native system Dock. This document is retained solely as an upstream DMS reference.
+
 ## 0. Coverage Manifest
 - `quickshell/Modules/Dock/Dock.qml` — Multi-screen layer-shell dock surface host, layer toggle (Overlay during edit mode or when `useOverlayLayer` is set, else Top), edge exclusions, connected frame chrome integration, and input mask routing.
 - `quickshell/Modules/Dock/DockBody.qml` (939 lines) — Core dock container, VectorSpringMotion surface physics (`VectorSpringMotion`), inline widget strip & app provider loader (`BarWidgets.AppsDock`), auto-hide/smart-auto-hide edge trigger zones, edit mode overlay with scrim, and widget expansion host.

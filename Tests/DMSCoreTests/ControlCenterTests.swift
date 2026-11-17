@@ -208,12 +208,21 @@ struct ControlCenterTests {
         #expect(undoCount <= 50)
     }
 
-    @Test("AvatarShapeGenerator Paths for All 12 User Shapes")
+    @Test("AvatarShapeGenerator Paths for All 12 User Shapes and 35 M3 Expressive Shapes")
     func testAvatarShapeGeneratorAllShapes() {
         let rect = CGRect(x: 0, y: 0, width: 64, height: 64)
 
         for shapeName in ControlCenterUtils.userShapes {
             let path = AvatarShapeGenerator.path(for: shapeName, in: rect)
+            #expect(!path.isEmpty)
+            let bounds = path.boundingBox
+            #expect(bounds.width > 0)
+            #expect(bounds.height > 0)
+        }
+
+        #expect(ControlCenterUtils.expressiveUserShapes.count == 35)
+        for shape in M3ExpressiveShape.allCases {
+            let path = AvatarShapeGenerator.path(for: shape, in: rect)
             #expect(!path.isEmpty)
             let bounds = path.boundingBox
             #expect(bounds.width > 0)
@@ -245,6 +254,167 @@ struct ControlCenterTests {
     func testCatalogWidgets() {
         #expect(ControlCenterUtils.catalogWidgets.count >= 15)
         for widget in ControlCenterUtils.catalogWidgets {
+            #expect(!ControlCenterUtils.title(for: widget.id).isEmpty)
+            #expect(!ControlCenterUtils.subtitle(for: widget.id).isEmpty)
+            #expect(!ControlCenterUtils.icon(for: widget.id).isEmpty)
+        }
+    }
+
+    // MARK: - Grid Customization (Stage 2c)
+
+    private func tileRectsOverlap(_ a: ControlCenterWidgetConfig, _ b: ControlCenterWidgetConfig) -> Bool {
+        a.col < b.col + b.w && b.col < a.col + a.w && a.row < b.row + b.h && b.row < a.row + a.h
+    }
+
+    private func hasAnyOverlap(_ tiles: [ControlCenterWidgetConfig]) -> Bool {
+        for i in tiles.indices {
+            for j in tiles.indices where j > i {
+                if tileRectsOverlap(tiles[i], tiles[j]) { return true }
+            }
+        }
+        return false
+    }
+
+    private struct GridPos: Equatable {
+        let col: Int
+        let row: Int
+    }
+
+    private func position(of id: String, in tiles: [ControlCenterWidgetConfig]) -> GridPos? {
+        guard let tile = tiles.first(where: { $0.id == id }) else { return nil }
+        return GridPos(col: tile.col, row: tile.row)
+    }
+
+    @Test("Default Grid Tiles Equal Canonical Hardware Tiles")
+    func testDefaultGridTilesEqualCanonicalHardwareTiles() {
+        #expect(ControlCenterWidgetConfig.defaultGridTiles == ControlCenterUtils.canonicalHardwareTiles)
+        #expect(ControlCenterWidgetConfig.defaultGridTiles.count == 8)
+    }
+
+    @Test("Normalized Grid Tiles Preserve Unlocked Catalog Tiles")
+    func testNormalizedGridTilesPreserveUnlockedCatalogTiles() {
+        let unlockedIds = ["doNotDisturb", "nightMode", "darkMode", "theme", "media", "quickTiles"]
+        let input = ControlCenterWidgetConfig.defaultGridTiles
+            + unlockedIds.map { ControlCenterWidgetConfig(id: $0) }
+        let normalized = ControlCenterUtils.normalizedGridTiles(from: input)
+        let ids = normalized.map { $0.id }
+        #expect(normalized.count == 14)
+        for id in unlockedIds {
+            #expect(ids.contains(id))
+        }
+    }
+
+    @Test("Normalized Grid Tiles Do Not Snap Back to Canonical on Removal")
+    func testNormalizedGridTilesNoSnapBackOnRemoval() {
+        let removed = ControlCenterWidgetConfig.defaultGridTiles.filter {
+            $0.id != "audioOutput" && $0.id != "colorPicker"
+        }
+        let normalized = ControlCenterUtils.normalizedGridTiles(from: removed)
+        #expect(normalized.count == 6)
+        #expect(!normalized.contains { $0.id == "audioOutput" || $0.id == "colorPicker" })
+        #expect(normalized != ControlCenterUtils.canonicalHardwareTiles)
+
+        let empty = ControlCenterUtils.normalizedGridTiles(from: [])
+        #expect(empty.isEmpty)
+        #expect(empty != ControlCenterUtils.canonicalHardwareTiles)
+    }
+
+    @Test("Normalized Grid Tiles Strip Fixed Chrome and Disabled, Normalize Aliases, Dedupe IDs")
+    func testNormalizedGridTilesFilteringAliasesDedupe() {
+        let input: [ControlCenterWidgetConfig] = [
+            ControlCenterWidgetConfig(id: "user"),
+            ControlCenterWidgetConfig(id: "lock"),
+            ControlCenterWidgetConfig(id: "power"),
+            ControlCenterWidgetConfig(id: "settings"),
+            ControlCenterWidgetConfig(id: "edit"),
+            ControlCenterWidgetConfig(id: "volumeSlider"),
+            ControlCenterWidgetConfig(id: "brightnessSlider"),
+            ControlCenterWidgetConfig(id: "inputVolumeSlider"),
+            ControlCenterWidgetConfig(id: "wifi", enabled: false),
+            ControlCenterWidgetConfig(id: "network"),
+            ControlCenterWidgetConfig(id: "caffeine"),
+            ControlCenterWidgetConfig(id: "audioDevice"),
+            ControlCenterWidgetConfig(id: "wifi")
+        ]
+        let normalized = ControlCenterUtils.normalizedGridTiles(from: input)
+        let ids = normalized.map { $0.id }
+        #expect(ids == ["wifi", "idleInhibitor", "audioOutput"])
+        for chromeId in ControlCenterUtils.fixedChromeIds {
+            #expect(!ids.contains(chromeId))
+        }
+    }
+
+    @Test("Grid Planner Move Later Tile Onto Origin Shifts Displaced Tiles Without Overlap")
+    func testPlannerMoveLaterTileToOrigin() {
+        let tiles = ControlCenterWidgetConfig.defaultGridTiles
+        for movedId in ["idleInhibitor", "bluetooth"] {
+            let result = ControlCenterGridPlanner.move(widgetID: movedId, toCol: 0, toRow: 0, in: tiles, columns: 8, width: 418)
+            #expect(result.count == 8)
+            #expect(position(of: movedId, in: result) == GridPos(col: 0, row: 0))
+            #expect(!hasAnyOverlap(result))
+        }
+    }
+
+    @Test("Grid Planner Move Earlier Tile Down Compacts Vacated Left Column Upward")
+    func testPlannerMoveWifiDownCompactsColumn() {
+        let tiles = ControlCenterWidgetConfig.defaultGridTiles
+        let result = ControlCenterGridPlanner.move(widgetID: "wifi", toCol: 0, toRow: 3, in: tiles, columns: 8, width: 418)
+        #expect(result.count == 8)
+        #expect(position(of: "wifi", in: result) == GridPos(col: 0, row: 3))
+        #expect(position(of: "audioOutput", in: result) == GridPos(col: 0, row: 0))
+        #expect(position(of: "battery", in: result) == GridPos(col: 0, row: 1))
+        #expect(position(of: "colorPicker", in: result) == GridPos(col: 0, row: 2))
+        #expect(!hasAnyOverlap(result))
+    }
+
+    @Test("Grid Planner Insert Fills Open First-Fit Gap Instead of Next Row")
+    func testPlannerInsertFirstFitGap() {
+        let withoutBluetooth = ControlCenterWidgetConfig.defaultGridTiles.filter { $0.id != "bluetooth" }
+        let newTile = ControlCenterWidgetConfig(id: "doNotDisturb", w: 4, h: 1)
+        let result = ControlCenterGridPlanner.insert(newTile, into: withoutBluetooth, columns: 8, width: 418)
+        #expect(result.count == 8)
+        #expect(position(of: "doNotDisturb", in: result) == GridPos(col: 4, row: 0))
+        #expect(!hasAnyOverlap(result))
+    }
+
+    @Test("Grid Planner Cycle Span 4-2-1-4, Col Clamp on Expand, QuickTiles Floor")
+    func testPlannerCycleSpan() {
+        var tiles = ControlCenterWidgetConfig.defaultGridTiles
+        tiles = ControlCenterGridPlanner.cycleSpan(widgetID: "wifi", in: tiles, columns: 8, width: 418)
+        #expect(tiles.first { $0.id == "wifi" }?.w == 2)
+        tiles = ControlCenterGridPlanner.cycleSpan(widgetID: "wifi", in: tiles, columns: 8, width: 418)
+        #expect(tiles.first { $0.id == "wifi" }?.w == 1)
+        tiles = ControlCenterGridPlanner.cycleSpan(widgetID: "wifi", in: tiles, columns: 8, width: 418)
+        #expect(tiles.first { $0.id == "wifi" }?.w == 4)
+        #expect(!hasAnyOverlap(tiles))
+
+        // Expanding a 1-wide tile at col 7 clamps col to columns - w = 4
+        let single = [ControlCenterWidgetConfig(id: "wifi", col: 7, row: 0, w: 1, h: 1, small: true)]
+        let cycled = ControlCenterGridPlanner.cycleSpan(widgetID: "wifi", in: single, columns: 8, width: 418)
+        let wifi = cycled.first { $0.id == "wifi" }
+        #expect(wifi?.w == 4)
+        #expect(wifi?.col == 4)
+
+        // quickTiles never drops below 4 columns: 8 -> 4 -> 8
+        var quick = [ControlCenterWidgetConfig(id: "quickTiles", col: 0, row: 0, w: 8, h: 1)]
+        quick = ControlCenterGridPlanner.cycleSpan(widgetID: "quickTiles", in: quick, columns: 8, width: 418)
+        #expect(quick.first { $0.id == "quickTiles" }?.w == 4)
+        quick = ControlCenterGridPlanner.cycleSpan(widgetID: "quickTiles", in: quick, columns: 8, width: 418)
+        #expect(quick.first { $0.id == "quickTiles" }?.w == 8)
+    }
+
+    @Test("Grid Catalog Widgets Completeness")
+    func testGridCatalogWidgetsCompleteness() {
+        let catalog = ControlCenterUtils.gridCatalogWidgets
+        #expect(catalog.count == 14)
+        let expectedIds: Set<String> = [
+            "wifi", "bluetooth", "audioOutput", "audioInput", "battery", "diskUsage",
+            "colorPicker", "idleInhibitor", "doNotDisturb", "nightMode", "darkMode",
+            "theme", "media", "quickTiles"
+        ]
+        #expect(Set(catalog.map { $0.id }) == expectedIds)
+        for widget in catalog {
+            #expect(!ControlCenterUtils.fixedChromeIds.contains(widget.id))
             #expect(!ControlCenterUtils.title(for: widget.id).isEmpty)
             #expect(!ControlCenterUtils.subtitle(for: widget.id).isEmpty)
             #expect(!ControlCenterUtils.icon(for: widget.id).isEmpty)

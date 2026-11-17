@@ -75,9 +75,9 @@ struct IPCCommandTests {
         #expect(IPCCommand.parse(url: URL(string: "dms://settings?key=theme&value=orange")!) == .setSetting(key: "theme", value: "orange"))
         #expect(IPCCommand.parse(url: URL(string: "dms://settings")!) == .toggleSettings)
 
-        // 11. Bar & Dock
+        // 11. Bar & Workspace (dock URLs are unknown since the Dock subsystem was removed)
         #expect(IPCCommand.parse(url: URL(string: "dms://bar/reveal?position=top")!) == .bar(action: "reveal", value: "top"))
-        #expect(IPCCommand.parse(url: URL(string: "dms://dock/hide")!) == .dock(action: "hide", value: nil))
+        #expect(IPCCommand.parse(url: URL(string: "dms://dock/hide")!) == .unknown("dms://dock/hide"))
         #expect(IPCCommand.parse(url: URL(string: "dms://workspace/switch?number=3")!) == .workspace(action: "switch", value: "3"))
 
         // 12. Audio, Mic, Brightness, Inhibit, Media
@@ -170,11 +170,13 @@ struct IPCCommandTests {
         #expect(IPCCommand.parseCLI(args: ["settings", "dump"]) == .dumpSettings)
         #expect(IPCCommand.parseCLI(args: ["settings", "get", "theme"]) == .getSetting(key: "theme"))
         #expect(IPCCommand.parseCLI(args: ["settings", "set", "theme", "blue"]) == .setSetting(key: "theme", value: "blue"))
-        #expect(IPCCommand.parseCLI(args: ["settings", "open", "dock"]) == .openSettingsTab("dock"))
+        #expect(IPCCommand.parseCLI(args: ["settings", "open", "launcher"]) == .openSettingsTab("launcher"))
         #expect(IPCCommand.parseCLI(args: ["settings", "close"]) == .closeSettings)
 
         #expect(IPCCommand.parseCLI(args: ["bar", "reveal", "bottom"]) == .bar(action: "reveal", value: "bottom"))
-        #expect(IPCCommand.parseCLI(args: ["dock", "toggle"]) == .dock(action: "toggle", value: nil))
+        // "dock" is no longer a CLI target; it parses as unknown
+        #expect(IPCCommand.parseCLI(args: ["dock", "toggle"]) == .unknown("dock toggle"))
+        #expect(!IPCCommand.cliTargets.contains("dock"))
         #expect(IPCCommand.parseCLI(args: ["workspace", "status"]) == .workspace(action: "status", value: nil))
         #expect(IPCCommand.parseCLI(args: ["workspace", "switch", "2"]) == .workspace(action: "switch", value: "2"))
 

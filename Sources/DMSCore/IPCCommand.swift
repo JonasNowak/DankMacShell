@@ -74,9 +74,8 @@ public enum IPCCommand: Sendable, Equatable {
     case setSetting(key: String, value: String)
     case dumpSettings
 
-    // DankBar & Dock
+    // DankBar
     case bar(action: String, value: String? = nil)
-    case dock(action: String, value: String? = nil)
 
     // Workspaces & Virtual Spaces (OmniWM / SkyLight)
     case workspace(action: String, value: String? = nil)
@@ -270,10 +269,6 @@ public enum IPCCommand: Sendable, Equatable {
         case "bar":
             let act = subPath.isEmpty ? (param("action") ?? "toggle") : subPath
             return .bar(action: act, value: param("value") ?? param("position"))
-
-        case "dock":
-            let act = subPath.isEmpty ? (param("action") ?? "toggle") : subPath
-            return .dock(action: act, value: param("value"))
 
         case "workspace", "workspaces":
             let act = subPath.isEmpty ? (param("action") ?? "status") : subPath
@@ -550,9 +545,6 @@ public enum IPCCommand: Sendable, Equatable {
         case "bar":
             return .bar(action: action.isEmpty ? "toggle" : action, value: extra.first)
 
-        case "dock":
-            return .dock(action: action.isEmpty ? "toggle" : action, value: extra.first)
-
         case "workspace", "workspaces":
             return .workspace(action: action.isEmpty ? "status" : action, value: extra.first)
 
@@ -771,7 +763,7 @@ public enum IPCCommand: Sendable, Equatable {
     public static let cliTargets: [String] = [
         "spotlight", "launcher", "control-center", "dash", "powermenu", "notepad",
         "clipboard", "processlist", "unhide", "unhide-all", "hide", "activate",
-        "colorpicker", "qr", "keybinds", "settings", "bar", "dock", "workspace",
+        "colorpicker", "qr", "keybinds", "settings", "bar", "workspace",
         "audio", "mic", "brightness", "inhibit", "mpris", "lyrics", "theme",
         "wallpaper", "omniwm", "screenshot", "toast", "doctor", "reload",
         "plugins", "applets", "status", "weather", "island", "danksearch",
@@ -807,7 +799,7 @@ public enum IPCCommand: Sendable, Equatable {
             return ["toggle", "open", "close"]
         case "settings":
             return ["toggle", "open", "close", "get", "set", "dump"]
-        case "bar", "dock":
+        case "bar":
             return ["toggle", "reveal", "hide", "status", "setposition"]
         case "workspace", "workspaces":
             return ["status", "switch", "next", "prev"]

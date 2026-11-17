@@ -21,8 +21,23 @@ public struct TileLibrarySheet: View {
         self.onClose = onClose
     }
 
+    /// Normalizes legacy widget aliases (`network` -> `wifi`, `caffeine` -> `idleInhibitor`,
+    /// `audioDevice` -> `audioOutput`) so active-grid membership matches catalog ids.
+    private func normalizedWidgetID(_ id: String) -> String {
+        switch id {
+        case "network": return "wifi"
+        case "caffeine": return "idleInhibitor"
+        case "audioDevice": return "audioOutput"
+        default: return id
+        }
+    }
+
+    private var normalizedActiveWidgetIDs: Set<String> {
+        Set(activeWidgetIDs.map { normalizedWidgetID($0) })
+    }
+
     private var availableCatalog: [ControlCenterWidgetConfig] {
-        let all = ControlCenterUtils.catalogWidgets.filter { !activeWidgetIDs.contains($0.id) }
+        let all = ControlCenterUtils.gridCatalogWidgets.filter { !normalizedActiveWidgetIDs.contains($0.id) }
         let filteredByCategory = (selectedCategory == "All") ? all : all.filter { ControlCenterUtils.category(for: $0.id) == selectedCategory }
         let clean = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !clean.isEmpty else { return filteredByCategory }
@@ -33,7 +48,7 @@ public struct TileLibrarySheet: View {
     }
 
     private var categories: [String] {
-        var set = Set(ControlCenterUtils.catalogWidgets.map { ControlCenterUtils.category(for: $0.id) })
+        var set = Set(ControlCenterUtils.gridCatalogWidgets.map { ControlCenterUtils.category(for: $0.id) })
         set.insert("All")
         return ["All"] + set.filter { $0 != "All" }.sorted()
     }
@@ -120,9 +135,18 @@ public struct TileLibrarySheet: View {
                                     .clipShape(Circle())
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(ControlCenterUtils.title(for: tile.id))
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                        .foregroundColor(Color(hex: p.onSurface.hex))
+                                    HStack(spacing: 4) {
+                                        Text(ControlCenterUtils.title(for: tile.id))
+                                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                            .foregroundColor(Color(hex: p.onSurface.hex))
+                                        Text("\(tile.w)×\(tile.h)")
+                                            .font(.system(size: 8, weight: .semibold, design: .rounded))
+                                            .foregroundColor(Color(hex: p.outline.hex))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color(hex: p.surfaceContainerLow.hex))
+                                            .clipShape(Capsule())
+                                    }
                                     Text(ControlCenterUtils.subtitle(for: tile.id))
                                         .font(.system(size: 9))
                                         .foregroundColor(Color(hex: p.outline.hex))

@@ -202,6 +202,13 @@ struct ThemeTokensAndCustomizationTests {
         #expect(reduced.durShort == 0.0)
         #expect(reduced.durMed == 0.0)
         #expect(reduced.slidePx == 0.0)
+
+        // M3 Expressive physics springs
+        #expect(normalMotion.scheme == .expressive)
+        #expect(normalMotion.fastSpatial == M3SpringSpec(dampingRatio: 0.6, stiffness: 800))
+        #expect(normalMotion.defaultSpatial == M3SpringSpec(dampingRatio: 0.8, stiffness: 380))
+        #expect(normalMotion.slowSpatial == M3SpringSpec(dampingRatio: 0.8, stiffness: 200))
+        #expect(normalMotion.fastEffects == M3SpringSpec(dampingRatio: 1.0, stiffness: 3800))
     }
 
     @Test("M3 Typography and Surface Customization")

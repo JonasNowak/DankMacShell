@@ -33,21 +33,53 @@ struct ConfigAndIncludeTests {
         #expect(config.barAutoHide == true)
         #expect(config.barTransparent == true)
 
-        // Dock configs created from legacy showDock
-        #expect(config.dockConfigs.count == 1)
-        #expect(config.dockConfigs[0].enabled == true)
-        #expect(config.showDock == true)
+        // Legacy "showDock" key decodes cleanly but is ignored (Dock subsystem removed)
+        #expect(config.rawSettings["showDock"] == nil)
+        #expect(config.getSetting("showDock") == nil)
 
         // RunningApps injected into barConfigs since showWorkspaceApps is true
         let leftWidgets = config.barConfigs[0].layout.left
         #expect(leftWidgets.contains(where: { $0.widgetId == "runningApps" }))
     }
 
+    @Test("Legacy Dock Keys Ignored on Load and Not Re-Encoded")
+    func testLegacyDockKeysIgnoredOnLoad() throws {
+        // The Desktop Dock subsystem was removed; legacy keys must still decode
+        // cleanly from old settings.json files without errors.
+        let legacyJSON = """
+        {
+            "version": 2,
+            "theme": "blue",
+            "showDock": true,
+            "dockConfigs": [{ "enabled": true, "position": "bottom" }],
+            "pinnedApps": ["com.apple.Safari"]
+        }
+        """
+
+        let config = DMSConfig.load(from: Data(legacyJSON.utf8))
+        #expect(config.theme == "blue")
+        #expect(config.version == 2)
+
+        // Legacy dock keys are NOT captured into rawSettings
+        #expect(config.rawSettings["showDock"] == nil)
+        #expect(config.rawSettings["dockConfigs"] == nil)
+        #expect(config.rawSettings["pinnedApps"] == nil)
+        #expect(config.getSetting("showDock") == nil)
+        #expect(config.getSetting("dockConfigs") == nil)
+        #expect(config.getSetting("pinnedApps") == nil)
+
+        // And they are NOT re-encoded when calling encodeJSON()
+        let encoded = try config.encodeJSON()
+        let json = String(data: encoded, encoding: .utf8) ?? ""
+        #expect(!json.contains("\"showDock\""))
+        #expect(!json.contains("\"dockConfigs\""))
+        #expect(!json.contains("\"pinnedApps\""))
+    }
+
     @Test("Legacy Accessor Get and Set with Empty Layouts")
     func testLegacyAccessors() {
         var config = DMSConfig()
         config.barConfigs = []
-        config.dockConfigs = []
 
         // Set on empty barConfigs creates a default BarConfig
         config.barPosition = "left"
@@ -59,11 +91,6 @@ struct ConfigAndIncludeTests {
 
         config.barTransparent = true
         #expect(config.barConfigs[0].transparency == 0.7)
-
-        // Set on empty dockConfigs creates a default DockConfig
-        config.showDock = true
-        #expect(config.dockConfigs.count == 1)
-        #expect(config.dockConfigs[0].enabled == true)
     }
 
     @Test("$include Fragment Resolution and Deep Merging")
@@ -180,9 +207,6 @@ struct ConfigAndIncludeTests {
         config.setSetting("controlCenterColumns", value: AnyCodable(12))
         #expect(config.controlCenterColumns == 12)
         #expect(config.getSetting("controlCenterColumns")?.intValue == 12)
-
-        config.setSetting("pinnedApps", value: AnyCodable([AnyCodable("com.apple.Music")]))
-        #expect(config.pinnedApps == ["com.apple.Music"])
 
         config.setSetting("enabledPlugins", value: AnyCodable([AnyCodable("pomodoro-timer")]))
         #expect(config.enabledPlugins == ["pomodoro-timer"])
@@ -386,5 +410,67 @@ struct ConfigAndIncludeTests {
         dynamicCfg.setSetting("clipboardHotkeyKey", value: AnyCodable("v"))
         #expect(dynamicCfg.clipboardHotkeyKey == "v")
         #expect(dynamicCfg.getSetting("clipboardHotkeyKey")?.stringValue == "v")
+    }
+
+    @Test("Deprecated controlCenterWidgets Key Ignored on Load and Not Re-Encoded")
+    func testDeprecatedControlCenterWidgetsIgnoredOnLoad() throws {
+        let legacyJSON = """
+        {
+            "version": 2,
+            "theme": "blue",
+            "controlCenterWidgets": [
+                { "id": "wifi", "col": 0, "row": 0, "w": 4, "h": 1, "small": false, "enabled": true, "options": {} }
+            ]
+        }
+        """
+
+        let config = DMSConfig.load(from: Data(legacyJSON.utf8))
+
+        // The deprecated key does not populate the grid; the default grid tiles apply instead
+        #expect(config.controlCenterGridTiles == ControlCenterWidgetConfig.defaultGridTiles)
+        #expect(config.controlCenterGridTiles == ControlCenterUtils.canonicalHardwareTiles)
+
+        // The deprecated key is NOT captured into rawSettings
+        #expect(config.rawSettings["controlCenterWidgets"] == nil)
+        #expect(config.getSetting("controlCenterWidgets") == nil)
+
+        // And it is NOT re-encoded by encodeJSON()
+        let encoded = try config.encodeJSON()
+        let json = String(data: encoded, encoding: .utf8) ?? ""
+        #expect(!json.contains("\"controlCenterWidgets\""))
+        #expect(json.contains("\"controlCenterGridTiles\""))
+    }
+
+    @Test("Custom controlCenterGridTiles Round-Trips Through Encode and Decode")
+    func testControlCenterGridTilesRoundTrip() throws {
+        // An empty grid stays empty (no snap back to the default tiles)
+        let emptyJSON = """
+        {
+            "version": 2,
+            "controlCenterGridTiles": []
+        }
+        """
+        let emptyConfig = DMSConfig.load(from: Data(emptyJSON.utf8))
+        #expect(emptyConfig.controlCenterGridTiles.isEmpty)
+        let emptyEncoded = try emptyConfig.encodeJSON()
+        let emptyRedecoded = DMSConfig.load(from: emptyEncoded)
+        #expect(emptyRedecoded.controlCenterGridTiles.isEmpty)
+
+        // Unlocked catalog tiles round-trip cleanly
+        let customJSON = """
+        {
+            "version": 2,
+            "controlCenterGridTiles": [
+                { "id": "nightMode", "col": 0, "row": 0, "w": 2, "h": 1, "small": false, "enabled": true, "options": {} },
+                { "id": "doNotDisturb", "col": 2, "row": 0, "w": 4, "h": 1, "small": false, "enabled": true, "options": {} }
+            ]
+        }
+        """
+        let custom = DMSConfig.load(from: Data(customJSON.utf8))
+        #expect(custom.controlCenterGridTiles.map { $0.id } == ["nightMode", "doNotDisturb"])
+        let encoded = try custom.encodeJSON()
+        let decoded = DMSConfig.load(from: encoded)
+        #expect(decoded.controlCenterGridTiles == custom.controlCenterGridTiles)
+        #expect(decoded.controlCenterGridTiles.map { $0.id } == ["nightMode", "doNotDisturb"])
     }
 }

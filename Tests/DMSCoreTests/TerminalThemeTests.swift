@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import DMSCore
+import DankThemeEngine
 
 @Suite("Terminal Theme Format Tests (v0.7)")
 struct TerminalThemeTests {
@@ -55,15 +56,32 @@ struct TerminalThemeTests {
         #expect(output.contains("selection-background = "))
     }
 
-    @Test("Kitty format uses colorN / foreground / background / cursor keys")
+    @Test("Kitty format uses full kitty color keys (foreground, cursor, tabs, borders, color0..15)")
     func testKittySyntax() {
         let output = rendered(.kitty)
-        #expect(output.contains("color0 "))
-        #expect(output.contains("color15 "))
-        #expect(output.contains("foreground "))
-        #expect(output.contains("background "))
-        #expect(output.contains("cursor "))
-        #expect(output.contains("selection_background "))
+        for needle in [
+            "foreground ",
+            "background ",
+            "selection_foreground ",
+            "selection_background ",
+            "cursor ",
+            "cursor_text_color ",
+            "url_color ",
+            "active_border_color ",
+            "inactive_border_color ",
+            "bell_border_color ",
+            "active_tab_foreground ",
+            "active_tab_background ",
+            "inactive_tab_foreground ",
+            "inactive_tab_background ",
+            "tab_bar_background none",
+            "tab_bar_margin_color none",
+            "mark1_foreground ",
+            "color0 ",
+            "color15 ",
+        ] {
+            #expect(output.contains(needle), "kitty missing \(needle)")
+        }
     }
 
     @Test("Alacritty format is TOML with primary/cursor/selection/normal/bright sections")
@@ -311,6 +329,18 @@ struct TerminalThemeTests {
         """
         let pids = EmulatorReload.kittyGUIPids(fromPSOutput: ps)
         #expect(pids == [45968, 46657, 46703])
+
+        let hmPS = """
+          76985 /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty
+          76986 /Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty --listen-on unix:/tmp/k.sock
+          76987 /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty +open /tmp/dir
+          76988 /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty @ get-colors
+          76989 /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty +runpy "print(1)"
+          76990 /nix/store/abc-kitty/Applications/kitty.app/Contents/MacOS/kitten __watch_conf__ 76985 /Users/foo/kitty
+          76991 /bin/zsh -c /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty
+          76992 zsh subdir/kitty
+        """
+        #expect(EmulatorReload.kittyGUIPids(fromPSOutput: hmPS) == [76985, 76986, 76987])
     }
 
     @Test("kittyConfigReferencesTheme detects include directives only")
@@ -321,6 +351,41 @@ struct TerminalThemeTests {
         #expect(!EmulatorReload.kittyConfigReferencesTheme("# include dms-theme.conf\nfont_size 14\n"))
         #expect(!EmulatorReload.kittyConfigReferencesTheme("include /nix/store/xyz/themes/rose-pine-moon.conf\n"))
         #expect(!EmulatorReload.kittyConfigReferencesTheme(""))
+    }
+
+    // MARK: - DankThemeEngine parity
+
+    @Test("DankThemeEngine parity: target registry, render output, managed symlink")
+    func testDankThemeEngineParity() throws {
+        // Every DMSCore emulator maps to a registered engine target id.
+        let targetIds = try DankThemeEngine.listTargets().map(\.id)
+        for emulator in TerminalEmulator.allCases {
+            #expect(targetIds.contains(emulator.rawValue))
+            #expect(emulator.dteTargetId == emulator.rawValue)
+        }
+
+        // Rendering through the engine matches the DMSCore renderer byte-for-byte.
+        let doc = TerminalThemeDocument(
+            themeName: palette.name,
+            isDark: palette.isDark,
+            palette: palette,
+            dank16: dank16
+        )
+        for emulator in TerminalEmulator.allCases {
+            let dte = try DankThemeEngine.renderTerminal(targetId: emulator.rawValue, doc: doc.dteDocument)
+            #expect(dte.targetId == emulator.rawValue)
+            #expect(dte.content == rendered(emulator))
+        }
+
+        // Managed-symlink detection for the default /nix/store prefix delegates to the engine,
+        // so both entry points agree on every path (existing store files, symlink chains,
+        // dangling links, and plain non-store paths).
+        let storePath = "/nix/store/abc-dms-theme/x.conf"
+        #expect(DankThemeEngine.isManagedSymlink(storePath) == TerminalThemeSecurity.isManagedSymlink(path: storePath))
+        let outside = "/tmp/dms-not-managed-\(UUID().uuidString).conf"
+        #expect(!DankThemeEngine.isManagedSymlink(outside))
+        #expect(!TerminalThemeSecurity.isManagedSymlink(path: outside))
+        #expect(DankThemeEngine.isManagedSymlink(outside) == TerminalThemeSecurity.isManagedSymlink(path: outside))
     }
 
     // MARK: - Config toggles

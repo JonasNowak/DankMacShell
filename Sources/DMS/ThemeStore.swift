@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import DMSCore
+import DankThemeEngine
 
 @MainActor
 public final class ThemeStore: ObservableObject {
@@ -137,6 +138,27 @@ public final class ThemeStore: ObservableObject {
     public private(set) var successContainer: Color = .clear
     public private(set) var onSuccessContainer: Color = .clear
 
+    // MARK: - M3 Expressive Extended Surface & Fixed Accent Colors
+    public private(set) var surfaceDim: Color = .clear
+    public private(set) var surfaceBright: Color = .clear
+    public private(set) var inverseSurface: Color = .clear
+    public private(set) var inverseOnSurface: Color = .clear
+
+    public private(set) var primaryFixed: Color = .clear
+    public private(set) var primaryFixedDim: Color = .clear
+    public private(set) var onPrimaryFixed: Color = .clear
+    public private(set) var onPrimaryFixedVariant: Color = .clear
+
+    public private(set) var secondaryFixed: Color = .clear
+    public private(set) var secondaryFixedDim: Color = .clear
+    public private(set) var onSecondaryFixed: Color = .clear
+    public private(set) var onSecondaryFixedVariant: Color = .clear
+
+    public private(set) var tertiaryFixed: Color = .clear
+    public private(set) var tertiaryFixedDim: Color = .clear
+    public private(set) var onTertiaryFixed: Color = .clear
+    public private(set) var onTertiaryFixedVariant: Color = .clear
+
     private init() {
         let initialPalette = StockThemes.theme(named: "purple", isDark: true)
         self.palette = initialPalette
@@ -199,6 +221,26 @@ public final class ThemeStore: ObservableObject {
         onSuccess = Color(hex: palette.onSuccess.hex)
         successContainer = Color(hex: palette.successContainer.hex)
         onSuccessContainer = Color(hex: palette.onSuccessContainer.hex)
+
+        surfaceDim = Color(hex: palette.surfaceDim.hex)
+        surfaceBright = Color(hex: palette.surfaceBright.hex)
+        inverseSurface = Color(hex: palette.inverseSurface.hex)
+        inverseOnSurface = Color(hex: palette.inverseOnSurface.hex)
+
+        primaryFixed = Color(hex: palette.primaryFixed.hex)
+        primaryFixedDim = Color(hex: palette.primaryFixedDim.hex)
+        onPrimaryFixed = Color(hex: palette.onPrimaryFixed.hex)
+        onPrimaryFixedVariant = Color(hex: palette.onPrimaryFixedVariant.hex)
+
+        secondaryFixed = Color(hex: palette.secondaryFixed.hex)
+        secondaryFixedDim = Color(hex: palette.secondaryFixedDim.hex)
+        onSecondaryFixed = Color(hex: palette.onSecondaryFixed.hex)
+        onSecondaryFixedVariant = Color(hex: palette.onSecondaryFixedVariant.hex)
+
+        tertiaryFixed = Color(hex: palette.tertiaryFixed.hex)
+        tertiaryFixedDim = Color(hex: palette.tertiaryFixedDim.hex)
+        onTertiaryFixed = Color(hex: palette.onTertiaryFixed.hex)
+        onTertiaryFixedVariant = Color(hex: palette.onTertiaryFixedVariant.hex)
 
         dank16Palette = Dank16Generator.generate(from: palette).colors
         let hct = HCT.from(color: palette.primary)
@@ -400,10 +442,32 @@ public final class ThemeStore: ObservableObject {
         Color.black.opacity(isLightMode ? baseOpacity * 0.45 : baseOpacity)
     }
 
-    // MARK: - Typography & Shape Helpers
+    // MARK: - Typography, Motion & Shape Helpers
+
+    public var fastSpatialAnimation: Animation { motionTokens.fastSpatialAnimation }
+    public var defaultSpatialAnimation: Animation { motionTokens.defaultSpatialAnimation }
+    public var slowSpatialAnimation: Animation { motionTokens.slowSpatialAnimation }
+    public var fastEffectsAnimation: Animation { motionTokens.fastEffectsAnimation }
+    public var defaultEffectsAnimation: Animation { motionTokens.defaultEffectsAnimation }
+    public var slowEffectsAnimation: Animation { motionTokens.slowEffectsAnimation }
 
     public func scaledRadius(_ base: CGFloat) -> CGFloat {
         CGFloat(shapeTokens.scaled(Double(base)))
+    }
+
+    public func morphedRadius(_ base: CGFloat, progress: CGFloat, targetScale: Double? = nil) -> CGFloat {
+        CGFloat(shapeTokens.morphedRadius(base: Double(base), progress: Double(progress), targetScale: targetScale))
+    }
+
+    public func font(for role: M3TypeScaleRole, emphasized: Bool = false) -> Font {
+        let style = typographyTokens.style(for: role, emphasized: emphasized)
+        let isDisplay = role == .displayLarge || role == .displayMedium || role == .displaySmall
+        return font(
+            size: CGFloat(style.size / max(0.01, typographyTokens.fontScale)),
+            weight: style.swiftUIWeight,
+            mono: false,
+            display: isDisplay && !emphasized
+        )
     }
 
     public func font(size: CGFloat, weight: Font.Weight = .regular, mono: Bool = false, display: Bool = false) -> Font {
@@ -478,149 +542,21 @@ public final class ThemeStore: ObservableObject {
     }
 
     nonisolated private static func extractDominantColorOffMainThread(from url: URL) -> M3Color? {
-        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+        // Wallpaper quantization lives in the Rust-backed DankThemeEngine.
+        // Missing/unreadable files throw there and surface as nil; images with no
+        // usable pixels fall back to the M3 default seed inside the engine.
+        guard let color = try? DankThemeEngine.extractWallpaperSeed(from: url.path) else {
             return nil
         }
-        let width = 32
-        let height = 32
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        var rawData = [UInt8](repeating: 0, count: width * height * 4)
-
-        guard let context = CGContext(
-            data: &rawData,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return nil
-        }
-
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        var totalR: Double = 0
-        var totalG: Double = 0
-        var totalB: Double = 0
-        var count: Double = 0
-
-        for i in stride(from: 0, to: rawData.count, by: 4) {
-            let r = Double(rawData[i]) / 255.0
-            let g = Double(rawData[i + 1]) / 255.0
-            let b = Double(rawData[i + 2]) / 255.0
-            let a = Double(rawData[i + 3]) / 255.0
-
-            if a > 0.5 {
-                let l = (r + g + b) / 3.0
-                if l > 0.1 && l < 0.9 {
-                    totalR += r
-                    totalG += g
-                    totalB += b
-                    count += 1
-                }
-            }
-        }
-
-        guard count > 0 else {
-            return M3Color("#6750A4")
-        }
-
-        return M3Color.from(r: totalR / count, g: totalG / count, b: totalB / count)
+        return M3Color(color)
     }
 
     /// Extracts both primary dominant color and contrasting secondary chromatic cluster from wallpaper pixels.
     nonisolated public static func extractPaletteSeedsOffMainThread(from url: URL) -> (primary: M3Color, secondary: M3Color)? {
-        guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+        guard let seeds = try? DankThemeEngine.extractPaletteSeeds(from: url.path, count: 2),
+              seeds.count >= 2 else {
             return nil
         }
-        let width = 32
-        let height = 32
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        var rawData = [UInt8](repeating: 0, count: width * height * 4)
-
-        guard let context = CGContext(
-            data: &rawData,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return nil
-        }
-
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        var validColors: [(r: Double, g: Double, b: Double)] = []
-        var totalR: Double = 0
-        var totalG: Double = 0
-        var totalB: Double = 0
-
-        for i in stride(from: 0, to: rawData.count, by: 4) {
-            let a = Double(rawData[i + 3]) / 255.0
-            guard a > 0.5 else { continue }
-
-            let r = Double(rawData[i]) / 255.0
-            let g = Double(rawData[i + 1]) / 255.0
-            let b = Double(rawData[i + 2]) / 255.0
-            let l = (r + g + b) / 3.0
-
-            if l > 0.12 && l < 0.88 {
-                validColors.append((r, g, b))
-                totalR += r
-                totalG += g
-                totalB += b
-            }
-        }
-
-        guard !validColors.isEmpty else { return nil }
-
-        let count = Double(validColors.count)
-        let primary = M3Color.from(r: totalR / count, g: totalG / count, b: totalB / count)
-
-        // Find the color that has the greatest Euclidean distance in RGB color space from primary
-        var maxDist: Double = -1.0
-        var secondaryRGB = (r: totalR / count, g: totalG / count, b: totalB / count)
-
-        for c in validColors {
-            let dr = c.r - primary.red
-            let dg = c.g - primary.green
-            let db = c.b - primary.blue
-            let dist = dr * dr + dg * dg + db * db
-            if dist > maxDist {
-                maxDist = dist
-                secondaryRGB = c
-            }
-        }
-
-        let secondary = M3Color.from(r: secondaryRGB.r, g: secondaryRGB.g, b: secondaryRGB.b)
-        return (primary: primary, secondary: secondary)
-    }
-}
-
-public extension Color {
-    init(hex: String) {
-        var clean = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.hasPrefix("#") {
-            clean.removeFirst()
-        }
-        if clean.count == 3 {
-            let r = clean[clean.startIndex]
-            let g = clean[clean.index(clean.startIndex, offsetBy: 1)]
-            let b = clean[clean.index(clean.startIndex, offsetBy: 2)]
-            clean = "\(r)\(r)\(g)\(g)\(b)\(b)"
-        }
-        guard clean.count >= 6, let hexNum = UInt64(clean.prefix(6), radix: 16) else {
-            self = .clear
-            return
-        }
-        let r = Double((hexNum >> 16) & 0xFF) / 255.0
-        let g = Double((hexNum >> 8) & 0xFF) / 255.0
-        let b = Double(hexNum & 0xFF) / 255.0
-        self = Color(.sRGB, red: r, green: g, blue: b, opacity: 1.0)
+        return (primary: M3Color(seeds[0]), secondary: M3Color(seeds[1]))
     }
 }

@@ -238,8 +238,6 @@ public enum IPCCommandExecutor {
                 ThemeStore.shared.sync(with: ConfigStore.shared.config)
             } else if lower.contains("bar") {
                 DankBarController.shared.updateBarFrame()
-            } else if lower.contains("dock") {
-                DockController.shared.updateDocks()
             } else if lower.contains("island") {
                 DIslandController.shared.refreshSettings()
             }
@@ -269,38 +267,18 @@ public enum IPCCommandExecutor {
                 return "DankBar toggled"
             case "setposition":
                 if let pos = val {
-                    ConfigStore.shared.update { $0.barPosition = pos }
+                    guard let edge = OmniWMBarEdge(position: pos) else {
+                        return "Invalid bar position '\(pos)'. Valid positions: top, bottom, left, right"
+                    }
+                    ConfigStore.shared.update { $0.barPosition = edge.rawValue }
                     DankBarController.shared.updateBarFrame()
-                    return "Bar position set to \(pos)"
+                    return "Bar position set to \(edge.rawValue)"
                 }
                 return "Missing position"
             case "status":
                 return "visible: \(DankBarController.shared.isVisible), position: \(ConfigStore.shared.config.barPosition)"
             default:
                 return "Unknown bar action \(act)"
-            }
-
-        case .dock(let act, _):
-            switch act.lowercased() {
-            case "toggle":
-                ConfigStore.shared.update { $0.showDock.toggle() }
-                DockController.shared.toggle()
-                return "Dock toggled: \(ConfigStore.shared.config.showDock)"
-            case "hide":
-                ConfigStore.shared.update { $0.showDock = false }
-                DockController.shared.hide()
-                return "Dock hidden"
-            case "reveal", "show":
-                ConfigStore.shared.update { $0.showDock = true }
-                DockController.shared.show()
-                return "Dock revealed"
-            case "reposition", "update":
-                DockController.shared.reposition()
-                return "Dock repositioned"
-            case "status":
-                return "dock visible: \(ConfigStore.shared.config.showDock)"
-            default:
-                return "Unknown dock action \(act)"
             }
 
         case .workspace(let act, let val):

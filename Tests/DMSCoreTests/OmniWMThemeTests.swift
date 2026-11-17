@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import DMSCore
+import DankThemeEngine
 
 @Suite("OmniWM Theme and Border Gradient Tests")
 struct OmniWMThemeTests {
@@ -150,6 +151,71 @@ struct OmniWMThemeTests {
         let secondRun = OmniWMThemeUpdater.applyTheme(to: firstRun, palette: palette, mode: .expressive)
 
         #expect(firstRun == secondRun)
+    }
+
+    @Test("DankThemeEngine parity: updateOmniWMToml matches applyTheme byte-for-byte")
+    func testDankThemeEngineOmniWMParity() throws {
+        let sampleTOML = """
+        # OmniWM settings
+        schemaVersion = 4
+
+        [borders]
+        enabled = true
+        width = 1.5
+
+        [borders.color]
+        alpha = 1.0
+        blue = 0.500000
+        green = 0.500000
+        red = 0.500000
+
+        [borders.gradient]
+        direction = "topRightToBottomLeft"
+        enabled = false
+
+        [borders.gradient.end]
+        alpha = 1.0
+        blue = 0.100000
+        green = 0.100000
+        red = 0.100000
+
+        [borders.gradient.start]
+        alpha = 1.0
+        blue = 0.200000
+        green = 0.200000
+        red = 0.200000
+
+        [gaps]
+        size = 12.0
+        """
+
+        for mode in OmniWMGradientMode.allCases {
+            for direction in OmniWMGradientDirection.allCases {
+                let palette = StockThemes.purpleDark
+                let secondary = M3Color("#FFB74D")
+                let viaDMS = OmniWMThemeUpdater.applyTheme(
+                    to: sampleTOML,
+                    palette: palette,
+                    secondarySeed: secondary,
+                    mode: mode,
+                    direction: direction,
+                    syncOverview: true,
+                    syncWorkspaceBar: false
+                )
+                let viaDTE = try DankThemeEngine.updateOmniWMToml(
+                    sampleTOML,
+                    palette: palette.dtePalette,
+                    config: DTEOmniWMConfig(
+                        mode: mode.dteMode,
+                        direction: direction.dteDirection,
+                        syncOverview: true,
+                        syncWorkspaceBar: false,
+                        secondarySeed: secondary.hex
+                    )
+                )
+                #expect(viaDMS == viaDTE, "mode \(mode.rawValue) direction \(direction.rawValue)")
+            }
+        }
     }
 
     @Test("OmniWM Configuration Codable Round-Trip")

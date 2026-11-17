@@ -4,7 +4,7 @@ import DMSCore
 import EditLine
 import EditLine.readline
 
-let version = "0.7.0"
+let version = "0.8.2"
 
 func printHelp() {
     print("""
@@ -18,6 +18,7 @@ func printHelp() {
       dms status                       Show running status of DMS daemon and socket
       dms doctor                       Run diagnostics check on permissions and subsystems
       dms permission                   Open Accessibility settings to enable full OSD swallowing
+      dms setup-cert                   Create/trust persistent 'dms-cert' and re-sign DankMacShell.app for TCC persistence
 
       dms ipc call <target> <action> [args...]  Send IPC command to shell
       dms dmenu [--prompt <text>]   dmenu/rofi drop-in: read candidates from stdin, print selection to stdout
@@ -46,7 +47,6 @@ func printHelp() {
       dms settings [open|get|set|dump]  Material 3 configuration manager
       dms wellbeing [status|enable|disable|toggle|sync|open-system] Digital Wellbeing & Screen Time
       dms bar [reveal|hide|toggle|status]       DankBar controls
-      dms dock [reveal|hide|toggle|status]      Dock controls
       dms workspace [status|switch <num>|next|prev] Virtual workspace manager
       dms audio [status|setvolume <0-100>|mute|unmute|toggle]
       dms mic [status|mute|unmute|toggle]
@@ -127,13 +127,133 @@ func sendSocketCommand(_ commandStr: String) -> String? {
 }
 
 func resolveAppPath() -> String? {
-    let candidates = [
+    let fm = FileManager.default
+    if let envPath = ProcessInfo.processInfo.environment["DMS_APP_PATH"],
+       !envPath.isEmpty,
+       fm.fileExists(atPath: envPath) {
+        return envPath
+    }
+
+    var candidates: [String] = []
+    if let exeURL = Bundle.main.executableURL?.resolvingSymlinksInPath() {
+        let macOSDir = exeURL.deletingLastPathComponent()
+        let contentsDir = macOSDir.deletingLastPathComponent()
+        let bundleDir = contentsDir.deletingLastPathComponent()
+        if macOSDir.lastPathComponent == "MacOS",
+           contentsDir.lastPathComponent == "Contents",
+           bundleDir.pathExtension == "app" {
+            candidates.append(bundleDir.path)
+        }
+    }
+
+    candidates.append(contentsOf: [
         ("~/Applications/DankMacShell.app" as NSString).expandingTildeInPath,
         ("~/Applications/DankMaterialShell.app" as NSString).expandingTildeInPath,
         "/Applications/DankMacShell.app",
-        "/Applications/DankMaterialShell.app"
-    ]
-    return candidates.first { FileManager.default.fileExists(atPath: $0) }
+        "/Applications/DankMaterialShell.app",
+        "/Applications/Nix Apps/DankMacShell.app",
+        ("~/Applications/Home Manager Apps/DankMacShell.app" as NSString).expandingTildeInPath
+    ])
+    return candidates.first { fm.fileExists(atPath: $0) }
+}
+
+func setupPersistentCertAndSign(targetAppPath: String? = nil) -> Int32 {
+    guard let appPath = targetAppPath ?? resolveAppPath() else {
+        writeStderr("dms setup-cert: DankMacShell.app not found in ~/Applications or /Applications.")
+        return 1
+    }
+
+    let certName = "dms-cert"
+    let keychain = ("~/Library/Keychains/login.keychain-db" as NSString).expandingTildeInPath
+
+    // Check if dms-cert already exists in codesigning identities
+    let checkTask = Process()
+    checkTask.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+    checkTask.arguments = ["find-identity", "-p", "codesigning", "-v"]
+    let checkPipe = Pipe()
+    checkTask.standardOutput = checkPipe
+    checkTask.standardError = FileHandle.nullDevice
+    try? checkTask.run()
+    checkTask.waitUntilExit()
+    let checkOut = String(data: checkPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+
+    if !checkOut.contains("\"\(certName)\"") {
+        print("==> Creating persistent self-signed code signing certificate '\(certName)'...")
+        let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dms-cert-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let cnfPath = tmpDir.appendingPathComponent("cert.cnf").path
+        let keyPath = tmpDir.appendingPathComponent("key.pem").path
+        let certPath = tmpDir.appendingPathComponent("cert.pem").path
+        let p12Path = tmpDir.appendingPathComponent("cert.p12").path
+
+        let cnf = """
+        [ req ]
+        distinguished_name = req_distinguished_name
+        prompt = no
+        x509_extensions = v3_ca
+
+        [ req_distinguished_name ]
+        CN = dms-cert
+
+        [ v3_ca ]
+        basicConstraints = critical,CA:FALSE
+        keyUsage = critical,digitalSignature
+        extendedKeyUsage = critical,codeSigning
+        """
+        try? cnf.write(toFile: cnfPath, atomically: true, encoding: .utf8)
+
+        let req = Process()
+        req.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
+        req.arguments = ["req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "3650", "-nodes", "-config", cnfPath]
+        req.standardError = FileHandle.nullDevice
+        try? req.run()
+        req.waitUntilExit()
+
+        let pkcs = Process()
+        pkcs.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
+        pkcs.arguments = ["pkcs12", "-export", "-inkey", keyPath, "-in", certPath, "-out", p12Path, "-passout", "pass:dms", "-name", certName]
+        pkcs.standardError = FileHandle.nullDevice
+        try? pkcs.run()
+        pkcs.waitUntilExit()
+
+        let imp = Process()
+        imp.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        imp.arguments = ["import", p12Path, "-k", keychain, "-P", "dms", "-T", "/usr/bin/codesign"]
+        imp.standardOutput = FileHandle.nullDevice
+        imp.standardError = FileHandle.nullDevice
+        try? imp.run()
+        imp.waitUntilExit()
+
+        let trust = Process()
+        trust.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        trust.arguments = ["add-trusted-cert", "-r", "trustRoot", "-p", "codeSign", "-k", keychain, certPath]
+        trust.standardOutput = FileHandle.nullDevice
+        trust.standardError = FileHandle.nullDevice
+        try? trust.run()
+        trust.waitUntilExit()
+    }
+
+    let xattr = Process()
+    xattr.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+    xattr.arguments = ["-cr", appPath]
+    xattr.standardError = FileHandle.nullDevice
+    try? xattr.run()
+    xattr.waitUntilExit()
+
+    print("==> Signing \(appPath) with identity '\(certName)'...")
+    let sign = Process()
+    sign.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+    sign.arguments = ["--force", "--deep", "--sign", certName, appPath]
+    try? sign.run()
+    sign.waitUntilExit()
+    if sign.terminationStatus == 0 {
+        print("==> Signed \(appPath) with '\(certName)' (TCC permissions will persist across updates).")
+    } else {
+        writeStderr("dms setup-cert: codesign exited with status \(sign.terminationStatus)")
+    }
+    return sign.terminationStatus
 }
 
 func resolveBinaryPath(in appPath: String) -> String? {
@@ -478,6 +598,10 @@ case "permission", "accessibility":
     }
     print("Opened System Settings > Privacy & Security > Accessibility (Gerätesteuerung und Datenzugriff).")
     print("Toggle 'DankMacShell' ON to enable active media key interception and full OSD swallowing.")
+
+case "setup-cert", "cert":
+    let target = args.dropFirst().first
+    exit(setupPersistentCertAndSign(targetAppPath: target))
 
 case "symbian", "nokia":
     let subArgs = Array(args.dropFirst())
