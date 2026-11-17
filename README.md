@@ -1,7 +1,7 @@
 <h1 align="center">DankMacShell</h1>
 
 <p align="center">
-  <em>The Material 3 window-manager shell experience — natively on macOS.</em>
+  <em>The Material 3 Expressive shell experience — natively on macOS.</em>
 </p>
 
 <p align="center">
