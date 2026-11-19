@@ -23,11 +23,11 @@ public final class QRGeneratorController: ObservableObject {
         guard !isVisible else { return }
 
         DashController.shared.hide()
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let visibleFrame = screen.visibleFrame
 
-        let width: CGFloat = 268
-        let height: CGFloat = 280
+        let width: CGFloat = 360
+        let height: CGFloat = 400
         let rect = NSRect(
             x: visibleFrame.minX + (visibleFrame.width - width) / 2,
             y: visibleFrame.minY + (visibleFrame.height - height) / 2,
@@ -42,6 +42,7 @@ public final class QRGeneratorController: ObservableObject {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in self?.hide() }
 
         let view = QRGeneratorView(initialText: text) { [weak self] in
             self?.hide()

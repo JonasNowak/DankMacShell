@@ -13,7 +13,10 @@ public final class BrightnessService {
     private typealias GetBrightness = @convention(c) (UInt32, UnsafeMutablePointer<Float>) -> Int32
     private typealias SetBrightness = @convention(c) (UInt32, Float) -> Int32
     private typealias BrightnessCallback = @convention(c) (CGDirectDisplayID, Float, UnsafeMutableRawPointer?) -> Void
-    private typealias RegisterNotifications = @convention(c) (BrightnessCallback, UnsafeMutableRawPointer?) -> Int32
+    // arm64e disassembly: DisplayServicesRegisterForBrightnessChangeNotifications takes
+    // (CGDirectDisplayID display, void *refcon, callback) — the old 2-arg prototype passed the
+    // function pointer in x0 as the display ID and left x2 as register garbage.
+    private typealias RegisterNotifications = @convention(c) (CGDirectDisplayID, UnsafeMutableRawPointer?, BrightnessCallback) -> Int32
 
     public private(set) var value: Double = 0
     public private(set) var isAvailable = false
@@ -41,11 +44,11 @@ public final class BrightnessService {
             }
             if let reg = dlsym(handle, "DisplayServicesRegisterForBrightnessChangeNotifications") {
                 let registerFn = unsafeBitCast(reg, to: RegisterNotifications.self)
-                _ = registerFn({ (display, brightness, refcon) in
+                _ = registerFn(CGMainDisplayID(), nil, { (display, brightness, refcon) in
                     Task { @MainActor in
                         BrightnessService.shared.handleExternalBrightnessChange(Double(brightness))
                     }
-                }, nil)
+                })
             }
         }
         refresh()

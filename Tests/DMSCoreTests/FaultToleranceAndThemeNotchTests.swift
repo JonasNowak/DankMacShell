@@ -402,6 +402,97 @@ struct NotchLayoutSolverTests {
             }
         }
     }
+
+    @Test("ScreenNotchGeometry Invalid or Out-of-Bounds Notch Bounds Are Disabled")
+    func testInvalidNotchBounds() {
+        // Notch entirely beyond the right screen edge: invalid after clamping -> hasNotch = false
+        let beyond = ScreenNotchGeometry(
+            screenID: "x",
+            screenWidth: 1512,
+            screenHeight: 982,
+            hasNotch: true,
+            notchMinX: 1600,
+            notchMaxX: 1700,
+            notchHeight: 34
+        )
+        #expect(!beyond.hasNotch)
+        #expect(beyond.notchWidth == 0.0)
+        #expect(beyond.notchMinX == 0.0)
+        #expect(beyond.notchMaxX == 0.0)
+
+        // notchMaxX is clamped against the sanitized screen width, not the raw parameter
+        let clamped = ScreenNotchGeometry(
+            screenID: "x",
+            screenWidth: 1512,
+            screenHeight: 982,
+            hasNotch: true,
+            notchMinX: 1400,
+            notchMaxX: 2000,
+            notchHeight: 34
+        )
+        #expect(clamped.hasNotch)
+        #expect(clamped.notchMaxX == 1512.0)
+        #expect(clamped.notchMinX < clamped.notchMaxX)
+
+        // Degenerate screen dimensions are sanitized and can invalidate the notch
+        let tiny = ScreenNotchGeometry(
+            screenID: "x",
+            screenWidth: 0,
+            screenHeight: -5,
+            hasNotch: true,
+            notchMinX: 2.0,
+            notchMaxX: 5.0,
+            notchHeight: 10
+        )
+        #expect(tiny.screenWidth == 1.0)
+        #expect(tiny.screenHeight == 1.0)
+        #expect(!tiny.hasNotch)
+    }
+
+    @Test("solveIslandPillBar Never Produces Overlapping Pills on Narrow Bars")
+    func testNarrowBarPillsDoNotOverlap() {
+        let notch = ScreenNotchGeometry.notchedMacBook()
+        for barLength in [40.0, 80.0, 100.0, 119.0, 120.0, 300.0, 1496.0] {
+            let solution = NotchAwareBarLayoutSolver.solveIslandPillBar(
+                screenWidth: notch.screenWidth,
+                barLength: barLength,
+                notch: notch,
+                islandExclusionWidth: 220.0
+            )
+            #expect(
+                solution.leftPillBounds.upperBound <= solution.rightPillBounds.lowerBound,
+                "barLength \(barLength): left pill \(solution.leftPillBounds) must not overlap right pill \(solution.rightPillBounds)"
+            )
+            #expect(solution.leftPillBounds.lowerBound >= 0.0)
+            #expect(solution.rightPillBounds.upperBound <= barLength + 0.001)
+        }
+    }
+}
+
+@Suite("BarConfig Fault Tolerance Tests")
+struct BarConfigFaultToleranceTests {
+
+    @Test("gothFilletRadius Is Clamped in Init, Mutation, and JSON Decoding")
+    func testGothFilletRadiusClamping() throws {
+        // Memberwise init (didSet does not run during initialization)
+        #expect(BarConfig(gothFilletRadius: 100.0).gothFilletRadius == 32.0)
+        #expect(BarConfig(gothFilletRadius: 0.0).gothFilletRadius == 4.0)
+        #expect(BarConfig(gothFilletRadius: -20.0).gothFilletRadius == 4.0)
+        #expect(BarConfig(gothFilletRadius: 14.0).gothFilletRadius == 14.0)
+
+        // Post-init mutation still clamps via didSet
+        var config = BarConfig.default
+        config.gothFilletRadius = 500.0
+        #expect(config.gothFilletRadius == 32.0)
+        config.gothFilletRadius = 1.0
+        #expect(config.gothFilletRadius == 4.0)
+
+        // JSON decoding path (didSet does not run during init(from:))
+        let highJSON = #"{"gothFilletRadius": 999.0}"#.data(using: .utf8)!
+        #expect(try JSONDecoder().decode(BarConfig.self, from: highJSON).gothFilletRadius == 32.0)
+        let lowJSON = #"{"gothFilletRadius": -3.0}"#.data(using: .utf8)!
+        #expect(try JSONDecoder().decode(BarConfig.self, from: lowJSON).gothFilletRadius == 4.0)
+    }
 }
 
 @Suite("Dynamic Island Physics and State Machine Tests")
@@ -428,10 +519,66 @@ struct IslandEngineTests {
         #expect(abs(engine.current.height - 180.0) < 0.5)
     }
 
+    @Test("VectorSpringEngine Clamps Degenerate Spring Parameters and Sub-Floor Targets")
+    func testVectorSpringEngineFaultTolerance() {
+        // Init-time clamping (didSet does not run during init)
+        let degenerate = VectorSpringEngine(stiffness: 1e12, damping: -3.0, mass: 0.0)
+        #expect(degenerate.stiffness == 1200.0)
+        #expect(degenerate.damping == 1.0)
+        #expect(degenerate.mass == 0.1)
+
+        // Post-init mutation is clamped via didSet, so mass <= 0 can never NaN the RK4 step
+        var engine = VectorSpringEngine()
+        engine.mass = 0.0
+        #expect(engine.mass == 0.1)
+        engine.mass = -50.0
+        #expect(engine.mass == 0.1)
+        engine.mass = 1e6
+        #expect(engine.mass == 10.0)
+        engine.stiffness = 1e12
+        #expect(engine.stiffness == 1200.0)
+        engine.damping = -5.0
+        #expect(engine.damping == 1.0)
+        engine.stiffness = 560.0
+        engine.damping = 37.0
+        engine.mass = 1.0
+
+        engine.target = IslandGeometryVector(width: 420.0, height: 180.0)
+        for _ in 0..<240 {
+            _ = engine.step(dt: 1.0 / 60.0)
+            if engine.isAtRest { break }
+        }
+        #expect(engine.isAtRest)
+        for value in engine.current.asArray {
+            #expect(value.isFinite, "RK4 output must stay finite under clamped parameters")
+        }
+
+        // Target components below the geometry floors must still converge:
+        // isAtRest must not stay false forever comparing against unreachable values
+        var lowEngine = VectorSpringEngine(initial: IslandGeometryVector(width: 176.0, height: 42.0))
+        lowEngine.target = IslandGeometryVector(
+            width: 5.0,
+            height: 2.0,
+            topLeftRadius: -10.0,
+            topRightRadius: -3.0,
+            bottomLeftRadius: -1.0,
+            bottomRightRadius: -8.0
+        )
+        for _ in 0..<240 {
+            _ = lowEngine.step(dt: 1.0 / 60.0)
+            if lowEngine.isAtRest { break }
+        }
+        #expect(lowEngine.isAtRest, "Sub-floor target components must converge against the clamped floors")
+        #expect(lowEngine.current.width == 24.0)
+        #expect(lowEngine.current.height == 16.0)
+        #expect(lowEngine.current.topLeftRadius == 0.0)
+        #expect(lowEngine.current.bottomRightRadius == 0.0)
+    }
+
     @Test("Island State Machine Priority Arbitration (OSD > Notification > Media > Idle)")
     func testIslandStateMachinePriority() {
         var sm = IslandStateMachine()
-        let now = Date()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
 
         // 1. Idle state initially
         #expect(sm.resolveState(at: now) == .idle)

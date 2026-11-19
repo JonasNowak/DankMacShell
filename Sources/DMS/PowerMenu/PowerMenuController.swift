@@ -19,6 +19,7 @@ public final class PowerMenuController {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in self?.hide() }
 
         let rootView = PowerMenuView { [weak self] in
             self?.hide()
@@ -35,13 +36,13 @@ public final class PowerMenuController {
     }
 
     public func show() {
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         ControlCenterController.shared.hide()
         LauncherController.shared.hide()
         DashController.shared.hide()
 
-        let width: CGFloat = 295
-        let height: CGFloat = 135
+        let width: CGFloat = 360
+        let height: CGFloat = 195
         let xPos = screen.frame.midX - (width / 2)
         let yPos = screen.frame.midY - (height / 2)
 

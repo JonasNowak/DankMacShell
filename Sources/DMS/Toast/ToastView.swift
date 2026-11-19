@@ -21,6 +21,6 @@ public struct ToastOverlayView: View {
                 Color.clear
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: toastCenter.activeToast)
+        .animation(theme.motionTokens.reducedMotion ? .linear(duration: 0) : .spring(response: 0.3, dampingFraction: 0.7), value: toastCenter.activeToast)
     }
 }

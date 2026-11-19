@@ -185,9 +185,8 @@ public struct KeyboardLayoutWidget: View {
                 }
             }
             .padding(.horizontal, isVertical ? 0 : 7)
-            .frame(width: isVertical ? 28 : nil, height: isVertical ? 28 : 26)
+            .frame(width: isVertical ? 28 : nil, height: 28)
             .background(backgroundColor)
-            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
         .help("Input Layout: \(manager.currentLayoutName) (Click to switch)")

@@ -57,6 +57,9 @@ cp "$BINARY" "$APP/Contents/MacOS/DankMaterialShell"
 ln -sf "DankMaterialShell" "$APP/Contents/MacOS/DankMacShell"
 cp "$PLIST" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
+if [ -n "${BUNDLE_SHORT_VERSION:-}" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $BUNDLE_SHORT_VERSION" "$APP/Contents/Info.plist"
+fi
 
 # Copy SPM resource bundle and companion CLIs if present
 # On case-insensitive APFS, `dms` and `DMS` collide; only create the `DMS` symlink when `dms` isn't bundled.
@@ -100,6 +103,16 @@ fi
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || true
 
-echo "==> Signing $APP with identity: $IDENTITY..."
-codesign --force --deep --sign "$IDENTITY" "$APP"
+echo "==> Signing $APP with identity: $IDENTITY (inside-out)..."
+for nested in "$APP/Contents/MacOS/dms" "$APP/Contents/MacOS/dms-symbian"; do
+    if [ -f "$nested" ]; then
+        codesign --force --sign "$IDENTITY" "$nested"
+    fi
+done
+for bundle in "$APP/Contents/Resources/"*.bundle; do
+    if [ -d "$bundle" ]; then
+        codesign --force --sign "$IDENTITY" "$bundle"
+    fi
+done
+codesign --force --sign "$IDENTITY" "$APP"
 echo "Assembled and signed $APP"

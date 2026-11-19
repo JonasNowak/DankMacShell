@@ -31,12 +31,13 @@ public struct CpuTemperatureWidget: View {
         return configStore.config.weatherUnits.lowercased() == "fahrenheit" ? .fahrenheit : .celsius
     }
 
-    private var cpuCelsius: Double {
-        telemetry.telemetry.cpuTemperature ?? 45.0
+    private var cpuCelsius: Double? {
+        telemetry.telemetry.cpuTemperature
     }
 
     private var severity: ThermalSeverity {
-        SystemTelemetry.thermalSeverity(forCelsius: cpuCelsius)
+        guard let cpuCelsius = cpuCelsius else { return .normal }
+        return SystemTelemetry.thermalSeverity(forCelsius: cpuCelsius)
     }
 
     private var tempColor: Color {
@@ -61,7 +62,8 @@ public struct CpuTemperatureWidget: View {
     }
 
     private var formattedTemperature: String {
-        SystemTelemetry.formatTemperature(cpuCelsius, unit: unit)
+        guard let cpuCelsius = cpuCelsius else { return "--" }
+        return SystemTelemetry.formatTemperature(cpuCelsius, unit: unit)
     }
 
     public var body: some View {
@@ -82,11 +84,10 @@ public struct CpuTemperatureWidget: View {
                 }
             }
             .padding(.horizontal, isVertical ? 0 : 7)
-            .frame(width: isVertical ? 28 : nil, height: isVertical ? 28 : 26)
+            .frame(width: isVertical ? 28 : nil, height: 28)
             .background(backgroundColor)
-            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("CPU Temperature: \(formattedTemperature) (\(String(format: "%.1f", cpuCelsius))°C)")
+        .help("CPU Temperature: \(formattedTemperature)\(cpuCelsius.map { " (\(String(format: "%.1f", $0))°C)" } ?? "")")
     }
 }

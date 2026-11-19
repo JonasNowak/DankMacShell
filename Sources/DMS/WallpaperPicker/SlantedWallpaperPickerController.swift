@@ -14,9 +14,38 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
     @Published public private(set) var originalDesktopPath: String = ""
     @Published public private(set) var isTestingSession: Bool = false
 
+    // Filter state lives on the controller so `cycleNext()` / `select(index:)` / `commitSelection()`
+    // always index into the exact filtered list the view displays (no View/Controller mismatch).
+    @Published public var onlyFolder: Bool = false
+    @Published public var selectedSource: WallpaperSource = .all
+    @Published public var searchQuery: String = ""
+
+    /// Theme name captured when the testing session started, restored on cancel if a
+    /// gradient preset preview switched the theme.
+    private var themeSnapshotOnShow: String?
+
     private var globalClickMonitor: Any?
     private var localClickMonitor: Any?
     private var hostingView: NSHostingView<SlantedWallpaperPickerView>?
+
+    /// The exact filtered wallpaper list the picker view renders for the current
+    /// `onlyFolder` / `selectedSource` / `searchQuery` state.
+    public var filteredWallpapers: [WallpaperItem] {
+        let baseList = onlyFolder ? WallpaperService.shared.pickerWallpapers() : WallpaperService.shared.wallpapers
+        return WallpaperItem.filterWallpapers(
+            items: baseList,
+            source: selectedSource,
+            query: searchQuery
+        )
+    }
+
+    /// Syncs picker filter state from the persisted config and snapshots the current theme.
+    private func syncPickerStateFromConfig() {
+        onlyFolder = ConfigStore.shared.config.wallpaperPickerOnlyFolder
+        selectedSource = .all
+        searchQuery = ""
+        themeSnapshotOnShow = ThemeStore.shared.themeName
+    }
 
     private override init() {
         panel = ShellPanel(
@@ -41,8 +70,12 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
     }
 
     private func ensureHostingView() {
-        if hostingView == nil {
-            let view = SlantedWallpaperPickerView(controller: self)
+        // Fresh `.id(UUID())` per presentation so SwiftUI recreates the view's `@State`
+        // and re-runs `.onAppear` on every show instead of reusing stale state.
+        let view = SlantedWallpaperPickerView(controller: self, sessionID: UUID())
+        if let host = hostingView {
+            host.rootView = view
+        } else {
             let host = NSHostingView(rootView: view)
             panel.contentView = host
             self.hostingView = host
@@ -118,6 +151,8 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
         PowerMenuController.shared.hide()
         DashController.shared.hide()
 
+        syncPickerStateFromConfig()
+
         // Cache original desktop wallpaper for reset if user does not press Enter
         let current = WallpaperService.shared.currentDesktopPath
         self.originalDesktopPath = current
@@ -129,7 +164,7 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
         let yPos = screen.frame.midY - (height / 2)
         panel.setFrame(NSRect(x: xPos, y: yPos, width: width, height: height), display: true)
 
-        let items = WallpaperService.shared.pickerWallpapers()
+        let items = filteredWallpapers
         if !items.isEmpty {
             let currentIndex = items.firstIndex(where: { $0.path == current }) ?? -1
             let nextIndex = (currentIndex + 1) % items.count
@@ -156,6 +191,8 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
         PowerMenuController.shared.hide()
         DashController.shared.hide()
 
+        syncPickerStateFromConfig()
+
         let current = WallpaperService.shared.currentDesktopPath
         self.originalDesktopPath = current
         self.isTestingSession = true
@@ -166,7 +203,7 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
         let yPos = screen.frame.midY - (height / 2)
         panel.setFrame(NSRect(x: xPos, y: yPos, width: width, height: height), display: true)
 
-        let items = WallpaperService.shared.pickerWallpapers()
+        let items = filteredWallpapers
         if let idx = items.firstIndex(where: { $0.path == current }) {
             self.selectedIndex = idx
         } else {
@@ -182,27 +219,23 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
         installFocusMonitors()
     }
 
-    /// Advances to the next wallpaper and live-previews it on desktop.
+    /// Advances to the next wallpaper in the filtered list and live-previews it on desktop.
     public func cycleNext() {
-        let items = WallpaperService.shared.pickerWallpapers()
+        let items = filteredWallpapers
         guard !items.isEmpty else { return }
-        let next = (selectedIndex + 1) % items.count
-        self.selectedIndex = next
-        WallpaperService.shared.previewWallpaper(items[next])
+        select(index: (selectedIndex + 1) % items.count)
     }
 
-    /// Rewinds to the previous wallpaper and live-previews it on desktop.
+    /// Rewinds to the previous wallpaper in the filtered list and live-previews it on desktop.
     public func cyclePrevious() {
-        let items = WallpaperService.shared.pickerWallpapers()
+        let items = filteredWallpapers
         guard !items.isEmpty else { return }
-        let prev = (selectedIndex - 1 + items.count) % items.count
-        self.selectedIndex = prev
-        WallpaperService.shared.previewWallpaper(items[prev])
+        select(index: (selectedIndex - 1 + items.count) % items.count)
     }
 
-    /// Selects a specific index and live-previews it.
+    /// Selects a specific index into the filtered list and live-previews it.
     public func select(index: Int) {
-        let items = WallpaperService.shared.pickerWallpapers()
+        let items = filteredWallpapers
         guard items.indices.contains(index) else { return }
         self.selectedIndex = index
         WallpaperService.shared.previewWallpaper(items[index])
@@ -211,11 +244,12 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
     /// Confirms and commits the currently selected wallpaper (Enter / Apply).
     public func commitSelection() {
         guard isVisible else { return }
-        let items = WallpaperService.shared.pickerWallpapers()
+        let items = filteredWallpapers
         if items.indices.contains(selectedIndex) {
             WallpaperService.shared.applyWallpaper(items[selectedIndex], autoGenerateColors: true)
         }
         self.isTestingSession = false
+        themeSnapshotOnShow = nil
         hide(reverting: false)
     }
 
@@ -225,6 +259,11 @@ public final class SlantedWallpaperPickerController: NSObject, ObservableObject,
         if isTestingSession && !originalDesktopPath.isEmpty {
             WallpaperService.shared.revertWallpaper(to: originalDesktopPath)
         }
+        // A gradient preset preview switches the theme live; restore the pre-session theme.
+        if let snapshot = themeSnapshotOnShow, ThemeStore.shared.themeName != snapshot {
+            ThemeStore.shared.apply(theme: snapshot)
+        }
+        themeSnapshotOnShow = nil
         self.isTestingSession = false
         hide(reverting: true)
     }

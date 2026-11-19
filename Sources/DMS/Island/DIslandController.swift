@@ -72,6 +72,14 @@ public final class DIslandController: ObservableObject {
     private var autoDismissTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
+    // Screen + notch locked together for the duration of a reposition/animation pass,
+    // so mid-animation screen changes can never mix geometries from two displays.
+    private var lockedScreen: NSScreen?
+    private var lockedNotch: ScreenNotchGeometry?
+    private var localDismissMonitor: Any?
+    private var globalDismissMonitor: Any?
+    private var lastBarExclusionSignature: Int = -1
+
     private init() {
         let initialSettings = ConfigStore.shared.config.islandSettings
         let screen = NSScreen.main ?? NSScreen.screens.first
@@ -244,15 +252,23 @@ public final class DIslandController: ObservableObject {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let notch = screen.extractNotchGeometry()
         currentNotch = notch
+        lockedScreen = screen
+        lockedNotch = notch
 
         guard s.instance != .off || activeActivity == .osd || activeActivity == .notification else {
             panel?.orderOut(nil)
             stopAnimationLoop()
+            removeDismissMonitors()
+            lockedScreen = nil
+            lockedNotch = nil
             return
         }
 
         let enabledSet = Set(s.enabledActivities.compactMap { IslandActivity(rawValue: $0) })
-        stateMachine.enabledModules = enabledSet.union([.home])
+        var modules = enabledSet.union([.home])
+        if enabledSet.contains(.dash) { modules.insert(.dash) }
+        if enabledSet.contains(.controlCenter) { modules.insert(.controlCenter) }
+        stateMachine.enabledModules = modules
 
         var effectiveSettings = s
         if s.instance == .off {
@@ -274,18 +290,48 @@ public final class DIslandController: ObservableObject {
             springEngine.snapToTarget()
             currentGeometry = targetGeom
             updatePanelFrame(on: screen, geometry: targetGeom, settings: effectiveSettings, notch: notch)
-        } else {
+            notifyBarIfExclusionChanged()
+        } else if !springEngine.isAtRest {
             startAnimationLoop()
+        } else {
+            currentGeometry = targetGeom
+            updatePanelFrame(on: screen, geometry: targetGeom, settings: effectiveSettings, notch: notch)
+            notifyBarIfExclusionChanged()
         }
+    }
+
+    /// Signature of everything that affects the host bar's center exclusion hole.
+    private func barExclusionSignature() -> Int {
+        var hasher = Hasher()
+        hasher.combine(presentationState.isExpanded)
+        hasher.combine(Int(currentGeometry.width))
+        hasher.combine(settings.instance.rawValue)
+        hasher.combine(settings.float)
+        hasher.combine(settings.edge.lowercased())
+        return hasher.finalize()
+    }
+
+    /// Only poke the DankBar when the island's exclusion width / visibility actually changed,
+    /// so 1Hz media ticks and 10Hz lyric ticks never trigger a full multi-monitor bar rebuild.
+    private func notifyBarIfExclusionChanged() {
+        let sig = barExclusionSignature()
+        guard sig != lastBarExclusionSignature else { return }
+        lastBarExclusionSignature = sig
+        DankBarController.shared.reposition()
     }
 
     private func syncStateAndAnimate() {
         let nextState = stateMachine.resolveState(at: Date())
         if presentationState != nextState {
             presentationState = nextState
+            if nextState.isExpanded {
+                installDismissMonitors()
+            } else {
+                removeDismissMonitors()
+            }
         }
         reposition()
-        DankBarController.shared.reposition()
+        notifyBarIfExclusionChanged()
     }
 
     private func scheduleAutoDismiss(afterSeconds seconds: Double) {
@@ -326,15 +372,20 @@ public final class DIslandController: ObservableObject {
     private func stepSpringPhysics() {
         let geom = springEngine.step(dt: 1.0 / 60.0)
         currentGeometry = geom
-        if let screen = NSScreen.main ?? NSScreen.screens.first {
+        // Use the screen + notch locked at reposition() time — never re-read NSScreen.main
+        // mid-animation, or a display hot-plug could mix geometries from two screens.
+        let screen = lockedScreen ?? NSScreen.main ?? NSScreen.screens.first
+        let notch = lockedNotch ?? currentNotch
+        if let screen = screen {
             var effectiveSettings = settings
             if effectiveSettings.instance == .off {
-                effectiveSettings.instance = currentNotch.hasNotch ? .notch : .mainBar
+                effectiveSettings.instance = notch.hasNotch ? .notch : .mainBar
             }
-            updatePanelFrame(on: screen, geometry: geom, settings: effectiveSettings, notch: currentNotch)
+            updatePanelFrame(on: screen, geometry: geom, settings: effectiveSettings, notch: notch)
         }
         if springEngine.isAtRest {
             stopAnimationLoop()
+            notifyBarIfExclusionChanged()
             if settings.instance == .off && activeActivity != .osd && activeActivity != .notification {
                 panel?.orderOut(nil)
             }
@@ -415,17 +466,44 @@ public final class DIslandController: ObservableObject {
             islandPanel.onEscape = { [weak self] in
                 self?.close()
             }
+            // rootView is set exactly once here — DIslandView observes `controller`,
+            // so re-assigning it on every frame would restart the whole SwiftUI tree at 60Hz.
             let host = NSHostingView(rootView: DIslandView(controller: self))
             islandPanel.contentView = host
             self.hostingView = host
             self.panel = islandPanel
         }
 
-        if let host = hostingView {
-            host.rootView = DIslandView(controller: self)
-        }
         islandPanel.setFrame(frame, display: true)
         islandPanel.orderFront(nil)
+    }
+
+    // MARK: - Click-Outside Dismiss (expanded state)
+
+    private func installDismissMonitors() {
+        removeDismissMonitors()
+        let handler: (NSEvent) -> NSEvent? = { [weak self] event in
+            Task { @MainActor [weak self] in
+                guard let self = self, self.presentationState.isExpanded else { return }
+                let loc = NSEvent.mouseLocation
+                if let p = self.panel, NSMouseInRect(loc, p.frame, false) { return }
+                self.close()
+            }
+            return event
+        }
+        localDismissMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: handler)
+        globalDismissMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { event in _ = handler(event) })
+    }
+
+    private func removeDismissMonitors() {
+        if let m = localDismissMonitor {
+            NSEvent.removeMonitor(m)
+            localDismissMonitor = nil
+        }
+        if let m = globalDismissMonitor {
+            NSEvent.removeMonitor(m)
+            globalDismissMonitor = nil
+        }
     }
 
     private func setupObservers() {
@@ -436,18 +514,42 @@ public final class DIslandController: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Deduplicate on isPlaying so the 1Hz elapsed-time tick inside currentTrack
+        // does NOT fire this sink (and thus never triggers a full bar reposition every second).
         NowPlayingService.shared.$currentTrack
+            .map(\.isPlaying)
+            .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] track in
+            .sink { [weak self] isPlaying in
                 guard let self = self else { return }
                 let enabled = self.settings.enabledActivities.contains(IslandActivity.media.rawValue)
-                self.stateMachine.isMediaPlaying = track.isPlaying && enabled
+                self.stateMachine.isMediaPlaying = isPlaying && enabled
                 self.syncStateAndAnimate()
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.reposition()
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.reposition()
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in

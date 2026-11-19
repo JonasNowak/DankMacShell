@@ -138,7 +138,15 @@ public final class RunningAppsService {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         process.arguments = ["-a", path, "--args"] + arguments
-        try? process.run()
+        do {
+            try process.run()
+            // Reap /usr/bin/open so it doesn't linger as a zombie child.
+            Task.detached(priority: .utility) {
+                process.waitUntilExit()
+            }
+        } catch {
+            NSLog("[RunningAppsService] Failed to launch \(path): \(error)")
+        }
     }
 
     public func unhide(bundleID: String, fallbackPath: String? = nil, inBackground: Bool = false) {
@@ -214,15 +222,16 @@ public final class RunningAppsService {
         quit(bundleID: app.bundleID, fallbackPath: app.path)
     }
 
-    @discardableResult
-    private func runAppleScript(_ source: String) -> Bool {
-        var error: NSDictionary?
-        let script = NSAppleScript(source: source)
-        script?.executeAndReturnError(&error)
-        if let error {
-            NSLog("[RunningAppsService] AppleScript error: %@", error)
-            return false
+    /// Executes AppleScript off the main actor — executeAndReturnError blocks while the
+    /// script runs against System Events.
+    private func runAppleScript(_ source: String) {
+        Task.detached(priority: .utility) {
+            var error: NSDictionary?
+            let script = NSAppleScript(source: source)
+            script?.executeAndReturnError(&error)
+            if let error {
+                NSLog("[RunningAppsService] AppleScript error: %@", error)
+            }
         }
-        return true
     }
 }

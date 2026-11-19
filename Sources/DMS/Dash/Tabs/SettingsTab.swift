@@ -6,9 +6,7 @@ public struct SettingsTab: View {
     @ObservedObject var themeStore = ThemeStore.shared
     @ObservedObject var weatherService = WeatherService.shared
     @ObservedObject var configStore = ConfigStore.shared
-    @State private var timeFormat24h: Bool = false
     @State private var manualLocationInput: String = ""
-    @State private var defaultTab: DashTab = .overview
 
     let themeOptions = ["purple", "blue", "green", "orange", "red", "yellow"]
 
@@ -104,7 +102,12 @@ public struct SettingsTab: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
-                    Toggle(isOn: $timeFormat24h) {
+                    Toggle(isOn: Binding(
+                        get: { configStore.config.getSetting("timeFormat")?.stringValue == "24h" },
+                        set: { val in
+                            configStore.update { $0.setSetting("timeFormat", value: AnyCodable(val ? "24h" : "12h")) }
+                        }
+                    )) {
                         HStack {
                             Image(systemName: "clock")
                                 .foregroundColor(Color(hex: p.primary.hex))

@@ -31,12 +31,13 @@ public struct GpuTemperatureWidget: View {
         return configStore.config.weatherUnits.lowercased() == "fahrenheit" ? .fahrenheit : .celsius
     }
 
-    private var gpuCelsius: Double {
-        telemetry.telemetry.gpuTemperature ?? 42.0
+    private var gpuCelsius: Double? {
+        telemetry.telemetry.gpuTemperature
     }
 
     private var severity: ThermalSeverity {
-        SystemTelemetry.thermalSeverity(forCelsius: gpuCelsius)
+        guard let gpuCelsius = gpuCelsius else { return .normal }
+        return SystemTelemetry.thermalSeverity(forCelsius: gpuCelsius)
     }
 
     private var tempColor: Color {
@@ -61,7 +62,8 @@ public struct GpuTemperatureWidget: View {
     }
 
     private var formattedTemperature: String {
-        SystemTelemetry.formatTemperature(gpuCelsius, unit: unit)
+        guard let gpuCelsius = gpuCelsius else { return "--" }
+        return SystemTelemetry.formatTemperature(gpuCelsius, unit: unit)
     }
 
     public var body: some View {
@@ -82,11 +84,10 @@ public struct GpuTemperatureWidget: View {
                 }
             }
             .padding(.horizontal, isVertical ? 0 : 7)
-            .frame(width: isVertical ? 28 : nil, height: isVertical ? 28 : 26)
+            .frame(width: isVertical ? 28 : nil, height: 28)
             .background(backgroundColor)
-            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("GPU Temperature: \(formattedTemperature) (\(String(format: "%.1f", gpuCelsius))°C)")
+        .help("GPU Temperature: \(formattedTemperature)\(gpuCelsius.map { " (\(String(format: "%.1f", $0))°C)" } ?? "")")
     }
 }

@@ -44,6 +44,8 @@ public struct DoNotDisturbDetailPage: View {
                     set: { _ in dndService.toggle() }
                 ))
                 .toggleStyle(.switch)
+                .labelsHidden()
+                .accessibilityLabel("Do Not Disturb")
             }
             .padding(12)
             .background(Color(hex: p.surfaceContainerHigh.hex))

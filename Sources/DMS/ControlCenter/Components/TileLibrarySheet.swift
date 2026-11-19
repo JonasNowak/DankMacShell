@@ -182,12 +182,18 @@ public struct TileLibrarySheet: View {
             }
         }
         .padding(14)
-        .frame(width: 340, height: 280)
+        // Flexible width: never clips the close / + Add buttons when the Control Center
+        // sheet is narrower than 340pt (e.g. 318pt at controlCenterColumns == 6).
+        .frame(maxWidth: 340, minHeight: 280, maxHeight: 280)
         .background(Color(hex: p.surfaceContainer.hex))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color(hex: p.outlineVariant.hex).opacity(0.35), lineWidth: 1)
         )
+        .onAppear {
+            // Make the Control Center panel key so the search TextField receives typing.
+            ControlCenterController.shared.panel.makeKey()
+        }
     }
 }

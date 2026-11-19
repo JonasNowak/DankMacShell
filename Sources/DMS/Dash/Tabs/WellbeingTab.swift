@@ -288,11 +288,18 @@ private struct AppUsageRow: View {
         .cornerRadius(10)
     }
 
+    private static var iconCache: [String: NSImage] = [:]
+
     private func resolveAppIcon(bundleID: String) -> NSImage? {
+        if let cached = Self.iconCache[bundleID] {
+            return cached
+        }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
             return nil
         }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        Self.iconCache[bundleID] = icon
+        return icon
     }
 }
 

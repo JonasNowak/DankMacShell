@@ -149,12 +149,14 @@ public final class SymbianSyncService: ObservableObject {
     // MARK: - Library Scans
 
     public func refreshActiveDeviceData(_ device: SymbianDevice) {
-        Task.detached(priority: .userInitiated) {
+        Task.detached(priority: .userInitiated) { [weak self] in
             let breakdown = SymbianFilesystemHelper.calculateStorageBreakdown(for: device)
             let dTracks = Self.scanDirectoryForAudioStatic(url: device.musicURL)
             let dApps = Self.scanDirectoryForPackagesStatic(url: device.installsURL)
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                // Don't write stale results back if the active device changed meanwhile.
+                guard let self, self.activeDevice?.id == device.id else { return }
                 self.storageBreakdown = breakdown
                 self.deviceTracks = dTracks
                 self.stagedPackages = dApps
@@ -240,12 +242,14 @@ public final class SymbianSyncService: ObservableObject {
     ) async -> Int {
         guard let device = activeDevice else { return 0 }
         guard !tracks.isEmpty else { return 0 }
+        guard !isSyncing else { return 0 } // re-entrancy guard: one sync at a time
 
         isSyncing = true
         syncProgress = 0.0
         syncStatusMessage = "Preparing Symbian Belle Music folders..."
 
         let mountURL = URL(fileURLWithPath: device.mountPath)
+        let allowedRoot = mountURL.standardizedFileURL
         try? SymbianFilesystemHelper.ensureDirectories(at: mountURL)
 
         let total = tracks.count
@@ -265,16 +269,24 @@ public final class SymbianSyncService: ObservableObject {
 
                 let destURL: URL
                 if autoOrganize {
-                    // Safe FAT path components
+                    // Safe FAT path components; preserve the source audio extension
                     let safeArtist = SymbianID3Parser.sanitizeFATPathComponent(track.artist)
                     let safeAlbum = SymbianID3Parser.sanitizeFATPathComponent(track.album)
                     let safeTitle = SymbianID3Parser.sanitizeFATPathComponent(track.title)
-                    let trackRel = "Music/\(safeArtist)/\(safeAlbum)/\(String(format: "%02d", track.trackNumber)) - \(safeTitle).mp3"
+                    let ext = SymbianID3Parser.normalizedAudioExtension((track.filePath as NSString).pathExtension)
+                    let trackRel = "Music/\(safeArtist)/\(safeAlbum)/\(String(format: "%02d", track.trackNumber)) - \(safeTitle).\(ext)"
                     destURL = mountURL.appendingPathComponent(trackRel)
                 } else {
                     let fileName = (track.filePath as NSString).lastPathComponent
-                    let safeFileName = SymbianID3Parser.sanitizeFATPathComponent((fileName as NSString).deletingPathExtension) + ".\((fileName as NSString).pathExtension)"
+                    let ext = SymbianID3Parser.normalizedAudioExtension((fileName as NSString).pathExtension)
+                    let safeFileName = SymbianID3Parser.sanitizeFATPathComponent((fileName as NSString).deletingPathExtension) + ".\(ext)"
                     destURL = capturedDevice.musicURL.appendingPathComponent(safeFileName)
+                }
+
+                // Path-traversal guard: the destination must stay inside the device root.
+                guard destURL.standardizedFileURL.path.hasPrefix(allowedRoot.path + "/") else {
+                    print("Refusing to sync outside device root: \(destURL.path)")
+                    continue
                 }
 
                 do {
@@ -340,35 +352,47 @@ public final class SymbianSyncService: ObservableObject {
         }
 
         let mountURL = URL(fileURLWithPath: device.mountPath)
-        try SymbianFilesystemHelper.ensureDirectories(at: mountURL)
+        let installsURL = device.installsURL
 
-        let parsed = SymbianSISParser.parse(url: sourceURL)
-        let fm = FileManager.default
-        let destURL = device.installsURL.appendingPathComponent(sourceURL.lastPathComponent)
+        // All file I/O (parse, copy, dotfile clean) runs off the main actor.
+        let result = await Task.detached(priority: .utility) { () -> Result<SymbianAppPackage, Error> in
+            do {
+                try SymbianFilesystemHelper.ensureDirectories(at: mountURL)
 
-        if fm.fileExists(atPath: destURL.path) {
-            try? fm.removeItem(at: destURL)
-        }
+                let parsed = SymbianSISParser.parse(url: sourceURL)
+                let fm = FileManager.default
+                let destURL = installsURL.appendingPathComponent(sourceURL.lastPathComponent)
 
-        try fm.copyItem(at: sourceURL, to: destURL)
+                if fm.fileExists(atPath: destURL.path) {
+                    try? fm.removeItem(at: destURL)
+                }
 
-        let guideURL = device.installsURL.appendingPathComponent("HOW_TO_INSTALL.txt")
-        if !fm.fileExists(atPath: guideURL.path) {
-            let guide = """
-            ==============================================
-            NOKIA BELLE APPLICATION INSTALLATION GUIDE
-            ==============================================
-            1. Disconnect USB cable or switch mode to Nokia Suite.
-            2. On your Nokia C7, tap:
-               Menu -> Applications -> Office -> File Manager
-            3. Open Drive E: (Mass Memory) -> Installs
-            4. Tap on the .sis / .sisx package to begin install!
-            ==============================================
-            """
-            try? guide.write(to: guideURL, atomically: true, encoding: .utf8)
-        }
+                try fm.copyItem(at: sourceURL, to: destURL)
 
-        SymbianFilesystemHelper.cleanAppleDoubleFiles(at: device.installsURL)
+                let guideURL = installsURL.appendingPathComponent("HOW_TO_INSTALL.txt")
+                if !fm.fileExists(atPath: guideURL.path) {
+                    let guide = """
+                    ==============================================
+                    NOKIA BELLE APPLICATION INSTALLATION GUIDE
+                    ==============================================
+                    1. Disconnect USB cable or switch mode to Nokia Suite.
+                    2. On your Nokia C7, tap:
+                       Menu -> Applications -> Office -> File Manager
+                    3. Open Drive E: (Mass Memory) -> Installs
+                    4. Tap on the .sis / .sisx package to begin install!
+                    ==============================================
+                    """
+                    try? guide.write(to: guideURL, atomically: true, encoding: .utf8)
+                }
+
+                SymbianFilesystemHelper.cleanAppleDoubleFiles(at: installsURL)
+                return .success(parsed)
+            } catch {
+                return .failure(error)
+            }
+        }.value
+
+        let parsed = try result.get()
         refreshActiveDeviceData(device)
         showFeedback("Staged \(parsed.appName) to Nokia C7 Installs")
         return parsed
@@ -376,7 +400,13 @@ public final class SymbianSyncService: ObservableObject {
 
     public func removeStagedPackage(_ package: SymbianAppPackage) {
         guard let device = activeDevice else { return }
-        let target = device.installsURL.appendingPathComponent(package.fileName)
+        let allowedRoot = device.installsURL.standardizedFileURL
+        let target = allowedRoot.appendingPathComponent(package.fileName)
+        // Path-traversal guard: never delete outside the device Installs directory.
+        guard target.standardizedFileURL.path.hasPrefix(allowedRoot.path + "/") else {
+            showFeedback("Refusing to remove file outside Installs: \(package.fileName)")
+            return
+        }
         try? FileManager.default.removeItem(at: target)
         refreshActiveDeviceData(device)
         showFeedback("Removed \(package.fileName)")
@@ -387,24 +417,39 @@ public final class SymbianSyncService: ObservableObject {
     public func cleanDeviceDotfiles() {
         guard let device = activeDevice else { return }
         let mountURL = URL(fileURLWithPath: device.mountPath)
-        let removed = SymbianFilesystemHelper.cleanAppleDoubleFiles(at: mountURL)
-        refreshActiveDeviceData(device)
-        showFeedback("Cleaned \(removed) macOS dotfiles from Nokia C7")
+        // File I/O off the main actor — no UI freezes on large volumes.
+        Task.detached(priority: .utility) { [weak self] in
+            let removed = SymbianFilesystemHelper.cleanAppleDoubleFiles(at: mountURL)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.refreshActiveDeviceData(device)
+                self.showFeedback("Cleaned \(removed) macOS dotfiles from Nokia C7")
+            }
+        }
     }
 
     public func ejectActiveDevice() {
         guard let device = activeDevice else { return }
+        guard !isSyncing else {
+            showFeedback("Cannot eject while a sync is in progress")
+            return
+        }
 
         let mountURL = URL(fileURLWithPath: device.mountPath)
-        SymbianFilesystemHelper.cleanAppleDoubleFiles(at: mountURL)
-
-        do {
-            try NSWorkspace.shared.unmountAndEjectDevice(at: mountURL)
-            connectedDevices.removeAll(where: { $0.id == device.id })
-            activeDevice = connectedDevices.first
-            showFeedback("Nokia C7 safely disconnected")
-        } catch {
-            showFeedback("Eject failed: \(error.localizedDescription)")
+        // Clean dotfiles off the main actor, then eject on the main actor.
+        Task.detached(priority: .utility) { [weak self] in
+            SymbianFilesystemHelper.cleanAppleDoubleFiles(at: mountURL)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                do {
+                    try NSWorkspace.shared.unmountAndEjectDevice(at: mountURL)
+                    self.connectedDevices.removeAll(where: { $0.id == device.id })
+                    self.activeDevice = self.connectedDevices.first
+                    self.showFeedback("Nokia C7 safely disconnected")
+                } catch {
+                    self.showFeedback("Eject failed: \(error.localizedDescription)")
+                }
+            }
         }
     }
 

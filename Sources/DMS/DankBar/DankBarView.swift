@@ -13,14 +13,10 @@ public struct DankBarView: View {
     public var screenIndex: Int
 
     @ObservedObject private var theme = ThemeStore.shared
-    @ObservedObject private var workspace = WorkspaceService.shared
     private let telemetry = TelemetryService.shared
     private let wifi = WiFiService.shared
     private let audio = AudioService.shared
     private let battery = BatteryService.shared
-    @ObservedObject private var nowPlaying = NowPlayingService.shared
-    @ObservedObject private var weather = WeatherService.shared
-    @ObservedObject private var inhibit = IdleInhibitService.shared
     @ObservedObject private var configStore = ConfigStore.shared
     @ObservedObject private var island = DIslandController.shared
 
@@ -241,14 +237,14 @@ public struct DankBarView: View {
         let solved = NotchAwareBarLayoutSolver.solve(
             layout: activeConfig.layout,
             notch: notchForSolver,
-            barMargin: Double(activeConfig.margin),
+            barMargin: activeConfig.gothCorners ? 0.0 : Double(activeConfig.margin),
             spacing: Double(activeConfig.spacing),
             islandExclusionWidth: islandExclusion
         )
 
         let leftSafeWidth = max(60, CGFloat(solved.leftSafeEndX))
         let rightSafeWidth = max(60, totalLength - CGFloat(solved.rightSafeStartX))
-        let centerHoleWidth = max(0, CGFloat(solved.rightSafeStartX - solved.leftSafeEndX))
+        let centerHoleWidth = min(max(0, CGFloat(solved.rightSafeStartX - solved.leftSafeEndX)), max(0, totalLength - 120))
         let hPad = CGFloat(activeConfig.horizontalPadding)
         let vPad = CGFloat(activeConfig.verticalPadding)
         let isIsland = isIslandMode
@@ -264,7 +260,7 @@ public struct DankBarView: View {
                     HStack(spacing: 4) {
                         let leftRoles = BarSegmentRoleSolver.resolve(
                             entries: solved.leftSafeWidgets,
-                            participating: solved.leftSafeWidgets.map { $0.enabled }
+                            participating: solved.leftSafeWidgets.map { $0.enabled && liveWidgetVisible($0.widgetId) }
                         )
                         renderWidgets(entries: solved.leftSafeWidgets, roles: leftRoles)
                     }
@@ -287,7 +283,7 @@ public struct DankBarView: View {
                 HStack(spacing: 4) {
                     let leftRoles = BarSegmentRoleSolver.resolve(
                         entries: solved.leftSafeWidgets,
-                        participating: solved.leftSafeWidgets.map { $0.enabled }
+                        participating: solved.leftSafeWidgets.map { $0.enabled && liveWidgetVisible($0.widgetId) }
                     )
                     renderWidgets(entries: solved.leftSafeWidgets, roles: leftRoles)
                     Spacer(minLength: 0)
@@ -320,7 +316,7 @@ public struct DankBarView: View {
                     HStack(spacing: 4) {
                         let rightRoles = BarSegmentRoleSolver.resolve(
                             entries: solved.rightSafeWidgets,
-                            participating: solved.rightSafeWidgets.map { $0.enabled }
+                            participating: solved.rightSafeWidgets.map { $0.enabled && liveWidgetVisible($0.widgetId) }
                         )
                         renderWidgets(entries: solved.rightSafeWidgets, roles: rightRoles)
                     }
@@ -342,7 +338,7 @@ public struct DankBarView: View {
                     Spacer(minLength: 0)
                     let rightRoles = BarSegmentRoleSolver.resolve(
                         entries: solved.rightSafeWidgets,
-                        participating: solved.rightSafeWidgets.map { $0.enabled }
+                        participating: solved.rightSafeWidgets.map { $0.enabled && liveWidgetVisible($0.widgetId) }
                     )
                     renderWidgets(entries: solved.rightSafeWidgets, roles: rightRoles)
                 }
@@ -446,7 +442,9 @@ public struct DankBarView: View {
         }
         .overlay(
             Group {
-                if !isIsland {
+                // Center widgets stay accessible in bottom-bar Island mode (the island
+                // exclusion is 0 there); top-bar island mode reserves the center for the island.
+                if !isIsland || activeConfig.position.lowercased() == "bottom" {
                     // True Geometric Center Layout with Collision Confinement (only when NOT in Island mode)
                     GeometryReader { overlayGeo in
                         let bounds = BarCenterLayoutSolver.Bounds(
@@ -484,25 +482,45 @@ public struct DankBarView: View {
     @ViewBuilder
     private func verticalBarContent(totalLength: CGFloat) -> some View {
         let vPad = CGFloat(activeConfig.horizontalPadding)
+        let isIsland = isIslandMode
 
         VStack(spacing: CGFloat(activeConfig.spacing)) {
             // Top Section (corresponding to Left)
-            leftWidgetsRow
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: LeftSizePreferenceKey.self, value: geo.size.height)
-                    }
-                )
+            Group {
+                if isIsland {
+                    // Vertical island bars get the same floating satellite pill styling
+                    leftWidgetsRow
+                        .padding(.vertical, vPad)
+                        .background(islandSatelliteBackground)
+                        .clipShape(Capsule())
+                } else {
+                    leftWidgetsRow
+                }
+            }
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: LeftSizePreferenceKey.self, value: geo.size.height)
+                }
+            )
 
             Spacer(minLength: 16)
 
             // Bottom Section (corresponding to Right)
-            rightWidgetsRow
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: RightSizePreferenceKey.self, value: geo.size.height)
-                    }
-                )
+            Group {
+                if isIsland {
+                    rightWidgetsRow
+                        .padding(.vertical, vPad)
+                        .background(islandSatelliteBackground)
+                        .clipShape(Capsule())
+                } else {
+                    rightWidgetsRow
+                }
+            }
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: RightSizePreferenceKey.self, value: geo.size.height)
+                }
+            )
         }
         .padding(.vertical, effectiveCornerStyle == .gothic ? (vPad + CGFloat(activeConfig.gothFilletRadius * 0.75)) : vPad)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -551,7 +569,7 @@ public struct DankBarView: View {
     @ViewBuilder
     private var leftWidgetsRow: some View {
         let entries = activeConfig.layout.left
-        let roles = BarSegmentRoleSolver.resolve(entries: entries, participating: entries.map { $0.enabled })
+        let roles = BarSegmentRoleSolver.resolve(entries: entries, participating: entries.map { $0.enabled && liveWidgetVisible($0.widgetId) })
 
         if isVertical {
             VStack(spacing: 2) {
@@ -568,7 +586,7 @@ public struct DankBarView: View {
     @ViewBuilder
     private var centerWidgetsRow: some View {
         let entries = activeConfig.layout.center
-        let roles = BarSegmentRoleSolver.resolve(entries: entries, participating: entries.map { $0.enabled })
+        let roles = BarSegmentRoleSolver.resolve(entries: entries, participating: entries.map { $0.enabled && liveWidgetVisible($0.widgetId) })
 
         Group {
             if isVertical {
@@ -601,7 +619,7 @@ public struct DankBarView: View {
     @ViewBuilder
     private var rightWidgetsRow: some View {
         let entries = activeConfig.layout.right
-        let roles = BarSegmentRoleSolver.resolve(entries: entries, participating: entries.map { $0.enabled })
+        let roles = BarSegmentRoleSolver.resolve(entries: entries, participating: entries.map { $0.enabled && liveWidgetVisible($0.widgetId) })
 
         if isVertical {
             VStack(spacing: 2) {
@@ -611,6 +629,29 @@ public struct DankBarView: View {
             HStack(spacing: 2) {
                 renderWidgets(entries: entries, roles: roles)
             }
+        }
+    }
+
+    // MARK: - Live Widget Visibility (for BarSegmentRoleSolver participating flags)
+
+    /// Runtime visibility of conditionally-shown widgets, so segment roles (solo vs edge)
+    /// reflect what is actually on screen right now.
+    private func liveWidgetVisible(_ id: String) -> Bool {
+        switch id {
+        case "capsLockIndicator":
+            return CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
+        case "media", "mediaControls":
+            let t = NowPlayingService.shared.currentTrack
+            return t.isPlaying || (!t.title.isEmpty && t.title != "No Track Playing")
+        case "mediaLyricLine":
+            let t = NowPlayingService.shared.currentTrack
+            return configStore.config.showMediaLyricLine && (!t.title.isEmpty && t.title != "No Track Playing")
+        case "runningApps", "workspaceApps":
+            return !WorkspaceService.shared.currentWorkspaceApps.isEmpty
+        case "privacyIndicator":
+            return PrivacyIndicatorService.shared.isAnyActive
+        default:
+            return true
         }
     }
 
@@ -634,19 +675,19 @@ public struct DankBarView: View {
         case "launcherButton":
             launcherButton(style: style)
         case "workspaceSwitcher":
-            workspaceSwitcher
+            WorkspaceSwitcherView(isVertical: isVertical)
         case "runningApps", "workspaceApps":
-            runningAppsWidget
+            RunningAppsWidgetView(isVertical: isVertical)
         case "focusedApp":
             if configStore.config.showWorkspaceApps && !activeConfig.layout.left.contains(where: { $0.widgetId == "runningApps" || $0.widgetId == "workspaceApps" }) {
-                runningAppsWidget
+                RunningAppsWidgetView(isVertical: isVertical)
             } else {
-                focusedAppPill(style: style)
+                FocusedAppPillView(style: style, isVertical: isVertical)
             }
         case "clock":
             BarClockWidgetView(isVertical: isVertical, options: options, style: style)
         case "media", "mediaControls":
-            mediaWidget(style: style)
+            MediaBarWidget(style: style, isVertical: isVertical)
         case "mediaLyricLine":
             MediaLyricLineWidget(isVertical: isVertical, options: options, style: style)
         case "audioVisualization":
@@ -669,20 +710,24 @@ public struct DankBarView: View {
             CapsLockIndicatorWidget(isVertical: isVertical)
         case "keyboardLayoutName":
             KeyboardLayoutWidget(isVertical: isVertical, options: options, style: style)
-        case "telemetry", "monitorPill":
-            telemetryPill(style: style)
+        case "telemetry":
+            TelemetryPillView(style: style, isVertical: isVertical)
+        case "monitorPill":
+            MonitorPillView(style: style, isVertical: isVertical, screenIndex: screenIndex)
         case "weather":
-            weatherPill(style: style)
+            WeatherPillView(style: style, isVertical: isVertical)
         case "battery":
             batteryPill(style: style)
         case "inhibit", "idleInhibitor":
-            inhibitPill(style: style)
+            InhibitPillView(style: style, isVertical: isVertical)
         case "mic":
             micPill(style: style)
         case "wifi":
             wifiPill(style: style)
         case "vpn":
-            vpnPill(style: style)
+            VpnPillView(style: style, isVertical: isVertical)
+        case "privacyIndicator":
+            PrivacyIndicatorWidget(isVertical: isVertical, options: options, style: style)
         case "systemUpdate":
             systemUpdatePill(style: style)
         case "systemTray":
@@ -761,180 +806,6 @@ public struct DankBarView: View {
         .buttonStyle(.plain)
     }
 
-    private var workspaceSwitcher: some View {
-        let workspaceItems: [WorkspaceInfo] = workspace.workspaces.isEmpty
-            ? (1...max(4, workspace.spacesCount)).map { WorkspaceInfo(id: "\($0)", number: $0, name: "\($0)", isCurrent: workspace.activeSpaceIndex == $0) }
-            : workspace.workspaces
-
-        return Group {
-            if isVertical {
-                VStack(spacing: 3) {
-                    ForEach(workspaceItems) { ws in
-                        workspaceButton(ws: ws)
-                    }
-                }
-                .padding(.vertical, 4)
-                .frame(width: 28)
-                .background(theme.barWidgetBackground)
-            } else {
-                HStack(spacing: 3) {
-                    ForEach(workspaceItems) { ws in
-                        workspaceButton(ws: ws)
-                    }
-                }
-                .padding(.horizontal, 5)
-                .frame(height: 28)
-                .background(theme.barWidgetBackground)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func workspaceButton(ws: WorkspaceInfo) -> some View {
-        let isSelected = ws.isCurrent || workspace.activeSpaceIndex == ws.number
-        Button(action: {
-            workspace.switchSpace(ws.number)
-        }) {
-            Text(ws.name)
-                .font(theme.font(size: 11, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? theme.onPrimary : theme.onSurface)
-                .frame(minWidth: 20, minHeight: 20)
-                .padding(.horizontal, (!isVertical && ws.name.count > 1) ? 4 : 0)
-                .padding(.vertical, (isVertical && ws.name.count > 1) ? 2 : 0)
-                .background(isSelected ? theme.primary : Color.clear)
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var runningAppsWidget: some View {
-        if !workspace.currentWorkspaceApps.isEmpty {
-            if isVertical {
-                VStack(spacing: 4) {
-                    ForEach(workspace.currentWorkspaceApps) { app in
-                        WorkspaceAppItemView(app: app, isVertical: isVertical)
-                    }
-                }
-                .padding(.vertical, 4)
-                .frame(width: 28)
-                .background(theme.barWidgetBackground)
-            } else {
-                HStack(spacing: 4) {
-                    ForEach(workspace.currentWorkspaceApps) { app in
-                        WorkspaceAppItemView(app: app, isVertical: isVertical)
-                    }
-                }
-                .padding(.horizontal, 4)
-                .frame(height: 28)
-                .background(theme.barWidgetBackground)
-            }
-        }
-    }
-
-    private func focusedAppPill(style: BarWidgetStyleOptions) -> some View {
-        Group {
-            if let front = NSWorkspace.shared.frontmostApplication,
-               let name = front.localizedName {
-                HStack(spacing: 5) {
-                    if style.showIcon {
-                        Image(nsImage: front.icon ?? NSImage())
-                            .resizable()
-                            .frame(width: 14, height: 14)
-                    }
-                    if !isVertical && style.showLabel && !style.compactMode {
-                        Text(name)
-                            .font(theme.font(size: 11, weight: .medium))
-                            .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
-                            .lineLimit(1)
-                    }
-                }
-                .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 7))
-                .frame(width: isVertical ? 28 : nil, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-            }
-        }
-    }
-
-    private func mediaWidget(style: BarWidgetStyleOptions) -> some View {
-        Group {
-            let track = nowPlaying.currentTrack
-            let hasActiveTrack = track.isPlaying || (!track.title.isEmpty && track.title != "No Track Playing")
-            if hasActiveTrack {
-                Button(action: { nowPlaying.playPause() }) {
-                    HStack(spacing: 6) {
-                        if style.showIcon {
-                            // MEDIA-004: 20x20 rounded album art thumbnail
-                            MediaArtThumbnail(
-                                data: track.artworkData,
-                                identity: "\(track.title)|\(track.artist)",
-                                size: 20,
-                                cornerRadius: 4,
-                                tint: resolveWidgetTint(style, defaultColor: theme.primary),
-                                isPlaying: track.isPlaying
-                            )
-                        }
-                        if !isVertical && style.showLabel && !style.compactMode {
-                            Text(track.title)
-                                .font(theme.font(size: 11, weight: .medium))
-                                .foregroundColor( theme.onSurface)
-                                .lineLimit(1)
-                                .frame(maxWidth: 160)
-                        }
-                        // MEDIA-005: 4-bar mini equalizer while playing
-                        if !isVertical && track.isPlaying {
-                            MiniEqualizerView(isPlaying: true, color: resolveWidgetTint(style, defaultColor: theme.primary))
-                        }
-                    }
-                    .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
-                    .frame(width: isVertical ? 28 : nil, height: 28)
-                    .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button(track.isPlaying ? "Pause" : "Play") { nowPlaying.playPause() }
-                    Button("Next Track") { nowPlaying.next() }
-                    Button("Previous Track") { nowPlaying.previous() }
-                    Divider()
-                    Button("Open Media Hub") {
-                        DashController.shared.toggle(tab: .media, fromBar: true)
-                    }
-                    Button("Show Synchronized Lyrics") {
-                        LyricsService.shared.isLyricsOverlayVisible = true
-                        DashController.shared.toggle(tab: .media, fromBar: true)
-                    }
-                    Divider()
-                    Button("Copy Track Title") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(
-                            track.artist.isEmpty ? track.title : "\(track.title) — \(track.artist)",
-                            forType: .string
-                        )
-                    }
-                }
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear {
-                                let frameInWindow = geo.frame(in: .global)
-                                let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == NSScreen.main }) ?? DankBarController.shared.panel
-                                DashController.shared.reportMediaFrame(frameInWindow, in: barPanel)
-                            }
-                            .onChange(of: geo.frame(in: .global)) { _, newFrame in
-                                let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == NSScreen.main }) ?? DankBarController.shared.panel
-                                DashController.shared.reportMediaFrame(newFrame, in: barPanel)
-                            }
-                            .onDisappear {
-                                DashController.shared.reportMediaFrame(nil, in: nil)
-                            }
-                    }
-                )
-            }
-        }
-        .onAppear { nowPlaying.addPositionRef("bar.media") }
-        .onDisappear { nowPlaying.removePositionRef("bar.media") }
-    }
-
     private func networkMonitorPill(style: BarWidgetStyleOptions) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "arrow.up.arrow.down.circle.fill")
@@ -979,66 +850,28 @@ public struct DankBarView: View {
         return "US"
     }
 
-    private func weatherPill(style: BarWidgetStyleOptions) -> some View {
-        let hPad = style.paddingOverride.map { CGFloat($0) } ?? (style.compactMode ? 8 : 11)
-        return Button(action: { DashController.shared.toggle(tab: .weather, fromBar: true) }) {
-            HStack(spacing: 5) {
-                if style.showIcon {
-                    Image(systemName: weather.currentWeather.sfSymbol)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
-                }
-                if !isVertical && style.showLabel && !style.compactMode {
-                    let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
-                    let temp = isCelsius ? weather.currentWeather.temperatureC : weather.currentWeather.temperatureF
-                    Text("\(Int(round(temp)))°")
-                        .font(theme.font(size: 11, weight: .semibold))
-                        .foregroundColor(theme.onSurface)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-            }
-            .padding(.horizontal, isVertical ? 0 : hPad)
-            .frame(width: isVertical ? 28 : nil, height: 28)
-            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func telemetryPill(style: BarWidgetStyleOptions) -> some View {
-        Button {
-            ProcessListController.shared.toggle(sortByMemory: false, anchorX: NSEvent.mouseLocation.x)
-        } label: {
-            HStack(spacing: 4) {
-                if style.showIcon {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
-                }
-                if !isVertical && style.showLabel && !style.compactMode {
-                    Text("\(Int(telemetry.telemetry.cpuPercent))%")
-                        .font(theme.font(size: 11, weight: .semibold, mono: true))
-                        .foregroundColor(theme.onSurface)
-                }
-            }
-            .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
-            .frame(width: isVertical ? 28 : nil, height: 28)
-            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-        }
-        .buttonStyle(.plain)
+    private static func batterySymbol(capacity: Int, isCharging: Bool) -> String {
+        let base: String
+        if capacity > 87 { base = "battery.100percent" }
+        else if capacity > 62 { base = "battery.75" }
+        else if capacity > 37 { base = "battery.50" }
+        else if capacity > 12 { base = "battery.25" }
+        else { base = "battery.0" }
+        return isCharging ? "battery.100percent.bolt" : base
     }
 
     private func batteryPill(style: BarWidgetStyleOptions) -> some View {
         Group {
             if let bat = battery.status {
+                let lowBattery = bat.capacity <= 20 && !bat.isCharging
                 Button {
                     BatteryPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x)
                 } label: {
                     HStack(spacing: 4) {
                         if style.showIcon {
-                            Image(systemName: bat.isCharging ? "battery.100.bolt" : "battery.75")
+                            Image(systemName: Self.batterySymbol(capacity: bat.capacity, isCharging: bat.isCharging))
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(bat.isCharging ? theme.success : resolveWidgetTint(style, defaultColor: theme.onSurface))
+                                .foregroundColor(bat.isCharging ? theme.success : (lowBattery ? theme.warning : resolveWidgetTint(style, defaultColor: theme.onSurface)))
                         }
                         if !isVertical && style.showLabel && !style.compactMode {
                             Text("\(bat.capacity)%")
@@ -1055,39 +888,6 @@ public struct DankBarView: View {
         }
     }
 
-    private func inhibitPill(style: BarWidgetStyleOptions) -> some View {
-        Button(action: { DurationPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x) }) {
-            HStack(spacing: 3) {
-                Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(inhibit.isInhibited ? theme.onPrimary : resolveWidgetTint(style, defaultColor: theme.onSurface))
-
-                if !isVertical && style.showLabel && inhibit.isInhibited,
-                   let remaining = inhibit.formattedRemainingTimeShort {
-                    Text(remaining)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(theme.onPrimary)
-                }
-            }
-            .padding(.horizontal, isVertical ? 0 : (inhibit.isInhibited && !isVertical && style.showLabel ? 6 : 0))
-            .frame(width: isVertical ? 28 : (inhibit.isInhibited && !isVertical && style.showLabel ? nil : 28), height: 28)
-            .background(inhibit.isInhibited ? theme.primary : resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button(inhibit.isInhibited ? "Disable Sleep Inhibit" : "Keep Awake (Indefinite)") {
-                inhibit.toggle()
-            }
-            Divider()
-            ForEach(IdleInhibitPreset.allCases) { preset in
-                Button(preset.label) {
-                    inhibit.enable(preset: preset)
-                }
-            }
-        }
-        .help(inhibit.isInhibited ? "Sleep Inhibit: Active (\(inhibit.formattedRemainingTime ?? "Indefinite"))" : "Sleep Inhibit: Disabled (Click for presets)")
-    }
-
     private func micPill(style: BarWidgetStyleOptions) -> some View {
         Button(action: { audio.toggleMicMute() }) {
             Image(systemName: audio.isMicMuted ? "mic.slash.fill" : "mic.fill")
@@ -1097,31 +897,28 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(audio.isMicMuted ? "Microphone muted" : "Microphone")
     }
 
     private func wifiPill(style: BarWidgetStyleOptions) -> some View {
-        HStack(spacing: 0) {
-            Image(systemName: wifi.symbolName)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(wifi.isConnected ? resolveWidgetTint(style, defaultColor: theme.primary) : theme.outline)
+        Button {
+            ControlCenterController.shared.toggle()
+        } label: {
+            HStack(spacing: 0) {
+                Image(systemName: wifi.symbolName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(wifi.isConnected ? resolveWidgetTint(style, defaultColor: theme.primary) : theme.outline)
+            }
+            .frame(width: 28, height: 28)
+            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
-        .frame(width: 28, height: 28)
-        .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-    }
-
-    private func vpnPill(style: BarWidgetStyleOptions) -> some View {
-        HStack(spacing: 0) {
-            Image(systemName: "network.badge.shield.half.filled")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
-        }
-        .frame(width: 28, height: 28)
-        .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
+        .buttonStyle(.plain)
+        .accessibilityLabel(wifi.isConnected ? "Wi-Fi connected" : "Wi-Fi disconnected")
     }
 
     private func systemUpdatePill(style: BarWidgetStyleOptions) -> some View {
         Button {
-            SettingsController.shared.show()
+            SettingsController.shared.show(tab: "about")
         } label: {
             Image(systemName: "arrow.triangle.2.circlepath.circle")
                 .font(.system(size: 11, weight: .medium))
@@ -1130,13 +927,14 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("System Update")
     }
 
     private func systemTrayPill(style: BarWidgetStyleOptions) -> some View {
         Button {
             DIslandController.shared.toggle(activity: .home)
         } label: {
-            Image(systemName: "MenuBarRectangle")
+            Image(systemName: "menubar.rectangle")
                 .symbolVariant(.fill)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
@@ -1144,6 +942,7 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("System Tray")
     }
 
     private func volumePill(style: BarWidgetStyleOptions) -> some View {
@@ -1160,6 +959,7 @@ public struct DankBarView: View {
         }
         .buttonStyle(.plain)
         .help("Audio Output: \(audio.currentOutputName) (\(Int(audio.volume * 100))%)")
+        .accessibilityLabel("Volume")
     }
 
     private func notificationCenterButton(style: BarWidgetStyleOptions) -> some View {
@@ -1173,6 +973,7 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Notifications")
     }
 
     private func controlCenterButton(style: BarWidgetStyleOptions) -> some View {
@@ -1186,6 +987,7 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Control Center")
     }
 
     private func powerMenuButton(style: BarWidgetStyleOptions) -> some View {
@@ -1200,6 +1002,7 @@ public struct DankBarView: View {
         }
         .buttonStyle(.plain)
         .help("Power & Session")
+        .accessibilityLabel("Power Menu")
     }
 
     private func notepadButton(style: BarWidgetStyleOptions) -> some View {
@@ -1211,6 +1014,7 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Notepad")
     }
 
     private func clipboardButton(style: BarWidgetStyleOptions) -> some View {
@@ -1222,6 +1026,7 @@ public struct DankBarView: View {
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Clipboard")
     }
 
     private func colorPickerButton(style: BarWidgetStyleOptions) -> some View {
@@ -1234,6 +1039,7 @@ public struct DankBarView: View {
         }
         .buttonStyle(.plain)
         .help("Color Picker")
+        .accessibilityLabel("Color Picker")
     }
 }
 
@@ -1453,5 +1259,426 @@ public struct WorkspaceAppItemView: View {
         } else {
             AppIconImage(path: app.path, size: size)
         }
+    }
+}
+
+// MARK: - Isolated Leaf Widget Views (1Hz/2s service ticks redraw only the pill, not the whole bar)
+
+private struct WorkspaceSwitcherView: View {
+    let isVertical: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var workspace = WorkspaceService.shared
+
+    var body: some View {
+        let workspaceItems: [WorkspaceInfo] = workspace.workspaces.isEmpty
+            ? (1...max(4, workspace.spacesCount)).map { WorkspaceInfo(id: "\($0)", number: $0, name: "\($0)", isCurrent: workspace.activeSpaceIndex == $0) }
+            : workspace.workspaces
+
+        return Group {
+            if isVertical {
+                VStack(spacing: 3) {
+                    ForEach(workspaceItems) { ws in
+                        workspaceButton(ws: ws)
+                    }
+                }
+                .padding(.vertical, 4)
+                .frame(width: 28)
+                .background(theme.barWidgetBackground)
+            } else {
+                HStack(spacing: 3) {
+                    ForEach(workspaceItems) { ws in
+                        workspaceButton(ws: ws)
+                    }
+                }
+                .padding(.horizontal, 5)
+                .frame(height: 28)
+                .background(theme.barWidgetBackground)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func workspaceButton(ws: WorkspaceInfo) -> some View {
+        let isSelected = ws.isCurrent || workspace.activeSpaceIndex == ws.number
+        Button(action: {
+            workspace.switchSpace(ws.number)
+        }) {
+            Text(ws.name)
+                .font(theme.font(size: 11, weight: isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? theme.onPrimary : theme.onSurface)
+                .frame(minWidth: 20, minHeight: 20)
+                .padding(.horizontal, (!isVertical && ws.name.count > 1) ? 4 : 0)
+                .padding(.vertical, (isVertical && ws.name.count > 1) ? 2 : 0)
+                .background(isSelected ? theme.primary : Color.clear)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct RunningAppsWidgetView: View {
+    let isVertical: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var workspace = WorkspaceService.shared
+
+    var body: some View {
+        if !workspace.currentWorkspaceApps.isEmpty {
+            if isVertical {
+                VStack(spacing: 4) {
+                    ForEach(workspace.currentWorkspaceApps) { app in
+                        WorkspaceAppItemView(app: app, isVertical: isVertical)
+                    }
+                }
+                .padding(.vertical, 4)
+                .frame(width: 28)
+                .background(theme.barWidgetBackground)
+            } else {
+                HStack(spacing: 4) {
+                    ForEach(workspace.currentWorkspaceApps) { app in
+                        WorkspaceAppItemView(app: app, isVertical: isVertical)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .frame(height: 28)
+                .background(theme.barWidgetBackground)
+            }
+        }
+    }
+}
+
+private struct FocusedAppPillView: View {
+    let style: BarWidgetStyleOptions
+    let isVertical: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+    private let runningApps = RunningAppsService.shared
+
+    private var backgroundColor: Color {
+        if let hex = style.customBackgroundHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.barWidgetBackground
+    }
+
+    private var tintColor: Color {
+        if let hex = style.customTintHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.onSurface
+    }
+
+    var body: some View {
+        Group {
+            if let app = runningApps.activeApp {
+                HStack(spacing: 5) {
+                    if style.showIcon {
+                        AppIconImage(path: app.path, size: 14)
+                    }
+                    if !isVertical && style.showLabel && !style.compactMode {
+                        Text(app.name)
+                            .font(theme.font(size: 11, weight: .medium))
+                            .foregroundColor(tintColor)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 7))
+                .frame(width: isVertical ? 28 : nil, height: 28)
+                .background(backgroundColor)
+            }
+        }
+    }
+}
+
+private struct MediaBarWidget: View {
+    let style: BarWidgetStyleOptions
+    let isVertical: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var nowPlaying = NowPlayingService.shared
+
+    private var backgroundColor: Color {
+        if let hex = style.customBackgroundHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.barWidgetBackground
+    }
+
+    private var tintColor: Color {
+        if let hex = style.customTintHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.primary
+    }
+
+    var body: some View {
+        Group {
+            let track = nowPlaying.currentTrack
+            let hasActiveTrack = track.isPlaying || (!track.title.isEmpty && track.title != "No Track Playing")
+            if hasActiveTrack {
+                Button(action: { nowPlaying.playPause() }) {
+                    HStack(spacing: 6) {
+                        if style.showIcon {
+                            // MEDIA-004: 20x20 rounded album art thumbnail
+                            MediaArtThumbnail(
+                                data: track.artworkData,
+                                identity: "\(track.title)|\(track.artist)",
+                                size: 20,
+                                cornerRadius: 4,
+                                tint: tintColor,
+                                isPlaying: track.isPlaying
+                            )
+                        }
+                        if !isVertical && style.showLabel && !style.compactMode {
+                            Text(track.title)
+                                .font(theme.font(size: 11, weight: .medium))
+                                .foregroundColor(theme.onSurface)
+                                .lineLimit(1)
+                                .frame(maxWidth: 160)
+                        }
+                        // MEDIA-005: 4-bar mini equalizer while playing
+                        if !isVertical && track.isPlaying {
+                            MiniEqualizerView(isPlaying: true, color: tintColor)
+                        }
+                    }
+                    .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
+                    .frame(width: isVertical ? 28 : nil, height: 28)
+                    .background(backgroundColor)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button(track.isPlaying ? "Pause" : "Play") { nowPlaying.playPause() }
+                    Button("Next Track") { nowPlaying.next() }
+                    Button("Previous Track") { nowPlaying.previous() }
+                    Divider()
+                    Button("Open Media Hub") {
+                        DashController.shared.toggle(tab: .media, fromBar: true)
+                    }
+                    Button("Show Synchronized Lyrics") {
+                        LyricsService.shared.isLyricsOverlayVisible = true
+                        DashController.shared.toggle(tab: .media, fromBar: true)
+                    }
+                    Divider()
+                    Button("Copy Track Title") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(
+                            track.artist.isEmpty ? track.title : "\(track.title) — \(track.artist)",
+                            forType: .string
+                        )
+                    }
+                }
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear {
+                                let frameInWindow = geo.frame(in: .global)
+                                let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == NSScreen.main }) ?? DankBarController.shared.panel
+                                DashController.shared.reportMediaFrame(frameInWindow, in: barPanel)
+                            }
+                            .onChange(of: geo.frame(in: .global)) { _, newFrame in
+                                let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == NSScreen.main }) ?? DankBarController.shared.panel
+                                DashController.shared.reportMediaFrame(newFrame, in: barPanel)
+                            }
+                            .onDisappear {
+                                DashController.shared.reportMediaFrame(nil, in: nil)
+                            }
+                    }
+                )
+            }
+        }
+        // NOTE: no `nowPlaying.addPositionRef("bar.media")` here — the bar media pill does not
+        // display elapsed seconds, and holding that ref forced 1Hz polling 24/7.
+    }
+}
+
+private struct WeatherPillView: View {
+    let style: BarWidgetStyleOptions
+    let isVertical: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var configStore = ConfigStore.shared
+    @ObservedObject private var weather = WeatherService.shared
+
+    private var backgroundColor: Color {
+        if let hex = style.customBackgroundHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.barWidgetBackground
+    }
+
+    private var tintColor: Color {
+        if let hex = style.customTintHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.primary
+    }
+
+    var body: some View {
+        let hPad = style.paddingOverride.map { CGFloat($0) } ?? (style.compactMode ? 8 : 11)
+        return Button(action: { DashController.shared.toggle(tab: .weather, fromBar: true) }) {
+            HStack(spacing: 5) {
+                if style.showIcon {
+                    Image(systemName: weather.currentWeather.sfSymbol)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(tintColor)
+                }
+                if !isVertical && style.showLabel && !style.compactMode {
+                    let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
+                    let temp = isCelsius ? weather.currentWeather.temperatureC : weather.currentWeather.temperatureF
+                    Text("\(Int(round(temp)))°")
+                        .font(theme.font(size: 11, weight: .semibold))
+                        .foregroundColor(theme.onSurface)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .padding(.horizontal, isVertical ? 0 : hPad)
+            .frame(width: isVertical ? 28 : nil, height: 28)
+            .background(backgroundColor)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct TelemetryPillView: View {
+    let style: BarWidgetStyleOptions
+    let isVertical: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+    private let telemetry = TelemetryService.shared
+
+    private var backgroundColor: Color {
+        if let hex = style.customBackgroundHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.barWidgetBackground
+    }
+
+    private var tintColor: Color {
+        if let hex = style.customTintHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.primary
+    }
+
+    var body: some View {
+        Button {
+            ProcessListController.shared.toggle(sortByMemory: false, anchorX: NSEvent.mouseLocation.x)
+        } label: {
+            HStack(spacing: 4) {
+                if style.showIcon {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(tintColor)
+                }
+                if !isVertical && style.showLabel && !style.compactMode {
+                    Text("\(Int(telemetry.telemetry.cpuPercent))%")
+                        .font(theme.font(size: 11, weight: .semibold, mono: true))
+                        .foregroundColor(theme.onSurface)
+                }
+            }
+            .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
+            .frame(width: isVertical ? 28 : nil, height: 28)
+            .background(backgroundColor)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct InhibitPillView: View {
+    let style: BarWidgetStyleOptions
+    let isVertical: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var inhibit = IdleInhibitService.shared
+
+    private var backgroundColor: Color {
+        if inhibit.isInhibited { return theme.primary }
+        if let hex = style.customBackgroundHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.barWidgetBackground
+    }
+
+    private var tintColor: Color {
+        if let hex = style.customTintHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.onSurface
+    }
+
+    var body: some View {
+        Button(action: { DurationPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x) }) {
+            HStack(spacing: 3) {
+                Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(inhibit.isInhibited ? theme.onPrimary : tintColor)
+
+                if !isVertical && style.showLabel && inhibit.isInhibited,
+                   let remaining = inhibit.formattedRemainingTimeShort {
+                    Text(remaining)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(theme.onPrimary)
+                }
+            }
+            .padding(.horizontal, isVertical ? 0 : (inhibit.isInhibited && !isVertical && style.showLabel ? 6 : 0))
+            .frame(width: isVertical ? 28 : (inhibit.isInhibited && !isVertical && style.showLabel ? nil : 28), height: 28)
+            .background(backgroundColor)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(inhibit.isInhibited ? "Disable Sleep Inhibit" : "Keep Awake (Indefinite)") {
+                inhibit.toggle()
+            }
+            Divider()
+            ForEach(IdleInhibitPreset.allCases) { preset in
+                Button(preset.label) {
+                    inhibit.enable(preset: preset)
+                }
+            }
+        }
+        .help(inhibit.isInhibited ? "Sleep Inhibit: Active (\(inhibit.formattedRemainingTime ?? "Indefinite"))" : "Sleep Inhibit: Disabled (Click for presets)")
+    }
+}
+
+private struct VpnPillView: View {
+    let style: BarWidgetStyleOptions
+    let isVertical: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var vpn = VPNService.shared
+
+    private var backgroundColor: Color {
+        if let hex = style.customBackgroundHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.barWidgetBackground
+    }
+
+    var body: some View {
+        Button {
+            vpn.openVPNSettings()
+        } label: {
+            HStack(spacing: 0) {
+                Image(systemName: "network.badge.shield.half.filled")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(vpn.isConnected ? theme.primary : theme.onSurfaceVariant)
+            }
+            .frame(width: 28, height: 28)
+            .background(backgroundColor)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(vpn.isConnected ? "VPN connected" : "VPN disconnected")
+        .help(vpn.isConnected ? "VPN Connected (\(vpn.activeInterface ?? "")) — click for VPN settings" : "VPN Disconnected — click for VPN settings")
+    }
+}
+
+private struct MonitorPillView: View {
+    let style: BarWidgetStyleOptions
+    let isVertical: Bool
+    let screenIndex: Int
+    @ObservedObject private var theme = ThemeStore.shared
+
+    private var backgroundColor: Color {
+        if let hex = style.customBackgroundHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.barWidgetBackground
+    }
+
+    private var tintColor: Color {
+        if let hex = style.customTintHex, !hex.isEmpty { return Color(hex: hex) }
+        return theme.primary
+    }
+
+    var body: some View {
+        let screen = (screenIndex < NSScreen.screens.count) ? NSScreen.screens[screenIndex] : (NSScreen.main ?? NSScreen.screens.first)
+        let screenName = screen?.localizedName ?? "Display"
+        HStack(spacing: 4) {
+            if style.showIcon {
+                Image(systemName: "display")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(tintColor)
+            }
+            if !isVertical && style.showLabel && !style.compactMode {
+                Text("\(screenIndex + 1) · \(screenName)")
+                    .font(theme.font(size: 10, weight: .semibold, mono: true))
+                    .foregroundColor(theme.onSurface)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
+        .frame(width: isVertical ? 28 : nil, height: 28)
+        .background(backgroundColor)
     }
 }

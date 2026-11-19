@@ -429,7 +429,8 @@ public struct NotepadView: View {
             font: .monospacedSystemFont(ofSize: 13, weight: .regular),
             textColor: NSColor(Color(hex: p.onSurface.hex)),
             backgroundColor: .clear,
-            focusRange: $focusRange
+            focusRange: $focusRange,
+            noteID: notepad.activeNote.id.uuidString
         )
     }
 }

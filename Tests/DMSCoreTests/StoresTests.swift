@@ -163,9 +163,129 @@ struct StoresTests {
 
         let store1 = NotepadStore(storageURL: tmp)
         _ = store1.createNote(title: "Persisted Note", content: "Persisted Body")
+        store1.flushSync() // disk writes are serialized on a background queue; flush before reload
 
         let store2 = NotepadStore(storageURL: tmp)
         #expect(store2.getNotes().contains(where: { $0.title == "Persisted Note" }))
         #expect(store2.getActiveNote().title == "Persisted Note")
+    }
+
+    @Test("NotepadStore updateNote(id:) Targets a Specific Note Without Touching the Active One")
+    func testNotepadUpdateNoteById() {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_note_byid_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store = NotepadStore(storageURL: tmp)
+        let active = store.getActiveNote()
+        let other = store.createNote(title: "Other", content: "original")
+        #expect(store.getActiveNote().id == other.id)
+
+        // Update the non-active note by UUID
+        store.updateNote(id: active.id, title: "Renamed", content: "new body")
+        let updated = store.getNotes().first { $0.id == active.id }
+        #expect(updated?.title == "Renamed")
+        #expect(updated?.content == "new body")
+        // Active note is untouched by the targeted update
+        #expect(store.getActiveNote().id == other.id)
+        #expect(store.getActiveNote().title == "Other")
+
+        // Unknown UUID is a no-op
+        store.updateNote(id: UUID(), content: "ghost")
+        #expect(store.getNotes().count == 2)
+
+        // Persisted to disk
+        store.flushSync()
+        let store2 = NotepadStore(storageURL: tmp)
+        #expect(store2.getNotes().first { $0.id == active.id }?.content == "new body")
+    }
+
+    @Test("NotepadStore setActiveNote(id:) Is Persisted")
+    func testNotepadSetActiveNotePersisted() {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_note_active_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store1 = NotepadStore(storageURL: tmp)
+        let first = store1.getActiveNote()
+        let second = store1.createNote(title: "Second", content: "")
+        store1.setActiveNote(id: first.id)
+        store1.flushSync()
+        #expect(store1.getActiveNote().id == first.id)
+
+        let store2 = NotepadStore(storageURL: tmp)
+        #expect(store2.getActiveNote().id == first.id)
+        #expect(store2.getActiveNote().id != second.id)
+    }
+
+    @Test("NotepadStore Backs Up Corrupted notes.json Before Resetting")
+    func testNotepadCorruptBackup() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test_note_corrupt_\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let tmp = dir.appendingPathComponent("notes.json")
+
+        // Write garbage that is not valid JSON
+        try? "{ this is not json !!!".write(to: tmp, atomically: true, encoding: .utf8)
+        #expect(FileManager.default.fileExists(atPath: tmp.path))
+
+        let store = NotepadStore(storageURL: tmp)
+        // Corrupted file was moved aside to notes.json.corrupt-<timestamp>
+        let contents = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        let backups = contents.filter { $0.hasPrefix("notes.json.corrupt-") }
+        #expect(backups.count == 1)
+        #expect(!FileManager.default.fileExists(atPath: tmp.path))
+        // Store reset to a fresh seeded note
+        #expect(!store.getNotes().isEmpty)
+    }
+
+    @Test("NotepadStore Writes notes.json With 0600 Permissions and flushSync Drains the Queue")
+    func testNotepadFilePermissionsAndFlush() {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_note_perms_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store = NotepadStore(storageURL: tmp)
+        _ = store.createNote(title: "Perm Note", content: "body")
+        store.flushSync()
+
+        #expect(FileManager.default.fileExists(atPath: tmp.path))
+        let attrs = try? FileManager.default.attributesOfItem(atPath: tmp.path)
+        let perms = attrs?[.posixPermissions] as? Int
+        #expect(perms == 0o600)
+
+        // flushSync returns only after queued writes completed: file decodes immediately
+        let data = try? Data(contentsOf: tmp)
+        #expect(data != nil)
+    }
+
+    @Test("LauncherFrecencyStore Prunes Entries Beyond 500 by Oldest lastLaunchedAt")
+    func testFrecencyStorePruning() {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_frec_prune_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store = LauncherFrecencyStore(fileURL: tmp)
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        // 600 distinct ids, oldest first
+        for i in 0..<600 {
+            store.recordLaunch(id: "app.\(i)", date: base.addingTimeInterval(Double(i)))
+        }
+
+        // Oldest 100 evicted, newest 500 kept
+        #expect(store.launchInfo(for: "app.0").count == 0)
+        #expect(store.launchInfo(for: "app.99").count == 0)
+        #expect(store.launchInfo(for: "app.100").count == 1)
+        #expect(store.launchInfo(for: "app.599").count == 1)
+        #expect(store.launchInfo(for: "app.599").lastLaunch == base.addingTimeInterval(599))
+
+        // Persisted snapshot is also capped at 500 (poll briefly for the async serial write)
+        var persistedCount = -1
+        for _ in 0..<40 {
+            if let data = try? Data(contentsOf: tmp),
+               let decoded = try? JSONDecoder().decode([String: FrecencyEntry].self, from: data) {
+                persistedCount = decoded.count
+                if persistedCount == 500 { break }
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        #expect(persistedCount == 500)
     }
 }

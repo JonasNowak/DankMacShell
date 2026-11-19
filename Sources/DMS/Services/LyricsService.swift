@@ -24,7 +24,7 @@ public final class LyricsService: ObservableObject {
 
     private static let lruCapacity = 32
     private static let syncIntervalNs: UInt64 = 100_000_000 // 100 ms (10 Hz)
-    private nonisolated static let userAgent = "DankMacShell/0.8.2 (https://github.com/jonasnowak/DankMacShell)"
+    private nonisolated static let userAgent = DMSVersion.userAgent
 
     private var consumers: [String: Int] = [:]
     private var syncTask: Task<Void, Never>?
@@ -170,7 +170,8 @@ public final class LyricsService: ObservableObject {
 
     private func identity(of track: NowPlayingTrack) -> TrackIdentity? {
         guard !track.title.isEmpty, track.title != "No Track Playing" else { return nil }
-        return TrackIdentity(title: track.title, artist: track.artist, album: track.album, duration: Int(track.durationSeconds.rounded()))
+        let duration = track.durationSeconds.isFinite ? Int(track.durationSeconds.rounded()) : 0
+        return TrackIdentity(title: track.title, artist: track.artist, album: track.album, duration: duration)
     }
 
     private func handleTrackUpdate(_ track: NowPlayingTrack) {
@@ -359,7 +360,7 @@ public final class LyricsService: ObservableObject {
             URLQueryItem(name: "artist_name", value: artist)
         ]
         if !album.isEmpty { items.append(URLQueryItem(name: "album_name", value: album)) }
-        if duration > 0 { items.append(URLQueryItem(name: "duration", value: String(Int(duration.rounded())))) }
+        if duration > 0 && duration.isFinite { items.append(URLQueryItem(name: "duration", value: String(Int(duration.rounded())))) }
         get?.queryItems = items
         guard let getURL = get?.url else { return .failed }
 
@@ -408,8 +409,18 @@ public final class LyricsService: ObservableObject {
             let aSynced = !(a.syncedLyrics ?? "").isEmpty
             let bSynced = !(b.syncedLyrics ?? "").isEmpty
             if aSynced != bSynced { return aSynced }
-            let aDelta = (duration > 0 && a.duration != nil) ? abs(a.duration! - duration) : Double.greatestFiniteMagnitude
-            let bDelta = (duration > 0 && b.duration != nil) ? abs(b.duration! - duration) : Double.greatestFiniteMagnitude
+            let aDelta: Double
+            if duration > 0 && duration.isFinite, let aDuration = a.duration {
+                aDelta = abs(aDuration - duration)
+            } else {
+                aDelta = .greatestFiniteMagnitude
+            }
+            let bDelta: Double
+            if duration > 0 && duration.isFinite, let bDuration = b.duration {
+                bDelta = abs(bDuration - duration)
+            } else {
+                bDelta = .greatestFiniteMagnitude
+            }
             return aDelta < bDelta
         }
     }

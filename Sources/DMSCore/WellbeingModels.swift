@@ -181,19 +181,27 @@ public struct WellbeingStoreData: Sendable, Codable, Equatable {
 
 /// Helpers for formatting wellbeing durations and date keys.
 public enum WellbeingFormatter: Sendable {
-    private static let keyFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "yyyy-MM-dd"
-        return df
-    }()
+    /// Swift-6-safe locked box around a non-Sendable `DateFormatter`.
+    private final class LockedDateFormatter: @unchecked Sendable {
+        private let lock = NSLock()
+        private let formatter: DateFormatter
 
-    private static let dayFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "EEE"
-        return df
-    }()
+        init(dateFormat: String) {
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.dateFormat = dateFormat
+            self.formatter = df
+        }
+
+        func string(from date: Date) -> String {
+            lock.lock()
+            defer { lock.unlock() }
+            return formatter.string(from: date)
+        }
+    }
+
+    private static let keyFormatter = LockedDateFormatter(dateFormat: "yyyy-MM-dd")
+    private static let dayFormatter = LockedDateFormatter(dateFormat: "EEE")
 
     public static func dateKey(for date: Date) -> String {
         keyFormatter.string(from: date)
@@ -203,8 +211,15 @@ public enum WellbeingFormatter: Sendable {
         dayFormatter.string(from: date)
     }
 
+    /// Converts seconds to a bounded Int; non-finite or overflowing values clamp instead of trapping.
+    private static func safeSeconds(_ seconds: TimeInterval) -> Int {
+        guard seconds.isFinite else { return 0 }
+        let clamped = min(max(0, seconds.rounded()), Double(Int.max - 1024))
+        return Int(clamped)
+    }
+
     public static func formatDuration(seconds: TimeInterval) -> String {
-        let sec = Int(max(0, seconds.rounded()))
+        let sec = safeSeconds(seconds)
         let hours = sec / 3600
         let minutes = (sec % 3600) / 60
         let remainder = sec % 60
@@ -219,7 +234,7 @@ public enum WellbeingFormatter: Sendable {
     }
 
     public static func formatDurationDetailed(seconds: TimeInterval) -> String {
-        let sec = Int(max(0, seconds.rounded()))
+        let sec = safeSeconds(seconds)
         let hours = sec / 3600
         let minutes = (sec % 3600) / 60
         let remainder = sec % 60

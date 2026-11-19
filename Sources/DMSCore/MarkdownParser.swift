@@ -80,7 +80,7 @@ public enum MarkdownParser {
                 continue
             }
 
-            // Blockquote (consecutive lines)
+            // Blockquote (consecutive lines; a blank line ends the quote)
             if trimmed.hasPrefix(">") {
                 var quoteLines: [String] = []
                 while i < lines.count {
@@ -88,10 +88,8 @@ public enum MarkdownParser {
                     if t.hasPrefix(">") {
                         quoteLines.append(String(t.dropFirst()).trimmingCharacters(in: .whitespaces))
                         i += 1
-                    } else if !t.isEmpty {
-                        break
                     } else {
-                        i += 1
+                        break
                     }
                 }
                 blocks.append(.quote(runs: parseInline(quoteLines.joined(separator: " "))))
@@ -219,7 +217,8 @@ public enum MarkdownParser {
 
     private static func isTableSeparator(_ line: String) -> Bool {
         let t = line.trimmingCharacters(in: .whitespaces)
-        guard t.contains("|") || t.contains("-") else { return false }
+        // A table separator row must contain pipes; a plain "---" is a horizontal rule.
+        guard t.contains("|") else { return false }
         let cells = t.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
         guard !cells.isEmpty else { return false }
         return cells.allSatisfy { cell in
@@ -301,16 +300,18 @@ public enum MarkdownParser {
             // Link [text](url)
             if c == "[" {
                 let afterBracket = text.index(after: index)
-                if let closeBracket = text.range(of: "]", range: afterBracket..<text.endIndex)?.lowerBound,
-                   closeBracket < text.endIndex,
-                   text[text.index(after: closeBracket)] == "(",
-                   let closeParen = text.range(of: ")", range: text.index(after: text.index(after: closeBracket))..<text.endIndex)?.lowerBound {
-                    let linkText = String(text[text.index(after: index)..<closeBracket])
-                    let url = String(text[text.index(after: text.index(after: closeBracket))..<closeParen])
-                    flush()
-                    runs.append(.link(text: linkText, url: url))
-                    index = text.index(after: closeParen)
-                    continue
+                if let closeBracket = text.range(of: "]", range: afterBracket..<text.endIndex)?.lowerBound {
+                    let afterClose = text.index(after: closeBracket)
+                    if afterClose < text.endIndex,
+                       text[afterClose] == "(",
+                       let closeParen = text.range(of: ")", range: text.index(after: afterClose)..<text.endIndex)?.lowerBound {
+                        let linkText = String(text[text.index(after: index)..<closeBracket])
+                        let url = String(text[text.index(after: afterClose)..<closeParen])
+                        flush()
+                        runs.append(.link(text: linkText, url: url))
+                        index = text.index(after: closeParen)
+                        continue
+                    }
                 }
             }
 

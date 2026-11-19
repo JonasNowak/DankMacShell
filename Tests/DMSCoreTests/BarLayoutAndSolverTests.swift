@@ -77,6 +77,19 @@ struct BarLayoutAndSolverTests {
         }
     }
 
+    @Test("BarCenterLayoutSolver indexCenter With Empty Indices Does Not Trap")
+    func testIndexCenterEmptyIndices() {
+        #expect(BarCenterLayoutSolver.indexCenter(sizes: [], indices: [], offsets: [], spacing: 8.0, anchor: nil) == 0.0)
+        #expect(BarCenterLayoutSolver.indexCenter(sizes: [100.0, 200.0], indices: [], offsets: [], spacing: 8.0, anchor: nil) == 0.0)
+        #expect(BarCenterLayoutSolver.indexCenter(
+            sizes: [100.0],
+            indices: [],
+            offsets: [0.0],
+            spacing: 8.0,
+            anchor: BarCenterLayoutSolver.Anchor(middle: 0, count: 1, previous: -1)
+        ) == 0.0)
+    }
+
     @Test("BarCenterLayoutSolver Bounds Confinement")
     func testBoundsConfinement() {
         // Right bounds encroachment: max bound 400 when ideal start would be 500 - 150 = 350, totalSize 300

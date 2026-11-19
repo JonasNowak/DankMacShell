@@ -281,4 +281,234 @@ struct AppSearchTests {
         #expect(legacyDecoded.isRunning == true)
         #expect(legacyDecoded.isHidden == false)
     }
+
+    @Test("Math Power Precedence Binds Tighter Than Unary Minus")
+    func testMathPowerPrecedence() {
+        // ^ binds tighter than unary -: -2^2 == -(2^2) == -4
+        #expect(AppSearch.evaluateMath(query: "-2^2")?.result == "-4")
+        // Parenthesized base: (-2)^2 == 4
+        #expect(AppSearch.evaluateMath(query: "(-2)^2")?.result == "4")
+        // Right-associative power chain: 2^3^2 == 2^(3^2) == 512
+        #expect(AppSearch.evaluateMath(query: "2^3^2")?.result == "512")
+        // Negative exponent: 2^-3 == 0.125
+        let negExp = AppSearch.evaluateMath(query: "2^-3")
+        #expect(negExp?.result == "0.125" || negExp?.result == "0,125")
+    }
+
+    @Test("Math Allows Unary Minus After Binary Plus/Minus")
+    func testMathUnaryAfterBinaryOperator() {
+        #expect(AppSearch.evaluateMath(query: "5 + -3")?.result == "2")
+        #expect(AppSearch.evaluateMath(query: "5 - -3")?.result == "8")
+        #expect(AppSearch.evaluateMath(query: "2 * -3")?.result == "-6")
+        // Chained unary operators are still rejected
+        #expect(AppSearch.evaluateMath(query: "5 + --3") == nil)
+        #expect(AppSearch.evaluateMath(query: "5 + * 3") == nil)
+    }
+
+    @Test("Math Never Formats Negative Zero")
+    func testMathNegativeZeroNormalization() {
+        #expect(AppSearch.evaluateMath(query: "0 * -1")?.result == "0")
+        #expect(AppSearch.evaluateMath(query: "-0 + 0")?.result == "0")
+        #expect(AppSearch.evaluateMath(query: "0 - 0")?.result == "0")
+    }
+
+    @Test("Math Parser Depth and Input Length Caps Prevent Stack Overflow")
+    func testMathDepthAndLengthCaps() {
+        // 50,000 nested parens must return nil instead of overflowing the stack
+        let deep = String(repeating: "(", count: 50_000) + "1" + String(repeating: ")", count: 50_000)
+        #expect(AppSearch.evaluateMath(query: deep) == nil)
+
+        // Deep power chain (within the length cap but beyond the depth cap) must also return nil
+        let deepPower = "2" + String(repeating: "^2", count: 100)
+        #expect(deepPower.count <= 512)
+        #expect(AppSearch.evaluateMath(query: deepPower) == nil)
+
+        // Inputs longer than 512 characters are rejected outright
+        let longInput = "1 + " + String(repeating: "1 + ", count: 200) + "1"
+        #expect(longInput.count > 512)
+        #expect(AppSearch.evaluateMath(query: longInput) == nil)
+
+        // Reasonable nesting (within the depth cap) still evaluates
+        let okDepth = String(repeating: "(", count: 60) + "1 + 1" + String(repeating: ")", count: 60)
+        #expect(AppSearch.evaluateMath(query: okDepth)?.result == "2")
+    }
+
+    @Test("Web Search URL Percent-Encodes Reserved Characters")
+    func testWebSearchURLEncoding() {
+        let tricky = "C++ & Tom & Jerry = ? # 100%"
+        for provider in ["google", "duckduckgo", "bing", "kagi"] {
+            let url = AppSearch.webSearchURL(query: tricky, provider: provider)
+            #expect(url != nil)
+            guard let url else { continue }
+            // Round-trip: the query item must decode back to the exact original string
+            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            #expect(comps?.queryItems?.first(where: { $0.name == "q" })?.value == tricky)
+            // Raw query must not contain unencoded &, +, =, ?, # from the search text
+            let raw = url.absoluteString
+            let queryPart = raw.split(separator: "?", maxSplits: 1).last ?? ""
+            #expect(!queryPart.contains("&"))
+            #expect(!queryPart.contains("+"))
+            #expect(!queryPart.contains("=") || queryPart.hasPrefix("q="))
+            #expect(!queryPart.contains("#"))
+        }
+
+        // Simple queries still encode spaces
+        let cpp = AppSearch.webSearchURL(query: "C++", provider: "google")
+        #expect(cpp?.absoluteString.contains("C%2B%2B") == true)
+    }
+
+    @Test("DankSearch parseOutput Handles Pretty-Printed Whole-Document JSON")
+    func testParseOutputPrettyPrintedObject() {
+        let pretty = """
+        {
+          "results": [
+            { "name": "a.txt", "path": "/Users/test/a.txt" },
+            { "name": "b.txt", "path": "/Users/test/b.txt", "isDirectory": false }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        switch DankSearchClient.parseOutput(pretty, maxResults: 10) {
+        case .success(let items):
+            #expect(items.count == 2)
+            #expect(items[0].path == "/Users/test/a.txt")
+            #expect(items[1].name == "b.txt")
+        case .failure(let err):
+            Issue.record("Pretty-printed results object should parse: \(err)")
+        }
+
+        // Pretty-printed JSON array
+        let prettyArray = """
+        [
+          { "path": "/Users/test/c.txt" },
+          { "path": "/Users/test/d.txt" }
+        ]
+        """.data(using: .utf8)!
+        switch DankSearchClient.parseOutput(prettyArray, maxResults: 10) {
+        case .success(let items):
+            #expect(items.count == 2)
+        case .failure(let err):
+            Issue.record("Pretty-printed array should parse: \(err)")
+        }
+    }
+
+    @Test("DankSearch parseOutput Returns Empty for Non-Positive maxResults Before Appending")
+    func testParseOutputNonPositiveMaxResults() {
+        let json = """
+        [{"name": "a", "path": "/Users/test/a"}, {"name": "b", "path": "/Users/test/b"}]
+        """.data(using: .utf8)!
+
+        for limit in [0, -1, -100] {
+            switch DankSearchClient.parseOutput(json, maxResults: limit) {
+            case .success(let items):
+                #expect(items.isEmpty, "maxResults=\(limit) must yield zero items")
+            case .failure(let err):
+                Issue.record("maxResults=\(limit) should succeed with empty list, got \(err)")
+            }
+        }
+    }
+
+    @Test("DankSearch configure(timeout:) Does Not Clear a Configured Custom Executor")
+    func testConfigureKeepsCustomExecutor() {
+        let client = DankSearchClient(timeout: 0.1)
+        client.configure(customExecutor: { _, _, _ in
+            .success("[{\"path\": \"/Users/test/kept.txt\"}]".data(using: .utf8)!)
+        })
+        // Reconfiguring only the timeout must not drop the executor
+        client.configure(timeout: 0.5)
+        let response = client.searchFiles(query: "kept", maxResults: 5)
+        #expect(response.usedFallback == false)
+        #expect(response.files.count == 1)
+        #expect(response.files[0].path == "/Users/test/kept.txt")
+        #expect(response.backendUsed == "danksearch")
+    }
+
+    @Test("SafeProcessRunner Captures Output, Caps at 4MB, and Enforces Timeout")
+    func testSafeProcessRunnerBasics() {
+        // Normal execution
+        guard case .success(let out) = SafeProcessRunner.run(
+            executablePath: "/bin/echo",
+            arguments: ["hello-dms"],
+            timeout: 2.0
+        ) else {
+            Issue.record("echo should succeed")
+            return
+        }
+        #expect(String(data: out.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) == "hello-dms")
+        #expect(out.terminationStatus == 0)
+
+        // Bounded buffer: 5 MB of output is capped at 4 MB
+        guard case .success(let big) = SafeProcessRunner.run(
+            executablePath: "/bin/sh",
+            arguments: ["-c", "head -c 5000000 /dev/zero | tr '\\0' 'a'"],
+            timeout: 10.0
+        ) else {
+            Issue.record("large output run should succeed")
+            return
+        }
+        #expect(big.stdout.count == 4 * 1024 * 1024)
+
+        // Watchdog timeout
+        if case .failure(let err) = SafeProcessRunner.run(
+            executablePath: "/bin/sleep",
+            arguments: ["5"],
+            timeout: 0.1
+        ) {
+            if case .timedOut = err {
+                // expected
+            } else {
+                Issue.record("Expected .timedOut, got \(err)")
+            }
+        } else {
+            Issue.record("sleep 5 with 0.1s timeout should time out")
+        }
+
+        // Non-zero exit
+        if case .failure(let err) = SafeProcessRunner.run(
+            executablePath: "/bin/sh",
+            arguments: ["-c", "echo oops >&2; exit 3"],
+            timeout: 2.0
+        ) {
+            if case .nonZeroExit(let code, let stderr) = err {
+                #expect(code == 3)
+                #expect(stderr.contains("oops"))
+            } else {
+                Issue.record("Expected .nonZeroExit, got \(err)")
+            }
+        } else {
+            Issue.record("exit 3 should produce .nonZeroExit")
+        }
+    }
+
+    @Test("DankSearch searchFiles Inserts -- Before Dash-Prefixed Queries")
+    func testSearchFilesDashDashGuard() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dms_dashdash_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let argsFile = dir.appendingPathComponent("args.txt")
+        let script = dir.appendingPathComponent("fake-danksearch.sh")
+        let scriptBody = """
+        #!/bin/sh
+        printf '%s\\n' "$@" > \(argsFile.path)
+        echo '[{"name":"x","path":"/tmp/x"}]'
+        """
+        try scriptBody.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+
+        let client = DankSearchClient(customExecutablePath: script.path, timeout: 2.0)
+        let response = client.searchFiles(query: "-rf", maxResults: 5)
+        #expect(response.files.count == 1)
+
+        let args = try String(contentsOf: argsFile, encoding: .utf8)
+            .components(separatedBy: .newlines).filter { !$0.isEmpty }
+        #expect(args == ["--json", "--limit", "5", "--", "-rf"])
+
+        // A normal query must NOT get a stray "--"
+        _ = client.searchFiles(query: "report", maxResults: 5)
+        let args2 = try String(contentsOf: argsFile, encoding: .utf8)
+            .components(separatedBy: .newlines).filter { !$0.isEmpty }
+        #expect(args2 == ["--json", "--limit", "5", "report"])
+    }
 }

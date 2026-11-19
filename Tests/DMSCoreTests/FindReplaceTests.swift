@@ -40,6 +40,21 @@ struct FindReplaceTests {
         #expect(FindReplaceEngine.previousIndex(current: 0, matchCount: 0) == 0)
     }
 
+    @Test("Negative Current Index Wraps via Euclidean Modulo")
+    func testNegativeCurrentIndex() {
+        #expect(FindReplaceEngine.nextIndex(current: -1, matchCount: 3) == 0)
+        #expect(FindReplaceEngine.nextIndex(current: -4, matchCount: 3) == 0)
+        #expect(FindReplaceEngine.previousIndex(current: -1, matchCount: 3) == 1)
+        #expect(FindReplaceEngine.previousIndex(current: -3, matchCount: 3) == 2)
+        // Every result stays inside 0..<matchCount for any current
+        for current in -10...10 {
+            let n = FindReplaceEngine.nextIndex(current: current, matchCount: 5)
+            let p = FindReplaceEngine.previousIndex(current: current, matchCount: 5)
+            #expect(n >= 0 && n < 5, "nextIndex(\(current), 5) = \(n) out of range")
+            #expect(p >= 0 && p < 5, "previousIndex(\(current), 5) = \(p) out of range")
+        }
+    }
+
     @Test("Replace Single Match")
     func testReplaceSingle() {
         let text = "hello world hello"

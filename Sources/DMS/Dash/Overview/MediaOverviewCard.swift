@@ -5,7 +5,7 @@ import DMSCore
 public struct MediaOverviewCard: View {
     @ObservedObject var themeStore = ThemeStore.shared
     @ObservedObject var nowPlaying = NowPlayingService.shared
-    @State private var wavePhase: CGFloat = 0.0
+    @State private var artworkImage: NSImage?
 
     public init() {}
 
@@ -20,17 +20,19 @@ public struct MediaOverviewCard: View {
         VStack(spacing: 6) {
             Spacer(minLength: 4)
 
-            // Circular Artwork with Organic Wavy Visualizer Ring
-            ZStack {
-                // Organic Wavy Ring
-                WavyVisualizerRing(harmonics: 7, amplitude: track.isPlaying ? 2.8 : 1.2, phase: wavePhase)
-                    .stroke(Color(hex: p.primary.hex), lineWidth: 2.0)
-                    .frame(width: 74, height: 74)
-
-                // Album Artwork Circle
+            // Circular Artwork with Organic Wavy Visualizer Ring (animated while playing)
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !track.isPlaying)) { context in
+                let wavePhase = context.date.timeIntervalSinceReferenceDate * 2.5
                 ZStack {
-                    if let data = track.artworkData, let img = NSImage(data: data) {
-                        Image(nsImage: img)
+                    // Organic Wavy Ring
+                    WavyVisualizerRing(harmonics: 7, amplitude: track.isPlaying ? 2.8 : 1.2, phase: wavePhase)
+                        .stroke(Color(hex: p.primary.hex), lineWidth: 2.0)
+                        .frame(width: 74, height: 74)
+
+                    // Album Artwork Circle
+                    ZStack {
+                        if let img = artworkImage {
+                            Image(nsImage: img)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 56, height: 56)
@@ -61,8 +63,9 @@ public struct MediaOverviewCard: View {
                 }
                 .frame(width: 56, height: 56)
                 .clipShape(Circle())
+                }
+                .frame(width: 78, height: 78)
             }
-            .frame(width: 78, height: 78)
 
             Spacer(minLength: 4)
 
@@ -129,5 +132,16 @@ public struct MediaOverviewCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(hex: p.surfaceContainerHigh.hex))
         .cornerRadius(12)
+        .onAppear { decodeArtwork(track.artworkData) }
+        .onChange(of: track.artworkData) { _, newData in decodeArtwork(newData) }
+    }
+
+    /// Decodes artwork off the render path; the decoded image is cached in `@State`.
+    private func decodeArtwork(_ data: Data?) {
+        if let data = data, let img = NSImage(data: data) {
+            artworkImage = img
+        } else {
+            artworkImage = nil
+        }
     }
 }

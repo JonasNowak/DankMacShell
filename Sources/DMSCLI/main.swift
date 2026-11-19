@@ -4,7 +4,7 @@ import DMSCore
 import EditLine
 import EditLine.readline
 
-let version = "0.8.2"
+let version = DMSVersion.current
 
 func printHelp() {
     print("""
@@ -103,6 +103,24 @@ func connectSocket() -> Int32? {
     return fd
 }
 
+/// Writes the whole string to the socket, handling partial writes and EINTR.
+func writeAll(_ fd: Int32, _ string: String) {
+    let bytes = [UInt8](string.utf8)
+    var offset = 0
+    while offset < bytes.count {
+        let n = bytes.withUnsafeBufferPointer { buf in
+            write(fd, buf.baseAddress! + offset, buf.count - offset)
+        }
+        if n > 0 {
+            offset += n
+        } else if n < 0 && errno == EINTR {
+            continue
+        } else {
+            break
+        }
+    }
+}
+
 func sendSocketCommand(_ commandStr: String) -> String? {
     guard let fd = connectSocket() else {
         return nil
@@ -110,20 +128,57 @@ func sendSocketCommand(_ commandStr: String) -> String? {
     defer { close(fd) }
 
     let message = commandStr.hasSuffix("\n") ? commandStr : (commandStr + "\n")
-    _ = message.utf8CString.withUnsafeBufferPointer { buf in
-        write(fd, buf.baseAddress!, buf.count - 1)
-    }
+    writeAll(fd, message)
 
-    // Read response with timeout
-    var timeout = timeval(tv_sec: 2, tv_usec: 0)
+    // Read timeout: 10s for regular commands, 120s for long-running ones (symbian/wifi/wallpaper).
+    let lower = commandStr.lowercased()
+    let longRunning = lower.contains("symbian") || lower.contains("wifi") || lower.contains("wallpaper")
+    var timeout = timeval(tv_sec: longRunning ? 120 : 10, tv_usec: 0)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
 
-    var buffer = [CChar](repeating: 0, count: 8192)
-    let bytesRead = read(fd, &buffer, 8191)
-    if bytesRead > 0 {
-        return String(decoding: buffer.prefix(bytesRead).map { UInt8(bitPattern: $0) }, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    // Read until EOF (the daemon closes one-shot connections after responding), capped at 4 MB.
+    var result = Data()
+    let cap = 4 * 1024 * 1024
+    var chunk = [UInt8](repeating: 0, count: 8192)
+    while result.count < cap {
+        let n = read(fd, &chunk, chunk.count)
+        if n > 0 {
+            result.append(contentsOf: chunk.prefix(n))
+        } else if n == 0 {
+            break // EOF
+        } else if errno == EINTR {
+            continue
+        } else {
+            break // timeout or error
+        }
     }
-    return ""
+    guard !result.isEmpty else { return "" }
+    return String(decoding: result, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// Returns 1 when the daemon replied with a JSON error envelope, nil otherwise.
+func daemonErrorExitCode(for response: String) -> Int32? {
+    guard let data = response.data(using: .utf8),
+          let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let status = obj["status"] as? String,
+          status == "error" else {
+        return nil
+    }
+    return 1
+}
+
+/// Sends a command to the daemon, prints the response, and exits non-zero on failure:
+/// 3 when the daemon is unreachable, 1 when the daemon reports an error.
+func sendAndPrint(_ commandStr: String) -> Never {
+    guard let response = sendSocketCommand(commandStr) else {
+        writeStderr("dms: daemon unreachable (socket \(getSocketPath()) missing) — is DankMacShell running? try 'dms start'")
+        exit(3)
+    }
+    print(response)
+    if let code = daemonErrorExitCode(for: response) {
+        exit(code)
+    }
+    exit(0)
 }
 
 func resolveAppPath() -> String? {
@@ -163,6 +218,43 @@ func setupPersistentCertAndSign(targetAppPath: String? = nil) -> Int32 {
         return 1
     }
 
+    // Validate the target: an existing, writable .app bundle (never a read-only /nix/store path).
+    var isDir: ObjCBool = false
+    guard appPath.hasSuffix(".app"),
+          FileManager.default.fileExists(atPath: appPath, isDirectory: &isDir),
+          isDir.boolValue else {
+        writeStderr("dms setup-cert: '\(appPath)' is not an existing .app bundle.")
+        return 1
+    }
+    if appPath.hasPrefix("/nix/store") {
+        writeStderr("dms setup-cert: refusing to sign read-only /nix/store path '\(appPath)'. Copy the .app to ~/Applications first.")
+        return 1
+    }
+    guard FileManager.default.isWritableFile(atPath: appPath) else {
+        writeStderr("dms setup-cert: '\(appPath)' is not writable by the current user.")
+        return 1
+    }
+
+    /// Runs a subprocess and requires exit status 0.
+    func runChecked(_ exe: String, _ arguments: [String], what: String) -> Bool {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: exe)
+        proc.arguments = arguments
+        proc.standardError = FileHandle.nullDevice
+        do {
+            try proc.run()
+        } catch {
+            writeStderr("dms setup-cert: failed to launch \(what): \(error.localizedDescription)")
+            return false
+        }
+        proc.waitUntilExit()
+        if proc.terminationStatus != 0 {
+            writeStderr("dms setup-cert: \(what) exited with status \(proc.terminationStatus)")
+            return false
+        }
+        return true
+    }
+
     let certName = "dms-cert"
     let keychain = ("~/Library/Keychains/login.keychain-db" as NSString).expandingTildeInPath
 
@@ -180,8 +272,25 @@ func setupPersistentCertAndSign(targetAppPath: String? = nil) -> Int32 {
     if !checkOut.contains("\"\(certName)\"") {
         print("==> Creating persistent self-signed code signing certificate '\(certName)'...")
         let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dms-cert-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: tmpDir.path)
+        } catch {
+            writeStderr("dms setup-cert: failed to create private temp dir: \(error.localizedDescription)")
+            return 1
+        }
         defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        // Random 32-hex passphrase in a 0600 passfile — never a hardcoded password.
+        let passphrase = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(32))
+        let passfilePath = tmpDir.appendingPathComponent("passfile").path
+        do {
+            try passphrase.write(toFile: passfilePath, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: passfilePath)
+        } catch {
+            writeStderr("dms setup-cert: failed to write passfile: \(error.localizedDescription)")
+            return 1
+        }
 
         let cnfPath = tmpDir.appendingPathComponent("cert.cnf").path
         let keyPath = tmpDir.appendingPathComponent("key.pem").path
@@ -204,56 +313,28 @@ func setupPersistentCertAndSign(targetAppPath: String? = nil) -> Int32 {
         """
         try? cnf.write(toFile: cnfPath, atomically: true, encoding: .utf8)
 
-        let req = Process()
-        req.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
-        req.arguments = ["req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "3650", "-nodes", "-config", cnfPath]
-        req.standardError = FileHandle.nullDevice
-        try? req.run()
-        req.waitUntilExit()
-
-        let pkcs = Process()
-        pkcs.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
-        pkcs.arguments = ["pkcs12", "-export", "-inkey", keyPath, "-in", certPath, "-out", p12Path, "-passout", "pass:dms", "-name", certName]
-        pkcs.standardError = FileHandle.nullDevice
-        try? pkcs.run()
-        pkcs.waitUntilExit()
-
-        let imp = Process()
-        imp.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        imp.arguments = ["import", p12Path, "-k", keychain, "-P", "dms", "-T", "/usr/bin/codesign"]
-        imp.standardOutput = FileHandle.nullDevice
-        imp.standardError = FileHandle.nullDevice
-        try? imp.run()
-        imp.waitUntilExit()
-
-        let trust = Process()
-        trust.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        trust.arguments = ["add-trusted-cert", "-r", "trustRoot", "-p", "codeSign", "-k", keychain, certPath]
-        trust.standardOutput = FileHandle.nullDevice
-        trust.standardError = FileHandle.nullDevice
-        try? trust.run()
-        trust.waitUntilExit()
+        guard runChecked("/usr/bin/openssl",
+                         ["req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "3650", "-nodes", "-config", cnfPath],
+                         what: "openssl req") else { return 1 }
+        guard runChecked("/usr/bin/openssl",
+                         ["pkcs12", "-export", "-inkey", keyPath, "-in", certPath, "-out", p12Path, "-passout", "file:\(passfilePath)", "-name", certName],
+                         what: "openssl pkcs12") else { return 1 }
+        guard runChecked("/usr/bin/security",
+                         ["import", p12Path, "-k", keychain, "-P", passphrase, "-T", "/usr/bin/codesign"],
+                         what: "security import") else { return 1 }
+        guard runChecked("/usr/bin/security",
+                         ["add-trusted-cert", "-r", "trustRoot", "-p", "codeSign", "-k", keychain, certPath],
+                         what: "security add-trusted-cert") else { return 1 }
     }
 
-    let xattr = Process()
-    xattr.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
-    xattr.arguments = ["-cr", appPath]
-    xattr.standardError = FileHandle.nullDevice
-    try? xattr.run()
-    xattr.waitUntilExit()
+    guard runChecked("/usr/bin/xattr", ["-cr", "--", appPath], what: "xattr") else { return 1 }
 
     print("==> Signing \(appPath) with identity '\(certName)'...")
-    let sign = Process()
-    sign.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
-    sign.arguments = ["--force", "--deep", "--sign", certName, appPath]
-    try? sign.run()
-    sign.waitUntilExit()
-    if sign.terminationStatus == 0 {
-        print("==> Signed \(appPath) with '\(certName)' (TCC permissions will persist across updates).")
-    } else {
-        writeStderr("dms setup-cert: codesign exited with status \(sign.terminationStatus)")
-    }
-    return sign.terminationStatus
+    guard runChecked("/usr/bin/codesign",
+                     ["--force", "--deep", "--sign", certName, "--", appPath],
+                     what: "codesign") else { return 1 }
+    print("==> Signed \(appPath) with '\(certName)' (TCC permissions will persist across updates).")
+    return 0
 }
 
 func resolveBinaryPath(in appPath: String) -> String? {
@@ -279,7 +360,8 @@ func spawnDMS(appPath: String) -> Bool {
     }
 }
 
-func isDMSRunning() -> Bool {
+/// Live PIDs of running DMS daemon processes (pgrep — no stale pidfile).
+func dmsPIDs() -> [Int32] {
     let task = Process()
     task.launchPath = "/usr/bin/pgrep"
     task.arguments = ["-x", "DankMaterialShell|DankMacShell"]
@@ -287,17 +369,26 @@ func isDMSRunning() -> Bool {
     task.standardOutput = pipe
     try? task.run()
     task.waitUntilExit()
-    return task.terminationStatus == 0
+    let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    return out.split(separator: "\n").compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+}
+
+func isDMSRunning() -> Bool {
+    !dmsPIDs().isEmpty
 }
 
 func probeMediaRemote() -> String {
     let home = FileManager.default.homeDirectoryForCurrentUser.path
-    let candidates = [
+    var candidates: [String] = []
+    // Resolve via the app bundle — never a relative CWD path.
+    if let appPath = resolveAppPath() {
+        candidates.append("\(appPath)/Contents/Resources/media-bridge.swift")
+    }
+    candidates.append(contentsOf: [
         "\(home)/Applications/DankMacShell.app/Contents/Resources/media-bridge.swift",
         "/Applications/DankMacShell.app/Contents/Resources/media-bridge.swift",
-        "Support/media-bridge.swift",
         "\(home)/Library/Application Support/DMS/media-bridge.swift"
-    ]
+    ])
     guard let scriptPath = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
         return "{}"
     }
@@ -358,9 +449,9 @@ func runDMenu(args: [String]) {
     }
 
     let requestID = DMenuStaging.newRequestID()
-    let candidatesURL: URL
     do {
-        candidatesURL = try DMenuStaging.stage(candidates: candidates, requestID: requestID)
+        // Stage the candidates where the daemon expects them (derived from the requestID).
+        _ = try DMenuStaging.stage(candidates: candidates, requestID: requestID)
     } catch {
         writeStderr("dms dmenu: failed to stage candidates: \(error.localizedDescription)")
         exit(1)
@@ -375,17 +466,17 @@ func runDMenu(args: [String]) {
         finish(3)
     }
 
-    // Only the staged file path + requestID travel over the socket; the line protocol stays intact.
-    var commandLine = "ipc call dmenu \(requestID) --file \(candidatesURL.path)"
+    // Only the requestID (+ optional prompt) travel over the socket; the daemon derives the
+    // staged candidates path server-side. Never send `--file <path>`: the staging directory
+    // lives under "Application Support" (contains a space), which broke whitespace tokenization.
+    var commandLine = "ipc call dmenu \(requestID)"
     if !prompt.isEmpty {
         // Keep the line protocol intact: a prompt must never contain a newline.
         let safePrompt = prompt.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
         commandLine += " --prompt \(safePrompt)"
     }
     commandLine += "\n"
-    _ = commandLine.utf8CString.withUnsafeBufferPointer { buf in
-        write(fd, buf.baseAddress!, buf.count - 1)
-    }
+    writeAll(fd, commandLine)
 
     // Keep the persistent connection open and stream lines until the dmenu result arrives.
     var buffer = Data()
@@ -428,31 +519,53 @@ func runDMenu(args: [String]) {
 /// `dms listen [topic]` (default `*`): SUBSCRIBE on a persistent socket connection and print each
 /// newline-delimited JSON event to stdout until Ctrl-C or the daemon closes the stream.
 func runListen(args: [String]) {
-    let topic = args.first ?? "*"
+    var topic = args.first ?? "*"
+    // A topic must never break the line protocol.
+    if topic.contains("\r") || topic.contains("\n") {
+        writeStderr("dms listen: topic contains CR/LF — stripping")
+        topic = topic.replacingOccurrences(of: "\r", with: "").replacingOccurrences(of: "\n", with: "")
+    }
+    if topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { topic = "*" }
+
     guard let fd = connectSocket() else {
         writeStderr("dms listen: DMS daemon not running (socket \(getSocketPath()) missing) — start it with 'dms start'")
         exit(3)
     }
     defer { close(fd) }
 
-    let subscribe = "SUBSCRIBE \(topic)\n"
-    _ = subscribe.utf8CString.withUnsafeBufferPointer { buf in
-        write(fd, buf.baseAddress!, buf.count - 1)
-    }
+    writeAll(fd, "SUBSCRIBE \(topic)\n")
 
     var buffer = Data()
+    let maxBuffer = 4 * 1024 * 1024
     var chunk = [UInt8](repeating: 0, count: 8192)
+    var sawAck = false
     while true {
         let n = read(fd, &chunk, chunk.count)
-        if n <= 0 { break }
+        if n <= 0 {
+            if !sawAck {
+                writeStderr("dms listen: disconnected before subscribe ack")
+            } else {
+                writeStderr("dms listen: daemon closed the stream unexpectedly")
+            }
+            exit(1)
+        }
         buffer.append(contentsOf: chunk.prefix(n))
+        if buffer.count > maxBuffer {
+            writeStderr("dms listen: read buffer exceeded 4 MB cap — aborting")
+            exit(1)
+        }
         while let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
             let lineData = buffer.subdata(in: 0..<newlineIndex)
             buffer.removeSubrange(0...newlineIndex)
-            if let line = String(data: lineData, encoding: .utf8), !line.isEmpty {
-                print(line)
-                fflush(stdout)
+            guard let line = String(data: lineData, encoding: .utf8), !line.isEmpty else { continue }
+            if !sawAck {
+                // The subscribe ack goes to stderr so stdout stays a pure event stream.
+                sawAck = true
+                writeStderr("dms listen: \(line)")
+                continue
             }
+            print(line)
+            fflush(stdout)
         }
     }
 }
@@ -473,7 +586,9 @@ let dmsShellCompletion: @convention(c) (UnsafePointer<CChar>?, Int32, Int32) -> 
     var entries: [UnsafeMutablePointer<CChar>?] = [strdup(common)]
     entries.append(contentsOf: matches.map { strdup($0) })
     entries.append(nil)
-    let buffer = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: entries.count)
+    // C calloc (zero-initialized, nil-terminated) instead of Swift allocate.
+    let buffer = calloc(entries.count, MemoryLayout<UnsafeMutablePointer<CChar>?>.size)
+        .assumingMemoryBound(to: UnsafeMutablePointer<CChar>?.self)
     for (index, entry) in entries.enumerated() {
         buffer[index] = entry
     }
@@ -488,7 +603,7 @@ func runShell() {
     stifle_history(500)
     rl_attempted_completion_function = dmsShellCompletion
 
-    print("DankMacShell IPC shell (v\(version)) — type 'exit' or Ctrl-D to quit, Tab to complete.")
+    print("DankMacShell IPC shell (v\(version)) — type 'exit' or Ctrl-D to quit, 'help' for commands, Tab to complete.")
     while true {
         guard let raw = readline("dms> ") else {
             print("")
@@ -498,10 +613,36 @@ func runShell() {
         free(raw)
         if line.isEmpty { continue }
         if line == "exit" || line == "quit" { break }
+        let lower = line.lowercased()
+        if lower == "help" || lower == "?" {
+            print("""
+            Commands:
+              <target> <action> [args...]   IPC command (e.g. 'launcher toggle', 'settings get theme')
+              ipc call <target> ...         explicit IPC form
+              GET|POST|PUT|DELETE /path     REST request (e.g. 'GET /api/v1/audio/volume')
+              SUBSCRIBE <topic>             subscribe to an event stream on this connection
+              version                       show CLI version
+              exit / quit                   leave the shell
+            """)
+            continue
+        }
+        if lower == "version" {
+            print("DankMaterialShell (DMS) for macOS v\(version)")
+            continue
+        }
         add_history(line)
-        let command = line.lowercased().hasPrefix("ipc") ? line : "ipc call \(line)"
+        // Raw protocol lines (REST, SUBSCRIBE, explicit ipc) go through unprefixed;
+        // everything else is wrapped as an IPC call.
+        let isRawProtocol = lower.hasPrefix("ipc")
+            || lower.hasPrefix("get ") || lower.hasPrefix("post ")
+            || lower.hasPrefix("put ") || lower.hasPrefix("delete ")
+            || lower.hasPrefix("subscribe ") || lower.hasPrefix("unsubscribe ")
+        let command = isRawProtocol ? line : "ipc call \(line)"
         if let response = sendSocketCommand(command) {
             print(response)
+            if let code = daemonErrorExitCode(for: response) {
+                writeStderr("dms: daemon error (exit \(code))")
+            }
         } else {
             writeStderr("dms: daemon unreachable (is DankMacShell running? try 'dms start')")
         }
@@ -555,7 +696,17 @@ case "stop":
     try? task.run()
     task.waitUntilExit()
 
-    unlink(getSocketPath())
+    // Wait up to 3s for the daemon to exit (and remove its own socket) before unlinking.
+    for _ in 0..<30 {
+        if dmsPIDs().isEmpty { break }
+        Thread.sleep(forTimeInterval: 0.1)
+    }
+
+    let sockPath = getSocketPath()
+    var st = stat()
+    if lstat(sockPath, &st) == 0 && (st.st_mode & S_IFMT) == S_IFSOCK {
+        unlink(sockPath)
+    }
     print("DankMacShell stopped.")
 
 case "restart":
@@ -606,7 +757,10 @@ case "setup-cert", "cert":
 case "symbian", "nokia":
     let subArgs = Array(args.dropFirst())
     let act = subArgs.first?.lowercased() ?? "open"
-    if act == "open" || act == "gui" || act == "show" {
+    if act == "close" || act == "toggle" {
+        // dms-symbian has no close/toggle verbs — route over IPC to the daemon.
+        sendAndPrint("ipc call symbian \(act)")
+    } else if act == "open" || act == "gui" || act == "show" {
         switch SymbianClient.shared.launchCompanion() {
         case .success:
             print("Launched Nokia Belle USB Sync companion.")
@@ -624,15 +778,19 @@ case "symbian", "nokia":
     }
 
 case "status":
-    let running = isDMSRunning()
+    let pids = dmsPIDs()
+    let running = !pids.isEmpty
     let socketExists = FileManager.default.fileExists(atPath: getSocketPath())
     print("DankMaterialShell Status:")
-    print("  Daemon: \(running ? "Running (pid: \((try? String(contentsOfFile: "/tmp/dms.pid", encoding: .utf8)) ?? "active")" : "Stopped")")
+    print("  Daemon: \(running ? "Running (pid: \(pids.map(String.init).joined(separator: ", ")))" : "Stopped")")
     print("  Socket: \(socketExists ? "Active (\(getSocketPath()))" : "Inactive")")
     if running, socketExists {
         if let res = sendSocketCommand("status") {
             print("  Shell State: \(res)")
         }
+    }
+    if !running {
+        exit(1)
     }
 
 case "doctor":
@@ -687,28 +845,9 @@ case "shell":
 
 case "ipc":
     // dms ipc call <target> <action> [args...]
-    let rawCommand = args.joined(separator: " ")
-    if let response = sendSocketCommand(rawCommand) {
-        print(response)
-    } else {
-        // Fallback to URL scheme open
-        let cmd = IPCCommand.parseCLI(args: Array(args.dropFirst()))
-        print("Note: Unix socket unreachable, triggering via dms:// fallback for \(cmd)")
-        let urlStr = "dms://\(args.dropFirst().joined(separator: "/"))"
-        if let url = URL(string: urlStr) {
-            NSWorkspace.shared.open(url)
-        }
-    }
+    sendAndPrint(args.joined(separator: " "))
 
 default:
     // Shortcut for direct target invocation: e.g. "dms audio status", "dms notepad get"
-    let rawCommand = "ipc call " + args.joined(separator: " ")
-    if let response = sendSocketCommand(rawCommand) {
-        print(response)
-    } else {
-        let task = Process()
-        task.launchPath = "/usr/bin/open"
-        task.arguments = ["-g", "dms://\(args.joined(separator: "/"))"]
-        try? task.run()
-    }
+    sendAndPrint("ipc call " + args.joined(separator: " "))
 }

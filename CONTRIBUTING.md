@@ -13,7 +13,7 @@ For security issues, please see [our secure disclosure policy](SECURITY.md).
 
 ## Build and run
 
-Requirements: **macOS 26+** with Xcode or the Command Line Tools (Swift 6 toolchain). DankMacShell is a Swift Package, so plain `swift build` works too.
+Requirements: **macOS 14+** with Xcode or the Command Line Tools (Swift 6 toolchain). DankMacShell is a Swift Package, so plain `swift build` works too.
 
 ```bash
 git clone https://github.com/JonasNowak/DankMacShell.git

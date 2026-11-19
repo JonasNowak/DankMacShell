@@ -17,9 +17,14 @@ public struct FrecencyEntry: Sendable, Codable, Equatable {
 public final class LauncherFrecencyStore: @unchecked Sendable {
     public static let shared = LauncherFrecencyStore()
 
+    /// Maximum number of tracked entries; oldest (by `lastLaunchedAt`) are pruned beyond this cap.
+    public static let maxEntries = 500
+
     private let lock = NSLock()
     private var entries: [String: FrecencyEntry] = [:]
     private let fileURL: URL
+    /// Dedicated serial queue for all disk writes (eliminates detached-Task lost-update races).
+    private let ioQueue: DispatchQueue
 
     public init(fileURL: URL? = nil) {
         if let url = fileURL {
@@ -30,6 +35,7 @@ public final class LauncherFrecencyStore: @unchecked Sendable {
             let dmsDir = appSupport.appendingPathComponent("DMS", isDirectory: true)
             self.fileURL = dmsDir.appendingPathComponent("frecency.json")
         }
+        self.ioQueue = DispatchQueue(label: "com.dms.launcher.frecency.io", qos: .utility)
         loadFromDisk()
     }
 
@@ -46,6 +52,7 @@ public final class LauncherFrecencyStore: @unchecked Sendable {
             entries[id] = FrecencyEntry(launchCount: 1, lastLaunchedAt: date)
         }
 
+        pruneLocked()
         saveToDiskAsync()
     }
 
@@ -74,6 +81,18 @@ public final class LauncherFrecencyStore: @unchecked Sendable {
     }
 
     // MARK: - Persistence
+
+    /// Prunes `entries` down to `maxEntries`, evicting the oldest by `lastLaunchedAt`.
+    /// Callers must hold `lock`.
+    private func pruneLocked() {
+        if entries.count > Self.maxEntries {
+            let sorted = entries.sorted { $0.value.lastLaunchedAt < $1.value.lastLaunchedAt }
+            for (key, _) in sorted.prefix(entries.count - Self.maxEntries) {
+                entries.removeValue(forKey: key)
+            }
+        }
+    }
+
     private func loadFromDisk() {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
@@ -81,16 +100,18 @@ public final class LauncherFrecencyStore: @unchecked Sendable {
             let decoded = try JSONDecoder().decode([String: FrecencyEntry].self, from: data)
             lock.lock()
             self.entries = decoded
+            pruneLocked()
             lock.unlock()
         } catch {
             // Silently fallback if corrupted
         }
     }
 
+    /// Serializes a snapshot onto the dedicated IO queue. Callers must hold `lock`.
     private func saveToDiskAsync() {
         let snapshot = entries
         let target = fileURL
-        Task.detached(priority: .utility) {
+        ioQueue.async {
             do {
                 let dir = target.deletingLastPathComponent()
                 if !FileManager.default.fileExists(atPath: dir.path) {

@@ -1,9 +1,11 @@
 import SwiftUI
 import AppKit
+import Darwin
 import DMSCore
 
 public struct PowerMenuView: View {
     @ObservedObject private var theme = ThemeStore.shared
+    @State private var pendingAction: String?
     public var onClose: () -> Void
 
     public init(onClose: @escaping () -> Void) {
@@ -11,15 +13,15 @@ public struct PowerMenuView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 14) {
             VStack(spacing: 4) {
                 Text("Power & Session")
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
 
-                Text("Choose an action")
+                Text(pendingAction == nil ? "Choose an action" : "Click \"Sure?\" again to confirm")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundColor(theme.onSurfaceVariant)
+                    .foregroundColor(pendingAction == nil ? theme.onSurfaceVariant : theme.error)
             }
 
             HStack(spacing: 16) {
@@ -43,29 +45,44 @@ public struct PowerMenuView: View {
 
                 PowerOptionButton(
                     icon: "arrow.counterclockwise",
-                    label: "Restart",
-                    color: theme.warning
+                    label: pendingAction == "Restart" ? "Sure?" : "Restart",
+                    color: pendingAction == "Restart" ? theme.error : theme.warning
                 ) {
-                    onClose()
-                    PowerMenuView.restartSystem()
+                    if pendingAction == "Restart" {
+                        pendingAction = nil
+                        onClose()
+                        PowerMenuView.restartSystem()
+                    } else {
+                        pendingAction = "Restart"
+                    }
                 }
 
                 PowerOptionButton(
                     icon: "power",
-                    label: "Shut Down",
-                    color: Color.red
+                    label: pendingAction == "Shut Down" ? "Sure?" : "Shut Down",
+                    color: theme.error
                 ) {
-                    onClose()
-                    PowerMenuView.shutDownSystem()
+                    if pendingAction == "Shut Down" {
+                        pendingAction = nil
+                        onClose()
+                        PowerMenuView.shutDownSystem()
+                    } else {
+                        pendingAction = "Shut Down"
+                    }
                 }
 
                 PowerOptionButton(
                     icon: "rectangle.portrait.and.arrow.right",
-                    label: "Log Out",
-                    color: theme.outline
+                    label: pendingAction == "Log Out" ? "Sure?" : "Log Out",
+                    color: pendingAction == "Log Out" ? theme.error : theme.outline
                 ) {
-                    onClose()
-                    PowerMenuView.logOut()
+                    if pendingAction == "Log Out" {
+                        pendingAction = nil
+                        onClose()
+                        PowerMenuView.logOut()
+                    } else {
+                        pendingAction = "Log Out"
+                    }
                 }
             }
 
@@ -83,7 +100,7 @@ public struct PowerMenuView: View {
             .buttonStyle(.plain)
         }
         .padding(14)
-        .frame(width: 295)
+        .frame(width: 360)
         .background(GlassSurfaceBackground())
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
@@ -94,18 +111,47 @@ public struct PowerMenuView: View {
     }
 
     public static func executeAppleScript(_ script: String) {
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
+        guard let appleScript = NSAppleScript(source: script) else { return }
+        var error: NSDictionary?
+        appleScript.executeAndReturnError(&error)
+        if let error = error {
+            NSLog("PowerMenu AppleScript failed: %@", error)
+            Task { @MainActor in
+                ToastCenter.shared.show(
+                    icon: "exclamationmark.triangle.fill",
+                    message: "Automation permission denied — allow DMS in Privacy & Security > Automation"
+                )
+            }
         }
     }
 
+    /// Locks the screen for real via login.framework's `SACLockScreenImmediate`,
+    /// falling back to CGSession `-suspend` and finally `pmset displaysleepnow`.
     public static func lockScreen() {
-        Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["displaysleepnow"])
+        if let loginLib = dlopen("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login", RTLD_LAZY) {
+            if let sym = dlsym(loginLib, "SACLockScreenImmediate") {
+                let lockFn = unsafeBitCast(sym, to: (@convention(c) () -> Void).self)
+                lockFn()
+                return
+            }
+        }
+
+        let cgSession = Process()
+        cgSession.launchPath = "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession"
+        cgSession.arguments = ["-suspend"]
+        try? cgSession.run()
+
+        let pmset = Process()
+        pmset.launchPath = "/usr/bin/pmset"
+        pmset.arguments = ["displaysleepnow"]
+        try? pmset.run()
     }
 
     public static func sleepSystem() {
-        Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["sleepnow"])
+        let pmset = Process()
+        pmset.launchPath = "/usr/bin/pmset"
+        pmset.arguments = ["sleepnow"]
+        try? pmset.run()
     }
 
     public static func restartSystem() {

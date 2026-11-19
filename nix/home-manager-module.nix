@@ -49,7 +49,8 @@ in
     dmsGop = {
       enable = lib.mkOption {
         type = lib.types.bool;
-        default = true;
+        # dms-gop is aarch64-darwin only; default off on x86_64-darwin.
+        default = pkgs.stdenv.hostPlatform.isAarch64;
         description = "Install the `dms-gop` (`dgop`) system monitor CLI.";
       };
 

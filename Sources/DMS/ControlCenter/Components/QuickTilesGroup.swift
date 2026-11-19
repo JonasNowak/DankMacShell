@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import DMSCore
-import MaterialMacLibrary
 
 /// Container bundling compact 1x1 quick action tiles horizontally within a single grid slot.
 /// Implements upstream DMS `QuickTilesGroup.qml`. Renders a compact `CcMetrics.tileHeight`
@@ -101,35 +100,6 @@ private struct QuickTileIconButton: View {
         }
         .buttonStyle(.plain)
         .help(label)
-    }
-}
-
-/// Compact circular/rounded icon button for QuickTilesGroup.
-/// Delegates to `MaterialComponents.MaterialQuickTileButton`.
-public struct QuickTileButton: View {
-    public let icon: String
-    public let label: String
-    public let isActive: Bool
-    public let onTap: () -> Void
-
-    @ObservedObject private var theme = ThemeStore.shared
-
-    public init(
-        icon: String,
-        label: String,
-        isActive: Bool,
-        onTap: @escaping () -> Void
-    ) {
-        self.icon = icon
-        self.label = label
-        self.isActive = isActive
-        self.onTap = onTap
-    }
-
-    public var body: some View {
-        MaterialQuickTileButton(
-            item: MaterialQuickTileItem(icon: icon, label: label, isActive: isActive, onTap: onTap)
-        )
-        .materialTheme(theme.materialTheme)
+        .accessibilityLabel(label)
     }
 }

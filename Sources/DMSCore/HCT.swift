@@ -90,11 +90,13 @@ public extension HCTMath {
     static func readableOn(background: M3Color, candidates: [M3Color], target: Double = 4.5) -> M3Color {
         guard let first = candidates.first else { return background }
         var best = first
+        var bestContrast = contrastRatio(best, background)
         for candidate in candidates {
             let current = contrastRatio(candidate, background)
             if current >= target { return candidate }
-            if current > contrastRatio(best, background) {
+            if current > bestContrast {
                 best = candidate
+                bestContrast = current
             }
         }
         return best

@@ -73,11 +73,44 @@ public final class OSDController {
     public func show(type: OSDType, value: Double? = nil, isMuted: Bool = false, text: String? = nil) {
         guard ConfigStore.shared.config.rawSettings["osdEnabled"]?.boolValue ?? true else { return }
 
-        // Route directly through DIslandController (Dynamic Island swallows the OSD)
         let icon = type.iconName(isMuted: isMuted, value: value, text: text)
         let formatted = type.formattedValue(isMuted: isMuted, value: value, text: text)
         let label = (type == .audioOutput || type == .capsLock || type == .idleInhibit) ? "\(type.title): \(formatted)" : type.title
         let progress = type.isGaugeMetric ? (isMuted ? 0.0 : (value ?? 0.0)) : nil
-        DIslandController.shared.triggerOSD(icon: icon, label: label, progress: progress)
+
+        // Route through DIslandController only when the island is actually able to show OSDs;
+        // otherwise present our own floating panel so OSDs are never silently dropped.
+        let island = ConfigStore.shared.config.islandSettings
+        let islandHandlesOSD = island.instance != .off && island.enabledActivities.contains(IslandActivity.osd.rawValue)
+        if islandHandlesOSD {
+            DIslandController.shared.triggerOSD(icon: icon, label: label, progress: progress)
+        } else {
+            presentFallbackOSD(type: type, value: value, isMuted: isMuted, text: text)
+        }
+    }
+
+    /// Floating fallback OSD pill used when the Dynamic Island is off or OSD is not whitelisted.
+    private func presentFallbackOSD(type: OSDType, value: Double?, isMuted: Bool, text: String?) {
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let host = NSHostingView(rootView: OSDView(type: type, value: value, isMuted: isMuted, text: text))
+        let fitted = host.fittingSize
+        let w = max(260, fitted.width)
+        let h = max(44, fitted.height)
+        let frame = NSRect(
+            x: screen.frame.minX + (screen.frame.width - w) * 0.5,
+            y: screen.frame.maxY - h - 24,
+            width: w,
+            height: h
+        )
+        panel.contentView = host
+        panel.setFrame(frame, display: true)
+        panel.orderFront(nil)
+
+        hideTask?.cancel()
+        hideTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            guard !Task.isCancelled, let self = self else { return }
+            self.panel.orderOut(nil)
+        }
     }
 }

@@ -36,18 +36,20 @@ public final class ColorPickerService: ObservableObject {
     }
 
     public func applyColor(_ color: NSColor) {
-        let rgbColor = color.usingColorSpace(.sRGB) ?? color
+        // Non-RGB colors (e.g. grayscale or CMYK-backed) raise NSInvalidArgumentException
+        // from usingColorSpace(_:); fall back to deviceRGB and bail out if neither works.
+        guard let rgbColor = color.usingColorSpace(.sRGB) ?? color.usingColorSpace(.deviceRGB) else { return }
         self.selectedColor = rgbColor
 
-        let r = Double(rgbColor.redComponent)
-        let g = Double(rgbColor.greenComponent)
-        let b = Double(rgbColor.blueComponent)
+        let r = min(255, max(0, Int(round(Double(rgbColor.redComponent) * 255))))
+        let g = min(255, max(0, Int(round(Double(rgbColor.greenComponent) * 255))))
+        let b = min(255, max(0, Int(round(Double(rgbColor.blueComponent) * 255))))
 
-        let hex = String(format: "#%02X%02X%02X", Int(round(r * 255)), Int(round(g * 255)), Int(round(b * 255)))
+        let hex = String(format: "#%02X%02X%02X", r, g, b)
         self.hexCode = hex
-        self.rgbString = "rgb(\(Int(round(r * 255))), \(Int(round(g * 255))), \(Int(round(b * 255))))"
+        self.rgbString = "rgb(\(r), \(g), \(b))"
 
-        let hsl = DynamicThemeGenerator.rgbToHSL(r: r, g: g, b: b)
+        let hsl = DynamicThemeGenerator.rgbToHSL(r: Double(r) / 255, g: Double(g) / 255, b: Double(b) / 255)
         self.hslString = "hsl(\(Int(round(hsl.h))), \(Int(round(hsl.s * 100)))%, \(Int(round(hsl.l * 100)))%)"
 
         if !recentColors.contains(hex) {

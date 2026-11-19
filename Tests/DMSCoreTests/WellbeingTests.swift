@@ -24,11 +24,14 @@ struct WellbeingTests {
         #expect(topApps[1].durationSeconds == 180.0)
     }
 
+    /// Fixed reference instant (2025-11-01T15:46:40Z) so tests do not depend on wall-clock time.
+    private static let fixedNow = Date(timeIntervalSince1970: 1_762_000_000)
+
     @Test("WellbeingStoreData 7-Day Weekly Aggregation")
     func testWeeklyAggregation() {
         var store = WellbeingStoreData()
         let calendar = Calendar.current
-        let today = Date()
+        let today = Self.fixedNow
 
         for offset in 0..<7 {
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
@@ -46,7 +49,7 @@ struct WellbeingTests {
     func testRetentionPruning() {
         var store = WellbeingStoreData(retentionDays: 92)
         let calendar = Calendar.current
-        let today = Date()
+        let today = Self.fixedNow
 
         // Recent record (10 days ago)
         let recentDate = calendar.date(byAdding: .day, value: -10, to: today)!
@@ -92,6 +95,38 @@ struct WellbeingTests {
         #expect(WellbeingFormatter.formatDuration(seconds: 125) == "2m")
         #expect(WellbeingFormatter.formatDuration(seconds: 3720) == "1h 2m")
         #expect(WellbeingFormatter.formatDurationDetailed(seconds: 3720) == "1 hr 2 min")
+    }
+
+    @Test("Wellbeing Formatter Guards Non-Finite and Overflowing Durations")
+    func testWellbeingFormatterNonFinite() {
+        #expect(WellbeingFormatter.formatDuration(seconds: .nan) == "0s")
+        #expect(WellbeingFormatter.formatDuration(seconds: .infinity) == "0s")
+        #expect(WellbeingFormatter.formatDuration(seconds: -.infinity) == "0s")
+        #expect(WellbeingFormatter.formatDurationDetailed(seconds: .nan) == "0 sec")
+        #expect(WellbeingFormatter.formatDurationDetailed(seconds: .infinity) == "0 sec")
+        // Huge finite values clamp instead of trapping in Int(Double)
+        let huge = WellbeingFormatter.formatDuration(seconds: 1e300)
+        #expect(huge.hasSuffix("m") && huge.contains("h"))
+        #expect(WellbeingFormatter.formatDuration(seconds: -5) == "0s")
+    }
+
+    @Test("Wellbeing Date Key and Day Label Use Fixed Reference Dates Deterministically")
+    func testWellbeingDateFormattingFixedDates() {
+        let fixed = Self.fixedNow
+        let key = WellbeingFormatter.dateKey(for: fixed)
+        #expect(key == WellbeingFormatter.dateKey(for: fixed)) // deterministic
+        #expect(key.count == 10)
+        #expect(key.allSatisfy { $0.isNumber || $0 == "-" })
+        #expect(key.split(separator: "-").count == 3)
+
+        let label = WellbeingFormatter.dayLabel(for: fixed)
+        #expect(label == WellbeingFormatter.dayLabel(for: fixed))
+        #expect(label.count == 3)
+
+        // Known instant: 1_762_000_000 = 2025-11-01T15:46:40Z (a Saturday); depending on the
+        // local timezone the date key may roll to 2025-11-02 (Sunday).
+        #expect(key == "2025-11-01" || key == "2025-11-02")
+        #expect(label == "Sat" || label == "Sun")
     }
 
     @Test("DMSConfig Digital Wellbeing Defaults and Serialization")

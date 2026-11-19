@@ -27,13 +27,15 @@ public enum FindReplaceEngine {
     /// Index of the next match after `current`, wrapping around. Returns 0 when there are no matches.
     public static func nextIndex(current: Int, matchCount: Int) -> Int {
         guard matchCount > 0 else { return 0 }
-        return (current + 1) % matchCount
+        // Euclidean modulo so a negative `current` never yields a negative index
+        return ((current + 1) % matchCount + matchCount) % matchCount
     }
 
     /// Index of the previous match before `current`, wrapping around. Returns 0 when there are no matches.
     public static func previousIndex(current: Int, matchCount: Int) -> Int {
         guard matchCount > 0 else { return 0 }
-        return (current - 1 + matchCount) % matchCount
+        // Euclidean modulo so a negative `current` never yields a negative index
+        return ((current - 1) % matchCount + matchCount) % matchCount
     }
 
     /// Replaces a single match range in `text` with `replacement`.

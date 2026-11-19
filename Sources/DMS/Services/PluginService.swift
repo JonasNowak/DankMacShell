@@ -80,8 +80,9 @@ public final class PluginService: ObservableObject {
         self.applets = list
     }
 
-    public func toggleApplet(id: String) {
-        guard let idx = applets.firstIndex(where: { $0.id == id }) else { return }
+    @discardableResult
+    public func toggleApplet(id: String) -> Bool {
+        guard let idx = applets.firstIndex(where: { $0.id == id }) else { return false }
         applets[idx].isEnabled.toggle()
         let newState = applets[idx].isEnabled
 
@@ -148,24 +149,29 @@ public final class PluginService: ObservableObject {
             }
         }
         DankBarController.shared.reposition()
+        return true
     }
 
-    public func installPlugin(id: String) {
-        guard let idx = plugins.firstIndex(where: { $0.id == id }) else { return }
+    @discardableResult
+    public func installPlugin(id: String) -> Bool {
+        guard let idx = plugins.firstIndex(where: { $0.id == id }) else { return false }
         plugins[idx].isInstalled = true
         plugins[idx].isEnabled = true
         saveLockfile()
         syncConfig()
         ToastCenter.shared.show(icon: "arrow.down.circle.fill", message: "Installed plugin: \(plugins[idx].name)")
+        return true
     }
 
-    public func uninstallPlugin(id: String) {
-        guard let idx = plugins.firstIndex(where: { $0.id == id }) else { return }
+    @discardableResult
+    public func uninstallPlugin(id: String) -> Bool {
+        guard let idx = plugins.firstIndex(where: { $0.id == id }) else { return false }
         plugins[idx].isInstalled = false
         plugins[idx].isEnabled = false
         saveLockfile()
         syncConfig()
         ToastCenter.shared.show(icon: "trash.fill", message: "Uninstalled plugin: \(plugins[idx].name)")
+        return true
     }
 
     public func togglePlugin(id: String) {
@@ -175,6 +181,7 @@ public final class PluginService: ObservableObject {
         syncConfig()
     }
 
+    /// Persists the lockfile atomically with `0600` POSIX permissions.
     public func saveLockfile() {
         var entries: [String: DMSPluginLockfile.DMSPluginLockEntry] = [:]
         for p in plugins where p.isInstalled {
@@ -186,13 +193,23 @@ public final class PluginService: ObservableObject {
         }
 
         let lock = DMSPluginLockfile(version: 1, plugins: entries)
-        if let data = try? JSONEncoder().encode(lock) {
-            try? data.write(to: lockfileURL)
+        guard let data = try? JSONEncoder().encode(lock) else { return }
+        let url = lockfileURL
+        let tmp = url.deletingLastPathComponent()
+            .appendingPathComponent(".\(url.lastPathComponent).tmp-\(UUID().uuidString)")
+        guard fileManager.createFile(atPath: tmp.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            return
+        }
+        if rename(tmp.path, url.path) != 0 {
+            try? fileManager.removeItem(at: tmp)
+            try? data.write(to: url, options: .atomic)
+            try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         }
     }
 
     public func restoreLockfile(from path: String? = nil) -> Bool {
-        let url = path != nil ? URL(fileURLWithPath: path!) : lockfileURL
+        let rawPath = path ?? lockfileURL.path
+        let url = URL(fileURLWithPath: (rawPath as NSString).expandingTildeInPath)
         guard let data = try? Data(contentsOf: url),
               let lock = try? JSONDecoder().decode(DMSPluginLockfile.self, from: data) else {
             return false
@@ -209,6 +226,7 @@ public final class PluginService: ObservableObject {
             }
         }
         syncConfig()
+        saveLockfile()
         return true
     }
 
@@ -219,6 +237,14 @@ public final class PluginService: ObservableObject {
     }
 
     public func updatePluginLifecycles(enabledIDs: Set<String>) {
-        // Standalone plugins (e.g. symbian-belle-sync) run as isolated companion processes (dms-symbian)
+        // Reflect built-in plugin toggles into the persisted config so the applets they
+        // drive follow the lockfile: symbian-belle-sync -> showSymbianApplet, plus the
+        // network-speed / disk-usage / tailscale-status bar widgets.
+        ConfigStore.shared.update { cfg in
+            cfg.showSymbianApplet = enabledIDs.contains("symbian-belle-sync")
+            cfg.setSetting("showNetworkSpeed", value: AnyCodable(enabledIDs.contains("network-speed")))
+            cfg.setSetting("showDiskUsage", value: AnyCodable(enabledIDs.contains("disk-usage")))
+            cfg.setSetting("showTailscaleStatus", value: AnyCodable(enabledIDs.contains("tailscale-status")))
+        }
     }
 }

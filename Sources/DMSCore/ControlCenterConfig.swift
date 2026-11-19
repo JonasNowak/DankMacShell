@@ -36,7 +36,7 @@ public struct ControlCenterWidgetConfig: Sendable, Codable, Equatable, Identifia
         ControlCenterWidgetConfig(id: "lock", col: 5, row: 0, w: 1, h: 1, small: true),
         ControlCenterWidgetConfig(id: "power", col: 6, row: 0, w: 1, h: 1, small: true),
         ControlCenterWidgetConfig(id: "settings", col: 7, row: 0, w: 1, h: 1, small: true),
-        ControlCenterWidgetConfig(id: "edit", col: 7, row: 0, w: 1, h: 1, small: true),
+        ControlCenterWidgetConfig(id: "edit", col: 7, row: 7, w: 1, h: 1, small: true),
         ControlCenterWidgetConfig(id: "volumeSlider", col: 0, row: 1, w: 4, h: 1),
         ControlCenterWidgetConfig(id: "brightnessSlider", col: 4, row: 1, w: 4, h: 1),
         ControlCenterWidgetConfig(id: "wifi", col: 0, row: 2, w: 4, h: 1),
@@ -196,7 +196,8 @@ public enum ControlCenterUtils: Sendable {
             return (1, 1)
         }
         if isSliderWidget(widget.id) {
-            let clampedW = max(2, min(widget.w, columns))
+            // Slider minimum width is 2, but never wider than the grid itself.
+            let clampedW = max(min(2, columns), min(widget.w, columns))
             let clampedH = max(1, min(widget.h, rows))
             return (clampedW, clampedH)
         }
@@ -416,8 +417,9 @@ public enum ControlCenterUtils: Sendable {
     public static func formatStorage(usedBytes: Int64, totalBytes: Int64) -> (summary: String, usedGB: String, totalGB: String, rawPercent: Double) {
         let used = Double(usedBytes) / (1024.0 * 1024.0 * 1024.0)
         let total = Double(totalBytes) / (1024.0 * 1024.0 * 1024.0)
-        let percent = total > 0 ? (used / total) : 0.0
-        let percentInt = Int(round(percent * 100.0))
+        let percent = (total.isFinite && total > 0) ? (used / total) : 0.0
+        // Int(Double) traps on NaN/Infinity/overflow; guard and clamp the percentage first.
+        let percentInt = percent.isFinite ? Int(round(min(max(percent, 0.0), 1.0) * 100.0)) : 0
         let summary = String(format: "%.1fG / %.1fG (%d%%)", used, total, percentInt)
         let usedStr = String(format: "%.1fG", used)
         let totalStr = String(format: "%.1fG", total)

@@ -36,15 +36,23 @@ let mrGetIsPlaying = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlayi
 let mrSendCommand = dlsym(handle, "MRMediaRemoteSendCommand").map { unsafeBitCast($0, to: MRSendCommand.self) }
 let mrSetElapsed = dlsym(handle, "MRMediaRemoteSetElapsedTime").map { unsafeBitCast($0, to: MRSetElapsed.self) }
 
-let artURL = URL(fileURLWithPath: "/tmp/dms_nowplaying_art.jpg")
+// Artwork goes to a private 0700 cache dir via unique temp file + atomic rename,
+// never to a predictable /tmp path.
+let artDir = URL(fileURLWithPath: NSHomeDirectory())
+    .appendingPathComponent("Library/Caches/DMS/artwork", isDirectory: true)
+try? FileManager.default.createDirectory(at: artDir, withIntermediateDirectories: true)
+try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: artDir.path)
+let artURL = artDir.appendingPathComponent("nowplaying_art.jpg")
 var lastEmittedJSON = ""
 var lastIsPlaying = false
+let appNameLock = NSLock()
 
-func escape(_ s: String) -> String {
-    s.replacingOccurrences(of: "\\", with: "\\\\")
-     .replacingOccurrences(of: "\"", with: "\\\"")
-     .replacingOccurrences(of: "\n", with: "\\n")
-     .replacingOccurrences(of: "\r", with: "\\r")
+func finite(_ d: Double) -> Double { d.isFinite ? d : 0.0 }
+
+func emitJSON(_ payload: [String: Any]) -> String? {
+    guard let data = try? JSONSerialization.data(withJSONObject: payload),
+          let json = String(data: data, encoding: .utf8) else { return nil }
+    return json
 }
 
 func emitState(force: Bool = false) {
@@ -52,12 +60,13 @@ func emitState(force: Bool = false) {
         guard let dict = info as? [String: Any],
               let title = dict["kMRMediaRemoteNowPlayingInfoTitle"] as? String,
               !title.isEmpty else {
-            let empty = "{\"title\":\"\",\"artist\":\"\",\"album\":\"\",\"isPlaying\":false,\"duration\":0,\"elapsed\":0,\"rate\":0,\"app\":\"\"}"
-            if force || empty != lastEmittedJSON {
-                lastEmittedJSON = empty
-                lastIsPlaying = false
-                print(empty)
-                fflush(stdout)
+            if let empty = emitJSON(["title": "", "artist": "", "album": "", "isPlaying": false, "duration": 0.0, "elapsed": 0.0, "rate": 0.0, "app": ""]) {
+                if force || empty != lastEmittedJSON {
+                    lastEmittedJSON = empty
+                    lastIsPlaying = false
+                    print(empty)
+                    fflush(stdout)
+                }
             }
             return
         }
@@ -68,10 +77,14 @@ func emitState(force: Bool = false) {
         let elapsed = dict["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? Double ?? 0.0
         let rate = dict["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double ?? 0.0
 
-        // Handle artwork file write
+        // Handle artwork file write (atomic: unique temp + rename inside artDir)
         var hasArt = false
         if let artData = dict["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data, !artData.isEmpty {
-            try? artData.write(to: artURL)
+            let tmp = artDir.appendingPathComponent(".nowplaying_art.\(UUID().uuidString).tmp")
+            if (try? artData.write(to: tmp)) != nil {
+                try? FileManager.default.removeItem(at: artURL)
+                try? FileManager.default.moveItem(at: tmp, to: artURL)
+            }
             hasArt = true
         }
 
@@ -79,26 +92,46 @@ func emitState(force: Bool = false) {
         if let getClient = mrGetClient {
             let sema = DispatchSemaphore(value: 0)
             getClient(DispatchQueue.global()) { client in
+                var resolved = "Media Player"
                 if let client = client {
                     if let getName = mrClientGetName, let n = getName(client) as String?, !n.isEmpty {
-                        appName = n
+                        resolved = n
                     } else if let getBundle = mrClientGetBundle, let b = getBundle(client) as String?, !b.isEmpty {
-                        appName = b
+                        resolved = b
                     }
                 }
+                // Guard against the timeout data race: the callback may signal after
+                // the wait timed out, so every read/write of appName goes through the lock.
+                appNameLock.lock()
+                appName = resolved
+                appNameLock.unlock()
                 sema.signal()
             }
             _ = sema.wait(timeout: .now() + 0.1)
         }
+        appNameLock.lock()
+        let resolvedAppName = appName
+        appNameLock.unlock()
 
         let isPlaying = rate > 0.0
         lastIsPlaying = isPlaying
 
-        let json = "{\"title\":\"\(escape(title))\",\"artist\":\"\(escape(artist))\",\"album\":\"\(escape(album))\",\"duration\":\(dur),\"elapsed\":\(elapsed),\"rate\":\(rate),\"isPlaying\":\(isPlaying),\"hasArtwork\":\(hasArt),\"app\":\"\(escape(appName))\"}"
-        if force || json != lastEmittedJSON {
-            lastEmittedJSON = json
-            print(json)
-            fflush(stdout)
+        if let json = emitJSON([
+            "title": title,
+            "artist": artist,
+            "album": album,
+            "duration": finite(dur),
+            "elapsed": finite(elapsed),
+            "rate": finite(rate),
+            "isPlaying": isPlaying,
+            "hasArtwork": hasArt,
+            "app": resolvedAppName
+        ]) {
+            if force || json != lastEmittedJSON {
+                lastEmittedJSON = json
+                print(json)
+                fflush(stdout)
+            }
         }
     }
 }
@@ -136,41 +169,47 @@ timer.setEventHandler {
 }
 timer.resume()
 
-// Standard input listener for commands
+func handleCommand(_ trimmed: String) {
+    if trimmed == "poll" {
+        emitState(force: true)
+    } else if trimmed == "play" {
+        _ = mrSendCommand?(0, nil)
+    } else if trimmed == "pause" {
+        _ = mrSendCommand?(1, nil)
+    } else if trimmed == "toggle" {
+        _ = mrSendCommand?(2, nil)
+    } else if trimmed == "next" {
+        _ = mrSendCommand?(4, nil)
+    } else if trimmed == "prev" {
+        _ = mrSendCommand?(5, nil)
+    } else if trimmed.starts(with: "seek ") {
+        let secStr = String(trimmed.dropFirst(5))
+        if let sec = Double(secStr) {
+            mrSetElapsed?(sec)
+        }
+    } else if trimmed == "exit" || trimmed == "quit" {
+        exit(0)
+    }
+}
+
+// Standard input listener for commands; partial lines are buffered across reads
 DispatchQueue.global(qos: .userInitiated).async {
     let stdinHandle = FileHandle.standardInput
+    var stdinBuffer = ""
     while true {
         let data = stdinHandle.availableData
         if data.isEmpty {
             // Parent closed pipe -> terminate cleanly
             exit(0)
         }
-        guard let line = String(data: data, encoding: .utf8) else { continue }
-        for cmd in line.components(separatedBy: "\n") {
-            let trimmed = cmd.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { continue }
-
+        guard let chunk = String(data: data, encoding: .utf8) else { continue }
+        stdinBuffer += chunk
+        while let newlineIndex = stdinBuffer.firstIndex(of: "\n") {
+            let cmd = String(stdinBuffer[..<newlineIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+            stdinBuffer.removeSubrange(..<newlineIndex)
+            if cmd.isEmpty { continue }
             DispatchQueue.main.async {
-                if trimmed == "poll" {
-                    emitState(force: true)
-                } else if trimmed == "play" {
-                    _ = mrSendCommand?(0, nil)
-                } else if trimmed == "pause" {
-                    _ = mrSendCommand?(1, nil)
-                } else if trimmed == "toggle" {
-                    _ = mrSendCommand?(2, nil)
-                } else if trimmed == "next" {
-                    _ = mrSendCommand?(4, nil)
-                } else if trimmed == "prev" {
-                    _ = mrSendCommand?(5, nil)
-                } else if trimmed.starts(with: "seek ") {
-                    let secStr = String(trimmed.dropFirst(5))
-                    if let sec = Double(secStr) {
-                        mrSetElapsed?(sec)
-                    }
-                } else if trimmed == "exit" || trimmed == "quit" {
-                    exit(0)
-                }
+                handleCommand(cmd)
             }
         }
     }

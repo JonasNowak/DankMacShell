@@ -16,22 +16,25 @@ public struct CapsLockIndicatorWidget: View {
     }
 
     public var body: some View {
-        Group {
-            if isCapsLockOn {
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.capslock.fill")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(theme.onPrimary)
-                    if !isVertical {
-                        Text("CAPS")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+        // Always-mounted outer ZStack so the flagsChanged monitors start even when
+        // Caps Lock is off at launch (the Group below may render nothing).
+        ZStack {
+            Group {
+                if isCapsLockOn {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.capslock.fill")
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundColor(theme.onPrimary)
+                        if !isVertical {
+                            Text("CAPS")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundColor(theme.onPrimary)
+                        }
                     }
+                    .padding(.horizontal, isVertical ? 0 : 6)
+                    .frame(width: isVertical ? 28 : nil, height: 28)
+                    .background(theme.primary)
                 }
-                .padding(.horizontal, isVertical ? 0 : 6)
-                .frame(width: isVertical ? 28 : nil, height: isVertical ? 28 : 22)
-                .background(theme.primary)
-                .clipShape(Capsule())
             }
         }
         .onAppear {

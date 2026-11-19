@@ -10,6 +10,9 @@ public final class NotepadService: ObservableObject {
     @Published public private(set) var notes: [NoteItem] = []
 
     private var saveTask: Task<Void, Never>?
+    /// Serializes the debounced write against synchronous flushes so a pending save can
+    /// never land on a different note after the active note changed.
+    private let saveLock = NSLock()
 
     private init() {
         self.activeNote = NotepadStore.shared.getActiveNote()
@@ -28,13 +31,21 @@ public final class NotepadService: ObservableObject {
             notes[idx] = activeNote
         }
 
+        let targetNoteID = activeNote.id
         let currentTitle = activeNote.title
         let currentContent = activeNote.content
+        let lock = saveLock
         saveTask?.cancel()
         saveTask = Task.detached(priority: .utility) {
             try? await Task.sleep(nanoseconds: 150_000_000)
             guard !Task.isCancelled else { return }
-            NotepadStore.shared.updateActiveNote(title: currentTitle, content: currentContent)
+            lock.withLock {
+                guard !Task.isCancelled else { return }
+                // Only write when the store's active note is still the one we captured;
+                // selectNote/createNewNote/deleteNote flush synchronously before switching.
+                guard NotepadStore.shared.getActiveNote().id == targetNoteID else { return }
+                NotepadStore.shared.updateActiveNote(title: currentTitle, content: currentContent)
+            }
         }
     }
 
@@ -43,12 +54,14 @@ public final class NotepadService: ObservableObject {
         updateActiveNote(content: content)
     }
 
+    /// Synchronously writes any pending edit to the store BEFORE the active note id
+    /// changes, cancelling the debounced task first and writing under the save lock.
     public func flushPendingSave() {
-        if saveTask != nil {
-            saveTask?.cancel()
-            saveTask = nil
-            NotepadStore.shared.updateActiveNote(title: activeNote.title, content: activeNote.content)
-        }
+        saveLock.lock()
+        defer { saveLock.unlock() }
+        saveTask?.cancel()
+        saveTask = nil
+        NotepadStore.shared.updateActiveNote(title: activeNote.title, content: activeNote.content)
     }
 
     public func createNewNote(title: String = "New Note", content: String = "") {

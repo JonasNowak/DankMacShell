@@ -19,10 +19,39 @@ public struct AnyCodable: Sendable, Codable, Equatable, Hashable {
             self.value = .null
             return
         }
+        // Wrapping an existing AnyCodable preserves its value instead of stringifying it.
+        if let codable = value as? AnyCodable {
+            self.value = codable.value
+            return
+        }
+        // Foundation NSNumber (also the bridge target of Swift numeric types):
+        // distinguish a real boolean (CFBoolean) from numeric 0/1.
+        if let num = value as? NSNumber {
+            if CFGetTypeID(num) == CFBooleanGetTypeID() {
+                self.value = .bool(num.boolValue)
+            } else if let i = value as? Int {
+                self.value = .int(i)
+            } else if let d = value as? Double {
+                self.value = .double(d)
+            } else {
+                self.value = .double(num.doubleValue)
+            }
+            return
+        }
         if let b = value as? Bool {
             self.value = .bool(b)
         } else if let i = value as? Int {
             self.value = .int(i)
+        } else if let i32 = value as? Int32 {
+            self.value = .int(Int(i32))
+        } else if let i64 = value as? Int64 {
+            self.value = .int(Int(clamping: i64))
+        } else if let u = value as? UInt {
+            self.value = .int(Int(clamping: u))
+        } else if let u32 = value as? UInt32 {
+            self.value = .int(Int(u32))
+        } else if let f = value as? Float {
+            self.value = .double(Double(f))
         } else if let d = value as? Double {
             self.value = .double(d)
         } else if let s = value as? String {
@@ -57,7 +86,11 @@ public struct AnyCodable: Sendable, Codable, Equatable, Hashable {
     public var intValue: Int? {
         switch value {
         case .int(let i): return i
-        case .double(let d): return Int(d)
+        case .double(let d):
+            // Int(Double) traps on NaN/Infinity/overflow; guard and clamp instead.
+            guard d.isFinite else { return nil }
+            let clamped = min(max(d, Double(Int.min)), Double(Int.max - 1024))
+            return Int(clamped)
         case .string(let s): return Int(s)
         default: return nil
         }

@@ -54,6 +54,8 @@ public struct IdleInhibitorDetailPage: View {
                     set: { _ in inhibit.toggle() }
                 ))
                 .toggleStyle(.switch)
+                .labelsHidden()
+                .accessibilityLabel("Keep Awake")
             }
             .padding(12)
             .background(Color(hex: p.surfaceContainerHigh.hex))

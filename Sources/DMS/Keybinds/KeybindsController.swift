@@ -23,11 +23,11 @@ public final class KeybindsController: ObservableObject {
         guard !isVisible else { return }
 
         DashController.shared.hide()
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let visibleFrame = screen.visibleFrame
 
-        let width: CGFloat = 335
-        let height: CGFloat = 320
+        let width: CGFloat = 480
+        let height: CGFloat = 460
         let rect = NSRect(
             x: visibleFrame.minX + (visibleFrame.width - width) / 2,
             y: visibleFrame.minY + (visibleFrame.height - height) / 2,
@@ -42,6 +42,7 @@ public final class KeybindsController: ObservableObject {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in self?.hide() }
 
         let view = KeybindsView { [weak self] in
             self?.hide()

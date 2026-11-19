@@ -121,4 +121,29 @@ public struct OmniWMThemeUpdater: Sendable {
         }
         return tomlContent
     }
+
+    /// Throwing variant of `applyTheme`. Propagates `DankThemeEngine.updateOmniWMToml` failures
+    /// so callers (e.g. `dms omniwm sync`) can report `false` instead of a false-positive success.
+    public static func applyThemeThrowing(
+        to tomlContent: String,
+        palette: ThemePalette,
+        secondarySeed: M3Color? = nil,
+        mode: OmniWMGradientMode = .expressive,
+        direction: OmniWMGradientDirection = .topLeftToBottomRight,
+        syncOverview: Bool = true,
+        syncWorkspaceBar: Bool = true
+    ) throws -> String {
+        let config = DTEOmniWMConfig(
+            mode: mode.dteMode,
+            direction: direction.dteDirection,
+            syncOverview: syncOverview,
+            syncWorkspaceBar: syncWorkspaceBar,
+            secondarySeed: secondarySeed?.hex
+        )
+        return try DankThemeEngine.updateOmniWMToml(
+            tomlContent,
+            palette: palette.dtePalette,
+            config: config
+        )
+    }
 }

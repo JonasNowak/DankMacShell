@@ -141,9 +141,12 @@ public extension ThemePalette {
         )
     }
 
-    /// All 45 color roles as a camelCase role-name → hex map.
+    /// All 45 color roles as a camelCase role-name → hex map, plus `name` and
+    /// `isDark` so `from(hexMap:)` round-trips the palette identity cleanly.
     var hexMap: [String: String] {
         [
+            "name": name,
+            "isDark": isDark ? "true" : "false",
             "primary": primary.hex,
             "onPrimary": onPrimary.hex,
             "primaryContainer": primaryContainer.hex,

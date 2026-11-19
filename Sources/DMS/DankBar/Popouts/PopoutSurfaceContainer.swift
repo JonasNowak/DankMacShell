@@ -12,6 +12,23 @@ import MaterialMacLibrary
 /// Pure positioning math is delegated to `MaterialComponents.PopoutLayoutHelper`.
 @MainActor
 public struct PopoutLayoutHelper {
+    /// Resolves the active `BarConfig` for a specific screen: explicit per-screen
+    /// `screenPreferences` win over `"all"` configs, which win over the first config.
+    public static func activeBarConfig(for screen: NSScreen) -> BarConfig {
+        let configs = ConfigStore.shared.config.barConfigs
+        let name = screen.localizedName
+        if let explicit = configs.first(where: {
+            !$0.screenPreferences.isEmpty
+                && !$0.screenPreferences.contains("all")
+                && $0.screenPreferences.contains(name)
+        }) {
+            return explicit
+        }
+        return configs.first(where: { $0.screenPreferences.contains("all") || $0.screenPreferences.contains(name) })
+            ?? configs.first
+            ?? .default
+    }
+
     public static func frame(
         bodyWidth: CGFloat,
         bodyHeight: CGFloat,
@@ -21,9 +38,10 @@ public struct PopoutLayoutHelper {
         anchorToControlCenter: Bool = false
     ) -> NSRect {
         let config = ConfigStore.shared.config
+        let barConfig = activeBarConfig(for: screen)
         let isConnected = config.gothCornersEnabled && !anchorToControlCenter
-        let barPosition = config.barPosition.lowercased()
-        let filletR: CGFloat = isConnected ? CGFloat(config.barConfigs.first?.gothFilletRadius ?? 14.0) : 0.0
+        let barPosition = barConfig.position.lowercased()
+        let filletR: CGFloat = isConnected ? CGFloat(barConfig.gothFilletRadius) : 0.0
 
         let barPanel = DankBarController.shared.panels.values.first(where: { $0.screen == screen }) ?? DankBarController.shared.panel
 
@@ -45,7 +63,24 @@ public struct PopoutLayoutHelper {
             barHeight: DankBarController.barHeight,
             verticalBarWidth: DankBarController.verticalBarWidth
         )
-        let f = MaterialComponents.PopoutLayoutHelper.frame(for: input)
+        var f = MaterialComponents.PopoutLayoutHelper.frame(for: input)
+
+        // The library falls back to the mouse location when `anchorX <= 0`, which breaks
+        // popouts anchored on monitors left of the primary display (negative X). Recompute
+        // the horizontal position from the raw anchor whenever one is provided.
+        if let anchorX = anchorX, !anchorToControlCenter, !isControlCenter,
+           barPosition != "left", barPosition != "right" {
+            var computedX = anchorX - bodyWidth / 2.0 - (isConnected ? filletR : 0.0)
+            computedX = max(screen.visibleFrame.minX + 8, min(screen.visibleFrame.maxX - f.width - 8, computedX))
+            f.origin.x = computedX
+        }
+
+        // Clamp the popout inside the screen's visible frame even in connected mode, so
+        // edge-anchored or oversized popouts never render off-screen.
+        f.origin.x = max(screen.visibleFrame.minX + 8, min(screen.visibleFrame.maxX - f.width - 8, f.origin.x))
+        if f.height <= screen.visibleFrame.height - 16 {
+            f.origin.y = max(screen.visibleFrame.minY + 8, min(screen.visibleFrame.maxY - f.height - 8, f.origin.y))
+        }
         return NSRect(x: f.minX, y: f.minY, width: f.width, height: f.height)
     }
 }
@@ -138,22 +173,35 @@ public struct PopoutSurfaceContainer<Content: View>: View {
     public var bodyHeight: CGFloat
     public var cornerRadius: CGFloat
     public var anchorToControlCenter: Bool
+    /// Owning panel of this popout. When set, `.popoutWillDismiss` notifications are only
+    /// honored when `notification.object` is exactly this panel, so dismissing one popout
+    /// never collapses another open popout (or Control Center) to 0x0.
+    public var ownerPanel: NSPanel?
     @ViewBuilder public let content: () -> Content
 
     @State private var isPresented: Bool = false
+    /// Panel hosting this view, auto-resolved from the view hierarchy when `ownerPanel`
+    /// was not passed explicitly (covers Control Center / Dash / Process List surfaces).
+    @State private var resolvedPanel: NSPanel?
 
     public init(
         bodyWidth: CGFloat,
         bodyHeight: CGFloat,
         cornerRadius: CGFloat = 18,
         anchorToControlCenter: Bool = false,
+        ownerPanel: NSPanel? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.bodyWidth = bodyWidth
         self.bodyHeight = bodyHeight
         self.cornerRadius = cornerRadius
         self.anchorToControlCenter = anchorToControlCenter
+        self.ownerPanel = ownerPanel
         self.content = content
+    }
+
+    private var effectiveOwnerPanel: NSPanel? {
+        ownerPanel ?? resolvedPanel
     }
 
     private var isConnected: Bool {
@@ -170,7 +218,8 @@ public struct PopoutSurfaceContainer<Content: View>: View {
 
     private var filletRadius: CGFloat {
         guard isConnected else { return 0.0 }
-        let r = configStore.config.barConfigs.first?.gothFilletRadius ?? 14.0
+        let screen = effectiveOwnerPanel?.screen ?? NSScreen.main ?? NSScreen.screens.first
+        let r = screen.map { PopoutLayoutHelper.activeBarConfig(for: $0).gothFilletRadius } ?? (configStore.config.barConfigs.first?.gothFilletRadius ?? 14.0)
         return max(4.0, CGFloat(r))
     }
 
@@ -271,15 +320,62 @@ public struct PopoutSurfaceContainer<Content: View>: View {
         }
         .frame(width: totalWidth, height: totalHeight, alignment: protrusionAlignment)
         .materialTheme(theme.materialTheme)
+        .background(
+            PanelReader { panel in
+                if resolvedPanel == nil {
+                    resolvedPanel = panel
+                }
+            }
+            .frame(width: 0, height: 0)
+        )
         .onAppear {
-            withAnimation(MaterialComponents.PopoutAnimationHelper.entranceAnimation()) {
+            if theme.motionTokens.reducedMotion {
                 isPresented = true
+            } else {
+                withAnimation(MaterialComponents.PopoutAnimationHelper.entranceAnimation()) {
+                    isPresented = true
+                }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .popoutWillDismiss)) { _ in
-            withAnimation(MaterialComponents.PopoutAnimationHelper.exitAnimation()) {
-                isPresented = false
+        .onReceive(NotificationCenter.default.publisher(for: .popoutWillDismiss)) { notification in
+            // Only react to dismissal of OUR OWN panel: dismissing one popout must never
+            // collapse Control Center or another open popout to 0x0.
+            guard let sender = notification.object as? NSPanel else { return }
+            if let owner = effectiveOwnerPanel {
+                guard sender === owner else { return }
             }
+            if theme.motionTokens.reducedMotion {
+                isPresented = false
+            } else {
+                withAnimation(MaterialComponents.PopoutAnimationHelper.exitAnimation()) {
+                    isPresented = false
+                }
+            }
+        }
+    }
+}
+
+/// Zero-size `NSViewRepresentable` that reports the `NSPanel` hosting the view hierarchy,
+/// used to auto-resolve `ownerPanel` when a surface does not pass it explicitly.
+private struct PanelReader: NSViewRepresentable {
+    let onPanel: (NSPanel?) -> Void
+
+    func makeNSView(context: Context) -> ReaderView {
+        let view = ReaderView()
+        view.onPanel = onPanel
+        return view
+    }
+
+    func updateNSView(_ nsView: ReaderView, context: Context) {
+        nsView.onPanel = onPanel
+    }
+
+    final class ReaderView: NSView {
+        var onPanel: ((NSPanel?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onPanel?(window as? NSPanel)
         }
     }
 }

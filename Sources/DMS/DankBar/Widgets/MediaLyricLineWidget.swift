@@ -49,9 +49,13 @@ public struct MediaLyricLineWidget: View {
     }
 
     public var body: some View {
-        Group {
-            if hasTrack && configStore.config.showMediaLyricLine {
-                pill
+        // Always-mounted outer ZStack so the lyrics consumer registers even when no
+        // track is playing at launch (the Group below may render nothing).
+        ZStack {
+            Group {
+                if hasTrack && configStore.config.showMediaLyricLine {
+                    pill
+                }
             }
         }
         .onAppear { lyrics.addConsumer(Self.consumerID) }
@@ -85,15 +89,17 @@ public struct MediaLyricLineWidget: View {
             lineView
                 .id(lyrics.activeLineIndex ?? -1)
                 .transition(
-                    .asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    )
+                    theme.motionTokens.reducedMotion
+                        ? .opacity
+                        : .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .move(edge: .top).combined(with: .opacity)
+                        )
                 )
         }
         .frame(height: 28)
         .clipped()
-        .animation(.easeInOut(duration: 0.28), value: lyrics.activeLineIndex)
+        .animation(theme.motionTokens.reducedMotion ? nil : .easeInOut(duration: 0.28), value: lyrics.activeLineIndex)
     }
 
     @ViewBuilder
@@ -146,6 +152,7 @@ struct MiniEqualizerView: View {
     var isPlaying: Bool
     var color: Color
 
+    @ObservedObject private var theme = ThemeStore.shared
     @State private var heights: [CGFloat] = [0.35, 0.65, 0.5, 0.8]
     @State private var animationTask: Task<Void, Never>?
 
@@ -155,7 +162,7 @@ struct MiniEqualizerView: View {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(color)
                     .frame(width: 2, height: max(3, heights[idx] * 12))
-                    .animation(.easeInOut(duration: 0.14), value: heights[idx])
+                    .animation(theme.motionTokens.reducedMotion ? nil : .easeInOut(duration: 0.14), value: heights[idx])
             }
         }
         .frame(width: 12, height: 12, alignment: .bottom)
@@ -165,7 +172,7 @@ struct MiniEqualizerView: View {
     }
 
     private func update(_ playing: Bool) {
-        if playing { start() } else { stop() }
+        if playing && !theme.motionTokens.reducedMotion { start() } else { stop() }
     }
 
     private func start() {

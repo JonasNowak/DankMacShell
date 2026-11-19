@@ -258,7 +258,7 @@ public struct WeatherTab: View {
                 MetricSensorTile(
                     title: "Wind",
                     value: "\(Int(round(current.windSpeedKmh))) km/h",
-                    subtext: "\(current.cardinalWindDirection) • Moderate",
+                    subtext: "\(current.cardinalWindDirection) • \(windDescription(current.windSpeedKmh))",
                     icon: "wind",
                     palette: p
                 )
@@ -280,7 +280,7 @@ public struct WeatherTab: View {
                 MetricSensorTile(
                     title: "Air Pressure",
                     value: "\(Int(round(current.surfacePressureHpa))) hPa",
-                    subtext: "Stable",
+                    subtext: pressureDescription(current.surfacePressureHpa),
                     icon: "barometer",
                     palette: p
                 )
@@ -288,6 +288,22 @@ public struct WeatherTab: View {
             .frame(height: 72)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func windDescription(_ kmh: Double) -> String {
+        switch kmh {
+        case ..<1: return "Calm"
+        case ..<12: return "Light"
+        case ..<28: return "Moderate"
+        case ..<50: return "Strong"
+        default: return "Storm"
+        }
+    }
+
+    private func pressureDescription(_ hpa: Double) -> String {
+        if hpa < 1008 { return "Low" }
+        if hpa > 1018 { return "High" }
+        return "Stable"
     }
 
     private func commitLocation() {
@@ -313,9 +329,25 @@ public struct WeatherForecastChart: View {
     }
 
     public var body: some View {
-        let displayPoints: [HourlyForecastPoint] = points.isEmpty ? fallbackPoints : Array(points.prefix(24))
+        if points.isEmpty {
+            VStack(spacing: 4) {
+                Image(systemName: "cloud.sun.rain")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                Text("No forecast data")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            forecastScroll
+        }
+    }
 
-        ScrollView(.horizontal, showsIndicators: false) {
+    private var forecastScroll: some View {
+        let displayPoints: [HourlyForecastPoint] = Array(points.prefix(24))
+
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(displayPoints) { pt in
                     VStack(spacing: 2) {
@@ -351,20 +383,6 @@ public struct WeatherForecastChart: View {
             }
             .padding(.horizontal, 4)
         }
-    }
-
-    private var fallbackPoints: [HourlyForecastPoint] {
-        let now = Date()
-        return [
-            HourlyForecastPoint(time: now, hourLabel: "Now", temperatureC: 20, precipitationProbability: 0, weatherCode: 0, isDay: true),
-            HourlyForecastPoint(time: now.addingTimeInterval(3600), hourLabel: "1 PM", temperatureC: 21, precipitationProbability: 5, weatherCode: 1, isDay: true),
-            HourlyForecastPoint(time: now.addingTimeInterval(7200), hourLabel: "2 PM", temperatureC: 22, precipitationProbability: 10, weatherCode: 2, isDay: true),
-            HourlyForecastPoint(time: now.addingTimeInterval(10800), hourLabel: "3 PM", temperatureC: 21, precipitationProbability: 15, weatherCode: 3, isDay: true),
-            HourlyForecastPoint(time: now.addingTimeInterval(14400), hourLabel: "4 PM", temperatureC: 19, precipitationProbability: 25, weatherCode: 61, isDay: true),
-            HourlyForecastPoint(time: now.addingTimeInterval(18000), hourLabel: "5 PM", temperatureC: 18, precipitationProbability: 30, weatherCode: 61, isDay: true),
-            HourlyForecastPoint(time: now.addingTimeInterval(21600), hourLabel: "6 PM", temperatureC: 16, precipitationProbability: 10, weatherCode: 2, isDay: false),
-            HourlyForecastPoint(time: now.addingTimeInterval(25200), hourLabel: "7 PM", temperatureC: 15, precipitationProbability: 0, weatherCode: 0, isDay: false)
-        ]
     }
 }
 

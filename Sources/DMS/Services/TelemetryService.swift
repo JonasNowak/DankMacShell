@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Darwin
 import IOKit
+import Combine
 import DMSCore
 
 /// Hardware telemetry metrics for CPU, RAM, GPU, Battery, Network throughput, and Thermals.
@@ -16,6 +17,15 @@ public final class TelemetryService {
     @ObservationIgnored nonisolated(unsafe) private var previousCpuInfoCount: mach_msg_type_number_t = 0
     @ObservationIgnored private var previousNetworkSample: (inBytes: UInt64, outBytes: UInt64, timestamp: Date)?
     @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var consumers: Set<String> = []
+    @ObservationIgnored private var configCancellable: AnyCancellable?
+
+    /// Widget IDs that read from `TelemetryService.telemetry`.
+    nonisolated private static let telemetryWidgetIDs: Set<String> = [
+        "cpuMonitor", "ramMonitor", "gpuMonitor", "diskUsage", "networkMonitor",
+        "cpuTemperature", "gpuTemperature", "battery", "telemetry", "monitorPill",
+        "ram", "memory", "gpu"
+    ]
 
     // Apple Silicon IOHID Client handle (kept persistent across polls to prevent Mach port leaks)
     private typealias ClientCreateFunc = @convention(c) (CFAllocator?, Int32, UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer?
@@ -36,21 +46,69 @@ public final class TelemetryService {
 
     private init() {
         refresh()
-        startTimer()
+        observeConfig()
+        updateTimerState()
     }
 
     public func startTimer() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.refresh()
-            }
-        }
+        updateTimerState()
     }
 
     public func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+
+    /// Registers a consumer that needs live telemetry (e.g. an open dashboard view).
+    public func addConsumer(_ id: String) {
+        consumers.insert(id)
+        updateTimerState()
+    }
+
+    /// Unregisters a consumer; the polling timer pauses once no consumers remain
+    /// and no telemetry widget is enabled in the bar configuration.
+    public func removeConsumer(_ id: String) {
+        consumers.remove(id)
+        updateTimerState()
+    }
+
+    private func telemetryWidgetsEnabled() -> Bool {
+        ConfigStore.shared.config.barConfigs.contains { bar in
+            let entries = bar.layout.left + bar.layout.center + bar.layout.right
+            return entries.contains { $0.enabled && Self.telemetryWidgetIDs.contains($0.widgetId) }
+        }
+    }
+
+    private func updateTimerState() {
+        let shouldRun = !consumers.isEmpty || telemetryWidgetsEnabled()
+        if shouldRun {
+            if timer == nil {
+                timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.refresh()
+                    }
+                }
+            }
+        } else {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    private func observeConfig() {
+        configCancellable = ConfigStore.shared.$config
+            .map { config in
+                config.barConfigs.contains { bar in
+                    let entries = bar.layout.left + bar.layout.center + bar.layout.right
+                    return entries.contains { $0.enabled && Self.telemetryWidgetIDs.contains($0.widgetId) }
+                }
+            }
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.updateTimerState()
+                }
+            }
     }
 
     public func refresh() {
@@ -211,8 +269,9 @@ public final class TelemetryService {
             return nil
         }
 
-        var pageVal: Int = 0xff00
-        var usageVal: Int = 5
+        // CFNumberCreate with .intType expects a 32-bit value, not a 64-bit Swift Int.
+        var pageVal: Int32 = 0xff00
+        var usageVal: Int32 = 5
         guard let pageNum = CFNumberCreate(kCFAllocatorDefault, .intType, &pageVal),
               let usageNum = CFNumberCreate(kCFAllocatorDefault, .intType, &usageVal) else {
             Unmanaged<AnyObject>.fromOpaque(newClient).release()
@@ -281,10 +340,9 @@ public final class TelemetryService {
 
         var service = IOIteratorNext(iterator)
         while service != 0 {
-            defer {
-                IOObjectRelease(service)
-                service = IOIteratorNext(iterator)
-            }
+            // Release this service at the end of every iteration (including early
+            // returns) so the IOKit handle never leaks; advance the iterator last.
+            defer { IOObjectRelease(service) }
             var props: Unmanaged<CFMutableDictionary>?
             if IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0) == kIOReturnSuccess,
                let dict = props?.takeRetainedValue() as? [String: Any],
@@ -297,6 +355,7 @@ public final class TelemetryService {
                     return util * 100.0
                 }
             }
+            service = IOIteratorNext(iterator)
         }
         return nil
     }
@@ -308,8 +367,13 @@ public final class TelemetryService {
         var processorInfoCount: mach_msg_type_number_t = 0
         var processorCount: natural_t = 0
 
+        // mach_host_self() returns a send right that must be deallocated,
+        // otherwise each call leaks a Mach port (+86,400/day at 2s polling).
+        let hostPort = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, hostPort) }
+
         let result = host_processor_info(
-            mach_host_self(),
+            hostPort,
             PROCESSOR_CPU_LOAD_INFO,
             &processorCount,
             &processorInfo,
@@ -322,13 +386,15 @@ public final class TelemetryService {
 
         var totalUsage: Double = 0.0
 
-        if let prevInfo = previousCpuInfo {
+        if let prevInfo = previousCpuInfo, processorCount > 0 {
             for i in 0..<Int(processorCount) {
                 let offset = Int(CPU_STATE_MAX) * i
-                let user = Double(cpuInfo[offset + Int(CPU_STATE_USER)] - prevInfo[offset + Int(CPU_STATE_USER)])
-                let system = Double(cpuInfo[offset + Int(CPU_STATE_SYSTEM)] - prevInfo[offset + Int(CPU_STATE_SYSTEM)])
-                let nice = Double(cpuInfo[offset + Int(CPU_STATE_NICE)] - prevInfo[offset + Int(CPU_STATE_NICE)])
-                let idle = Double(cpuInfo[offset + Int(CPU_STATE_IDLE)] - prevInfo[offset + Int(CPU_STATE_IDLE)])
+                // CPU ticks are unsigned 32-bit counters that wrap; use wrapping
+                // subtraction via UInt32 bit patterns instead of signed Int32 math.
+                let user = Double(UInt32(bitPattern: cpuInfo[offset + Int(CPU_STATE_USER)]) &- UInt32(bitPattern: prevInfo[offset + Int(CPU_STATE_USER)]))
+                let system = Double(UInt32(bitPattern: cpuInfo[offset + Int(CPU_STATE_SYSTEM)]) &- UInt32(bitPattern: prevInfo[offset + Int(CPU_STATE_SYSTEM)]))
+                let nice = Double(UInt32(bitPattern: cpuInfo[offset + Int(CPU_STATE_NICE)]) &- UInt32(bitPattern: prevInfo[offset + Int(CPU_STATE_NICE)]))
+                let idle = Double(UInt32(bitPattern: cpuInfo[offset + Int(CPU_STATE_IDLE)]) &- UInt32(bitPattern: prevInfo[offset + Int(CPU_STATE_IDLE)]))
 
                 let total = user + system + nice + idle
                 if total > 0 {
@@ -355,9 +421,12 @@ public final class TelemetryService {
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
 
+        let hostPort = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, hostPort) }
+
         let kerr = withUnsafeMutablePointer(to: &stats) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+                host_statistics64(hostPort, HOST_VM_INFO64, $0, &count)
             }
         }
 

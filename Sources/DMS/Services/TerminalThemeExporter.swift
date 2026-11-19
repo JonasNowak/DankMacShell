@@ -79,6 +79,14 @@ public final class TerminalThemeExporter: ObservableObject {
                 dank16: dank16,
                 themeName: themeName
             )
+            // Never write empty / whitespace-only output — a render failure must not
+            // overwrite the user's existing theme file with a 0-byte document.
+            if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                results[emulator] = false
+                firstError = firstError ?? "Rendered \(emulator.rawValue) theme is empty; refusing to overwrite \(target.path)"
+                logger.error("Rendered \(emulator.rawValue) theme is empty; skipping write to \(target.path, privacy: .public)")
+                continue
+            }
             do {
                 try Self.writeAtomically(string: content, to: target)
                 results[emulator] = true
@@ -148,9 +156,11 @@ public final class TerminalThemeExporter: ObservableObject {
     public static func writeAtomically(data: Data, to url: URL) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        // Unique temp name in the destination directory; the rename below is the atomic
+        // step, so the temp write itself does not need `.atomic`.
         let tmp = url.deletingLastPathComponent()
             .appendingPathComponent(".\(url.lastPathComponent).tmp-\(UUID().uuidString)")
-        try data.write(to: tmp, options: .atomic)
+        try data.write(to: tmp)
         let result = rename(tmp.path, url.path)
         if result != 0 {
             try? fm.removeItem(at: tmp)

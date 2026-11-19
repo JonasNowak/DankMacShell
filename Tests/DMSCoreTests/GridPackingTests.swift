@@ -116,4 +116,78 @@ struct GridPackingTests {
         #expect(layout.rows == 0.0)
         #expect(layout.totalHeight == 0.0)
     }
+
+    @Test("Invalid Step Values Fall Back Instead of Crashing or Looping")
+    func testInvalidStepFallback() {
+        let cards = [GridPackingSolver.CardItem(id: "c", w: 4, h: 1)]
+        for badStep: Double in [0.0, -1.0, .nan, .infinity] {
+            let layout = GridPackingSolver.packCards(
+                cards: cards,
+                columns: 8,
+                width: 600,
+                step: badStep
+            )
+            #expect(layout.slots.count == 1)
+            #expect(layout.slots[0].cols == 4.0)
+            #expect(layout.step.isFinite && layout.step > 0)
+        }
+    }
+
+    @Test("Huge and Non-Finite Card Dimensions and Rows Are Clamped (DoS Guards)")
+    func testHugeCardValuesClamped() {
+        let cards = [
+            GridPackingSolver.CardItem(id: "huge_row", col: 0, row: 1e9, w: 4, h: 1),
+            GridPackingSolver.CardItem(id: "inf_size", w: .infinity, h: .infinity),
+            GridPackingSolver.CardItem(id: "nan_pos", col: .nan, row: .nan, w: 2, h: 1),
+            GridPackingSolver.CardItem(id: "normal", w: 2, h: 1)
+        ]
+
+        let layout = GridPackingSolver.packCards(
+            cards: cards,
+            columns: 8,
+            width: 600,
+            gap: 8,
+            rowUnit: 64,
+            step: 0.5
+        )
+
+        #expect(layout.slots.count == 4)
+        for slot in layout.slots {
+            #expect(slot.col.isFinite && slot.row.isFinite)
+            #expect(slot.cols.isFinite && slot.rows.isFinite)
+            #expect(slot.col >= 0 && slot.row >= 0)
+            // row clamped to <= 10_000 steps * 0.5 = 5000 grid units
+            #expect(slot.row <= 5000.0)
+            // width clamped to the grid (8 columns)
+            #expect(slot.cols <= 8.0)
+        }
+        // The NaN-positioned card falls back to firstFit (no crash, placed somewhere valid)
+        let nanSlot = layout.slots.first { $0.id == "nan_pos" }
+        #expect(nanSlot != nil)
+    }
+
+    @Test("cellAt Guards Against Zero and Non-Finite Pitches")
+    func testCellAtDegenerateLayout() {
+        // colW = 0 and gap = 0 => colPitch = 0 (division by zero guard)
+        let degenerate = GridPackingSolver.LayoutResult(
+            slots: [],
+            rows: 0,
+            totalHeight: 0,
+            columns: 8,
+            width: 0,
+            colW: 0,
+            rowUnit: 64,
+            gap: 0,
+            step: 0.5,
+            mirror: false
+        )
+        let result = GridPackingSolver.cellAt(layout: degenerate, x: 100, y: 100, cols: 4, rows: 1)
+        #expect(result.col == 0.0)
+        #expect(result.row.isFinite)
+
+        // NaN pixel input must not produce NaN output
+        let nanInput = GridPackingSolver.cellAt(layout: degenerate, x: .nan, y: .nan, cols: 4, rows: 1)
+        #expect(nanInput.col.isFinite && nanInput.row.isFinite)
+        #expect(nanInput.col >= 0 && nanInput.row >= 0)
+    }
 }

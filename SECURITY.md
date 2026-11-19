@@ -40,9 +40,9 @@ Good-faith security research conducted in accordance with this policy is authori
 
 | Area | Notes |
 | --- | --- |
-| `dms://` URL scheme handling | `AppDelegate.handleGetURL` — any local app or webpage can invoke actions (kill processes, change settings, clipboard, …) |
-| Local IPC | Unix socket `~/Library/Application Support/DMS/dms.sock` and the `dms-gop` REST API on `localhost:63484` |
-| Clipboard history | Reading/storing pasteboard contents; sensitive-app filtering (1Password, Bitwarden, KeePassXC) |
+| `dms://` URL scheme handling | `AppDelegate.handleGetURL` — strict allowlist of benign UI navigation/toggle commands (destructive/mutating commands rejected) |
+| Local IPC | Unix socket `~/Library/Application Support/DMS/dms.sock` (`0600` inside `0700` DMS dir) and the `dms-gop` REST API on `127.0.0.1:63484` |
+| Clipboard history | Reading/storing pasteboard contents (`0600`); sensitive-app filtering (Apple Passwords, Keychain Access, 1Password, Bitwarden, KeePassXC, Proton Pass, …) |
 | Input interception | CGEventTap media-key swallowing and synthetic key injection (auto-paste) |
 | Plugin registry & lockfile | `plugins.lock.json` and registry metadata with `repoURL`s |
 | Build & distribution | `build.sh`, `scripts/assemble-app.sh`, DMG packaging, release checksums |
@@ -59,7 +59,7 @@ Security fixes are applied to the **latest release** and the **`main`** branch o
 
 | Version | Supported |
 | --- | --- |
-| Latest release (v0.8.x) | Yes |
+| Latest release (v0.9.x) | Yes |
 | `main` branch | Yes |
 | Older releases | No |
 
@@ -68,8 +68,8 @@ DMS is pre-1.0: the config format and IPC surface may change between minor versi
 ## Known limitations (publicly documented)
 
 - The release DMG is **not signed or notarized** — verify the SHA-256 in `checksums.txt` on the release page before installing.
-- The geolocation fallback uses plain HTTP (`http://ip-api.com/json`), only when `weatherLocation` is `auto`.
-- IPC socket file permissions rely on `~/Library` being user-only (0700); the socket is not chmod'ed explicitly.
+- The geolocation fallback uses HTTPS (`https://get.geojs.io/v1/ip/geo.json`) only when `weatherLocation` is `auto`.
+- IPC socket `dms.sock` is explicitly `chmod 0600` inside a `0700` `~/Library/Application Support/DMS` directory, and `dms-gop` binds `127.0.0.1:63484`.
 - The app is intentionally **not sandboxed** — it is a shell and needs system-wide access.
 
 ## Security practices

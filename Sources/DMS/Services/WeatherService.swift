@@ -87,41 +87,49 @@ public final class WeatherService: ObservableObject {
                 let longitude: Double?
             }
 
-            struct IPApiResponse: Codable {
-                let status: String?
+            struct GeoJSResponse: Codable {
                 let city: String?
                 let country: String?
-                let lat: Double?
-                let lon: Double?
+                let latitude: String?
+                let longitude: String?
             }
 
             var detectedLat: Double?
             var detectedLon: Double?
             var detectedName: String?
 
+            func makeRequest(_ url: URL) async -> Data? {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 10
+                guard let (data, res) = try? await URLSession.shared.data(for: request),
+                      let http = res as? HTTPURLResponse, http.statusCode == 200 else {
+                    return nil
+                }
+                return data
+            }
+
             // 1. Try ipwho.is (HTTPS)
             if let url = URL(string: "https://ipwho.is/"),
-               let (data, res) = try? await URLSession.shared.data(from: url),
-               let http = res as? HTTPURLResponse, http.statusCode == 200,
+               let data = await makeRequest(url),
                let decoded = try? JSONDecoder().decode(IPWhoIsResponse.self, from: data),
                decoded.success == true,
                let lat = decoded.latitude, let lon = decoded.longitude, let city = decoded.city {
                 detectedLat = lat
                 detectedLon = lon
-                detectedName = decoded.country != nil ? "\(city), \(decoded.country!)" : city
+                detectedName = decoded.country.map { "\(city), \($0)" } ?? city
             }
 
-            // 2. Fallback to ip-api.com (HTTP)
+            // 2. Fallback to get.geojs.io (HTTPS — no cleartext HTTP)
             if detectedLat == nil,
-               let url = URL(string: "http://ip-api.com/json"),
-               let (data, res) = try? await URLSession.shared.data(from: url),
-               let http = res as? HTTPURLResponse, http.statusCode == 200,
-               let decoded = try? JSONDecoder().decode(IPApiResponse.self, from: data),
-               decoded.status?.lowercased() == "success",
-               let lat = decoded.lat, let lon = decoded.lon, let city = decoded.city {
+               let url = URL(string: "https://get.geojs.io/v1/ip/geo.json"),
+               let data = await makeRequest(url),
+               let decoded = try? JSONDecoder().decode(GeoJSResponse.self, from: data),
+               let latStr = decoded.latitude, let lonStr = decoded.longitude,
+               let lat = Double(latStr), let lon = Double(lonStr),
+               let city = decoded.city, !city.isEmpty {
                 detectedLat = lat
                 detectedLon = lon
-                detectedName = decoded.country != nil ? "\(city), \(decoded.country!)" : city
+                detectedName = decoded.country.map { "\(city), \($0)" } ?? city
             }
 
             guard !Task.isCancelled else { return }
@@ -203,10 +211,14 @@ public final class WeatherService: ObservableObject {
     private func geocodeAndFetch(query: String) {
         activeGeocodeTask?.cancel()
 
-        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://geocoding-api.open-meteo.com/v1/search?name=\(encoded)&count=1&language=en&format=json") else {
-            return
-        }
+        var components = URLComponents(string: "https://geocoding-api.open-meteo.com/v1/search")
+        components?.queryItems = [
+            URLQueryItem(name: "name", value: query),
+            URLQueryItem(name: "count", value: "1"),
+            URLQueryItem(name: "language", value: "en"),
+            URLQueryItem(name: "format", value: "json")
+        ]
+        guard let url = components?.url else { return }
 
         self.isFetching = true
 
@@ -221,7 +233,9 @@ public final class WeatherService: ObservableObject {
                 let results: [Result]?
             }
 
-            guard let (data, response) = try? await URLSession.shared.data(from: url),
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 10
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
                   let http = response as? HTTPURLResponse, http.statusCode == 200,
                   let decoded = try? JSONDecoder().decode(GeocodingResponse.self, from: data) else {
                 self?.isFetching = false
@@ -256,9 +270,18 @@ public final class WeatherService: ObservableObject {
         let lat = self.latitude
         let lon = self.longitude
         let currentLocName = self.locationName
-        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&hourly=temperature_2m,precipitation_probability,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max&timezone=auto&forecast_days=7"
 
-        guard let url = URL(string: urlString) else { return }
+        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
+        components?.queryItems = [
+            URLQueryItem(name: "latitude", value: String(format: "%.4f", lat)),
+            URLQueryItem(name: "longitude", value: String(format: "%.4f", lon)),
+            URLQueryItem(name: "current", value: "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure"),
+            URLQueryItem(name: "hourly", value: "temperature_2m,precipitation_probability,weather_code,is_day"),
+            URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max"),
+            URLQueryItem(name: "timezone", value: "auto"),
+            URLQueryItem(name: "forecast_days", value: "7")
+        ]
+        guard let url = components?.url else { return }
 
         self.isFetching = true
 
@@ -267,7 +290,9 @@ public final class WeatherService: ObservableObject {
                 self?.isFetching = false
             }
 
-            guard let (data, response) = try? await URLSession.shared.data(from: url),
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 10
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
                   let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 return
             }
@@ -304,6 +329,7 @@ public final class WeatherService: ObservableObject {
                 let current: Current
                 let hourly: Hourly?
                 let daily: Daily?
+                let utc_offset_seconds: Int?
             }
 
             guard let decoded = try? JSONDecoder().decode(OpenMeteoResponse.self, from: data) else {
@@ -312,12 +338,19 @@ public final class WeatherService: ObservableObject {
 
             guard !Task.isCancelled else { return }
 
+            // Open-Meteo returns local wall-clock times for the requested location when
+            // timezone=auto; decode utc_offset_seconds so parsed dates land on the right
+            // absolute instants for remote cities in other timezones.
+            let remoteTimeZone = decoded.utc_offset_seconds.map { TimeZone(secondsFromGMT: $0) } ?? TimeZone.current
+
+            // Reused formatter instances — the old code allocated 200+ formatters per fetch.
+            let iso = ISO8601DateFormatter()
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.timeZone = remoteTimeZone
+
             let parseDate: (String) -> Date? = { str in
-                let iso = ISO8601DateFormatter()
                 if let d = iso.date(from: str) { return d }
-                let df = DateFormatter()
-                df.locale = Locale(identifier: "en_US_POSIX")
-                df.timeZone = TimeZone.current
                 df.dateFormat = "yyyy-MM-dd'T'HH:mm"
                 if let d = df.date(from: str) { return d }
                 df.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
@@ -328,6 +361,7 @@ public final class WeatherService: ObservableObject {
 
             let hourLabelFormatter = DateFormatter()
             hourLabelFormatter.locale = Locale(identifier: "en_US_POSIX")
+            hourLabelFormatter.timeZone = remoteTimeZone
             hourLabelFormatter.dateFormat = "h a"
 
             // Parse 24-hour forecast starting at current hour

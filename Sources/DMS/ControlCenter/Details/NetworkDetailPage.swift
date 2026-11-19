@@ -1,5 +1,7 @@
 import SwiftUI
+import AppKit
 import CoreWLAN
+import CoreImage
 import DMSCore
 
 /// Wi-Fi Network scanner and connection manager subpage.
@@ -46,10 +48,44 @@ public struct NetworkDetailPage: View {
                     set: { _ in wifi.togglePower(); refreshNetworks() }
                 ))
                 .toggleStyle(.switch)
+                .labelsHidden()
+                .accessibilityLabel("Wi-Fi power")
             }
             .padding(12)
             .background(theme.surfaceContainerHigh)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            // Location Services hint: CoreWLAN needs it to report SSIDs on macOS 14.4+
+            if wifi.isPowerOn && !wifi.locationAuthorized {
+                HStack(spacing: 8) {
+                    Image(systemName: "location.slash.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondary)
+                    Text("Location Services is off — network names may be hidden")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.onSurfaceVariant)
+                        .lineLimit(2)
+                    Spacer()
+                    Button {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    } label: {
+                        Text("Open Settings")
+                            .font(.system(size: 10, weight: .semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(theme.primaryContainer)
+                            .foregroundColor(theme.primary)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open Location Services settings")
+                }
+                .padding(10)
+                .background(theme.surfaceContainerHigh)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
 
             if wifi.isPowerOn {
                 // Actions: Scan & Share
@@ -117,6 +153,7 @@ public struct NetworkDetailPage: View {
             }
         }
         .onAppear {
+            wifi.requestLocationAuthorizationIfNeeded()
             refreshNetworks()
         }
         .sheet(isPresented: $isShowingPasswordModal) {
@@ -197,7 +234,8 @@ public struct NetworkDetailPage: View {
     private func refreshNetworks() {
         isScanning = true
         Task {
-            let scanned = wifi.scanNetworks()
+            // Async scan: never blocks the UI thread while CoreWLAN sweeps.
+            let scanned = await wifi.scanNetworksAsync()
             await MainActor.run {
                 self.networks = scanned
                 self.isScanning = false
@@ -208,6 +246,9 @@ public struct NetworkDetailPage: View {
     // MARK: - Password Connection Modal
     private var passwordModalView: some View {
         VStack(spacing: 16) {
+            // Make the Control Center panel key so the SecureField receives typing.
+            Color.clear
+                .onAppear { ControlCenterController.shared.panel.makeKey() }
             Text("Connect to \(selectedNetwork?.ssid ?? "Network")")
                 .font(.headline)
                 .foregroundColor(theme.onSurface)
@@ -251,14 +292,27 @@ public struct NetworkDetailPage: View {
                     .font(.subheadline)
                     .foregroundColor(theme.primary)
 
-                Image(systemName: "qrcode")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 140, height: 140)
-                    .foregroundColor(theme.onSurface)
-                    .padding()
-                    .background(Color.white)
-                    .cornerRadius(12)
+                // Real scannable QR code (dark modules on a white card) encoding the
+                // WIFI:S:<ssid>;T:WPA;P:;; payload for the current network.
+                if let qrImage = qrCodeImage(forSSID: ssid) {
+                    Image(nsImage: qrImage)
+                        .interpolation(.none)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 140, height: 140)
+                        .padding()
+                        .background(Color.white)
+                        .cornerRadius(12)
+                } else {
+                    Image(systemName: "qrcode")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 140, height: 140)
+                        .foregroundColor(.black)
+                        .padding()
+                        .background(Color.white)
+                        .cornerRadius(12)
+                }
 
                 Text("Scan to connect to this Wi-Fi network")
                     .font(.caption)
@@ -273,5 +327,31 @@ public struct NetworkDetailPage: View {
         .padding(24)
         .frame(width: 280)
         .background(theme.surfaceContainer)
+    }
+
+    // MARK: - Wi-Fi QR Code Generation
+    /// Renders a scannable `CIQRCodeGenerator` image for `WIFI:S:<ssid>;T:WPA;P:;;`
+    /// with dark modules composited on a transparent (white-card) background.
+    private func qrCodeImage(forSSID ssid: String) -> NSImage? {
+        func escape(_ s: String) -> String {
+            s.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: ";", with: "\\;")
+                .replacingOccurrences(of: ",", with: "\\,")
+                .replacingOccurrences(of: ":", with: "\\:")
+        }
+        let payload = "WIFI:S:\(escape(ssid));T:WPA;P:;;"
+        guard let data = payload.data(using: .utf8),
+              let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let output = filter.outputImage, output.extent.width > 0 else { return nil }
+
+        // Scale up to a crisp 280px render; black modules stay opaque, background transparent.
+        let scale = 280.0 / output.extent.width
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let rep = NSCIImageRep(ciImage: scaled)
+        let image = NSImage(size: rep.size)
+        image.addRepresentation(rep)
+        return image
     }
 }

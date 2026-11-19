@@ -345,6 +345,16 @@ public enum DMenuStaging {
         UUID().uuidString.replacingOccurrences(of: "-", with: "").uppercased()
     }
 
+    /// Validates a dmenu request ID: exactly 32 uppercase hex characters (`0-9`, `A-F`).
+    /// Anything else (lowercase, wrong length, path separators, traversal) is rejected,
+    /// so a request ID can never escape the staging directory.
+    public static func isValidRequestID(_ id: String) -> Bool {
+        guard id.count == 32 else { return false }
+        return id.allSatisfy { c in
+            (c >= "0" && c <= "9") || (c >= "A" && c <= "F")
+        }
+    }
+
     /// Default staging directory: `<appSupport>/DMS/dmenu`.
     public static func defaultDirectory() -> URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -378,10 +388,18 @@ public enum DMenuStaging {
     }
 
     /// Reads the daemon-written result file, if present.
+    /// Strips only trailing CR/LF — leading/trailing spaces in the selected line are
+    /// significant (dmenu selections may legitimately contain them) and are preserved.
     public static func readResult(for requestID: String, in directory: URL? = nil) -> String? {
         let url = resultPath(for: requestID, in: directory)
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip over unicode scalars: "\r\n" is a single grapheme cluster (Character),
+        // so a Character-based loop would never match it.
+        var scalars = Substring(content).unicodeScalars
+        while let last = scalars.last, last == "\n" || last == "\r" {
+            scalars.removeLast()
+        }
+        return String(String.UnicodeScalarView(scalars))
     }
 
     /// Removes staged candidates + result files for a request.

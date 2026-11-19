@@ -6,6 +6,7 @@ import DMSCore
 public struct ClockCard: View {
     @ObservedObject var themeStore = ThemeStore.shared
     @ObservedObject private var clock = ClockService.shared
+    @ObservedObject private var configStore = ConfigStore.shared
 
     private static let hour24Formatter: DateFormatter = {
         let f = DateFormatter()
@@ -33,7 +34,7 @@ public struct ClockCard: View {
     public var body: some View {
         let p = themeStore.palette
         let currentTime = clock.currentDate
-        let is24h = ConfigStore.shared.config.getSetting("timeFormat")?.stringValue == "24h"
+        let is24h = configStore.config.getSetting("timeFormat")?.stringValue == "24h"
         let hourStr = (is24h ? Self.hour24Formatter : Self.hour12Formatter).string(from: currentTime)
         let minStr = Self.minFormatter.string(from: currentTime)
         let dateStr = Self.dateFormatter.string(from: currentTime)

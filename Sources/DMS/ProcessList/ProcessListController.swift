@@ -10,6 +10,7 @@ public final class ProcessListController: ObservableObject {
     @Published public private(set) var isVisible: Bool = false
     public private(set) var currentSortByMemory: Bool = false
     private var globalClickMonitor: Any?
+    private var refreshTimer: Timer?
 
     private init() {}
 
@@ -64,6 +65,7 @@ public final class ProcessListController: ObservableObject {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in self?.hide() }
 
         let view = ProcessListView(sortByMemory: sortByMemory) { [weak self] in
             self?.hide()
@@ -76,11 +78,22 @@ public final class ProcessListController: ObservableObject {
 
         PopoutAnimationHelper.animateIn(panel: panel, targetFrame: rect, screen: screen)
         installClickMonitor()
+
+        // Live data: refresh immediately, then every 2s while the panel is visible.
+        ProcessService.shared.refresh()
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            Task { @MainActor in
+                ProcessService.shared.refresh()
+            }
+        }
     }
 
     public func hide() {
         guard isVisible else { return }
         removeClickMonitor()
+        refreshTimer?.invalidate()
+        refreshTimer = nil
         isVisible = false
 
         let panelToClose = self.panel

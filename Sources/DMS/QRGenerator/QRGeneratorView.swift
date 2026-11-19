@@ -53,7 +53,7 @@ public struct QRGeneratorView: View {
 
                 if let ssid = wifi.ssid, !ssid.isEmpty {
                     Button(action: {
-                        inputText = "WIFI:S:\(ssid);T:WPA;P:;; "
+                        inputText = "WIFI:S:\(escapeWifiField(ssid));T:WPA;P:;;"
                         generateQR()
                     }) {
                         Label("WiFi", systemImage: "wifi")
@@ -116,7 +116,7 @@ public struct QRGeneratorView: View {
             }
         }
         .padding(14)
-        .frame(width: 260)
+        .frame(width: 360)
         .background(GlassSurfaceBackground())
         .cornerRadius(18)
         .overlay(
@@ -129,19 +129,42 @@ public struct QRGeneratorView: View {
         }
     }
 
+    /// Escapes special characters (`\`, `;`, `,`, `"`, `:`) in a WIFI: payload field.
+    private func escapeWifiField(_ field: String) -> String {
+        var result = ""
+        for char in field {
+            switch char {
+            case "\\", ";", ",", "\"", ":":
+                result.append("\\")
+                result.append(char)
+            default:
+                result.append(char)
+            }
+        }
+        return result
+    }
+
     private func generateQR() {
-        guard !inputText.isEmpty else { return }
+        guard !inputText.isEmpty else {
+            qrImage = nil
+            return
+        }
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(inputText.utf8)
         filter.correctionLevel = "M"
 
-        guard let output = filter.outputImage else { return }
+        guard let output = filter.outputImage else {
+            qrImage = nil
+            return
+        }
 
-        // Scale up sharp
-        let rep = NSCIImageRep(ciImage: output)
-        let nsImg = NSImage(size: NSSize(width: 200, height: 200))
-        nsImg.addRepresentation(rep)
-        self.qrImage = nsImg
+        // Render through CIContext at 12x scale so saved PNGs are crisp instead of blurry 27x27.
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 12, y: 12))
+        guard let cgImage = CIContext().createCGImage(scaled, from: scaled.extent) else {
+            qrImage = nil
+            return
+        }
+        self.qrImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 
     private func copyImage() {
@@ -158,9 +181,16 @@ public struct QRGeneratorView: View {
               let bitmap = NSBitmapImageRep(data: tiff),
               let png = bitmap.representation(using: .png, properties: [:]) else { return }
 
-        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let dest = downloads.appendingPathComponent("dms-qr-\(Int(Date().timeIntervalSince1970)).png")
-        try? png.write(to: dest)
-        ToastCenter.shared.show(icon: "arrow.down.circle.fill", message: "Saved to Downloads")
+        guard let downloadsDir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else {
+            ToastCenter.shared.show(icon: "exclamationmark.triangle.fill", message: "Downloads folder not found")
+            return
+        }
+        let dest = downloadsDir.appendingPathComponent("dms-qr-\(Int(Date().timeIntervalSince1970)).png")
+        do {
+            try png.write(to: dest)
+            ToastCenter.shared.show(icon: "arrow.down.circle.fill", message: "Saved to Downloads")
+        } catch {
+            ToastCenter.shared.show(icon: "exclamationmark.triangle.fill", message: "Failed to save QR code: \(error.localizedDescription)")
+        }
     }
 }

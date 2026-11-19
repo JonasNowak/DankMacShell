@@ -17,9 +17,9 @@ public enum CcMetrics: Sendable {
     public static let gridGap: CGFloat = 6.0
     public static let gridStep: Double = 0.5
 
-    public static let detailHeightList: CGFloat = 235.0
+    public static let detailHeightList: CGFloat = 380.0
     public static let detailHeightBrightness: CGFloat = 268.0
-    public static let detailHeightDefault: CGFloat = 175.0
+    public static let detailHeightDefault: CGFloat = 340.0
 
     /// Total sheet width for a given number of columns.
     /// width = sheetPadding * 2 + columns * columnWidth + (columns - 1) * gridGap

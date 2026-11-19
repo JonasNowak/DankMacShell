@@ -4,7 +4,7 @@ import DMSCore
 /// Hardware telemetry resource meters card with 3 vertical sliders and icons.
 public struct HardwareGaugesCard: View {
     @ObservedObject var themeStore = ThemeStore.shared
-    let telemetryService = TelemetryService.shared
+    private let telemetryService = TelemetryService.shared
 
     public init() {}
 
@@ -13,7 +13,8 @@ public struct HardwareGaugesCard: View {
         let telemetry = telemetryService.telemetry
 
         let cpuFraction = min(1.0, max(0.05, telemetry.cpuPercent / 100.0))
-        let tempFraction = 0.49 // Approx 49°C / nominal thermal fraction
+        // Map CPU temperature (20°C..100°C) onto the thermal meter; no reading -> empty.
+        let tempFraction = telemetry.cpuTemperature.map { min(1.0, max(0.0, ($0 - 20.0) / 80.0)) } ?? 0.0
         let ramFraction = min(1.0, max(0.1, telemetry.ramPercent / 100.0))
 
         HStack(spacing: 0) {

@@ -106,8 +106,9 @@ public final class SettingsController: NSObject, ObservableObject, NSWindowDeleg
         ConfigStore.shared.flushSave()
         window?.orderOut(nil)
         isVisible = false
+        let closingWindow = self.window
         DispatchQueue.main.async { [weak self] in
-            self?.window = nil
+            if self?.window === closingWindow { self?.window = nil }
         }
     }
 
@@ -119,8 +120,9 @@ public final class SettingsController: NSObject, ObservableObject, NSWindowDeleg
     public func windowWillClose(_ notification: Notification) {
         isVisible = false
         ConfigStore.shared.flushSave()
+        let closingWindow = self.window
         DispatchQueue.main.async { [weak self] in
-            self?.window = nil
+            if self?.window === closingWindow { self?.window = nil }
         }
     }
 }

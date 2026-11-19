@@ -14,24 +14,32 @@ public struct SlantedWallpaperPickerView: View {
 
     public var onClose: (() -> Void)? = nil
 
+    /// Fresh per-presentation identity; applied via `.id(sessionID)` so SwiftUI recreates
+    /// the view's `@State` on every `show()`.
+    public let sessionID: UUID
+
     @State private var hoveredIndex: Int? = nil
-    @State private var searchQuery: String = ""
-    @State private var selectedSource: WallpaperSource = .all
-    @State private var onlyFolder: Bool = false
     @FocusState private var isViewFocused: Bool
 
-    public init(controller: SlantedWallpaperPickerController? = nil, onClose: (() -> Void)? = nil) {
+    public init(controller: SlantedWallpaperPickerController? = nil, sessionID: UUID = UUID(), onClose: (() -> Void)? = nil) {
         self.controller = controller ?? SlantedWallpaperPickerController.shared
+        self.sessionID = sessionID
         self.onClose = onClose
     }
 
+    /// The exact filtered list the controller indexes into (single source of truth).
     private var availableWallpapers: [WallpaperItem] {
-        let baseList = onlyFolder ? wallpaperService.pickerWallpapers() : wallpaperService.wallpapers
-        return WallpaperItem.filterWallpapers(
-            items: baseList,
-            source: selectedSource,
-            query: searchQuery
-        )
+        controller.filteredWallpapers
+    }
+
+    private var onlyFolder: Bool {
+        get { controller.onlyFolder }
+        set { controller.onlyFolder = newValue }
+    }
+
+    private var selectedSource: WallpaperSource {
+        get { controller.selectedSource }
+        set { controller.selectedSource = newValue }
     }
 
     private var currentFolderDisplay: String {
@@ -70,7 +78,8 @@ public struct SlantedWallpaperPickerView: View {
             // MARK: - Footer Control Bar
             footerBar(items: items, palette: p)
         }
-        .frame(width: 1120)
+        .frame(maxWidth: 1120)
+        .id(sessionID)
         .background(GlassSurfaceBackground())
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
@@ -82,7 +91,7 @@ public struct SlantedWallpaperPickerView: View {
         .focused($isViewFocused)
         .onAppear {
             isViewFocused = true
-            onlyFolder = configStore.config.wallpaperPickerOnlyFolder
+            controller.onlyFolder = configStore.config.wallpaperPickerOnlyFolder
         }
         .onKeyPress(.leftArrow) {
             controller.cyclePrevious()
@@ -171,8 +180,9 @@ public struct SlantedWallpaperPickerView: View {
                 ForEach([WallpaperSource.all, .custom, .pictures, .system, .presets], id: \.self) { src in
                     let isSel = selectedSource == src
                     Button {
-                        selectedSource = src
+                        controller.selectedSource = src
                         controller.selectedIndex = 0
+                        controller.searchQuery = ""
                     } label: {
                         Text(src.rawValue)
                             .font(.system(size: 10, weight: isSel ? .bold : .medium))
@@ -220,7 +230,7 @@ public struct SlantedWallpaperPickerView: View {
     private func carouselView(items: [WallpaperItem], skew: CGFloat, palette: DMSPalette) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                LazyHStack(spacing: 8) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         let isSelected = (index == controller.selectedIndex)
                         let isHovered = (hoveredIndex == index)
@@ -280,8 +290,9 @@ public struct SlantedWallpaperPickerView: View {
                     .frame(maxWidth: 420)
 
                 Button("Disable Folder Filter") {
-                    onlyFolder = false
+                    controller.onlyFolder = false
                     configStore.update { $0.wallpaperPickerOnlyFolder = false }
+                    controller.selectedIndex = 0
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -350,8 +361,9 @@ public struct SlantedWallpaperPickerView: View {
             Toggle("Restrict to folder", isOn: Binding(
                 get: { onlyFolder },
                 set: { val in
-                    onlyFolder = val
+                    controller.onlyFolder = val
                     configStore.update { $0.wallpaperPickerOnlyFolder = val }
+                    controller.selectedIndex = 0
                 }
             ))
             .toggleStyle(.checkbox)
@@ -424,8 +436,9 @@ public struct SlantedWallpaperPickerView: View {
     }
 
     private func toggleFolderRestriction() {
-        onlyFolder.toggle()
+        controller.onlyFolder.toggle()
         configStore.update { $0.wallpaperPickerOnlyFolder = onlyFolder }
+        controller.selectedIndex = 0
     }
 }
 

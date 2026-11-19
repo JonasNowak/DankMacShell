@@ -5,7 +5,12 @@ set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-VERSION=${1:-"0.8.2"}
+if [ $# -ge 1 ]; then
+    VERSION=$1
+else
+    VERSION=$(sed -n 's/.*public static let current = "\([^"]*\)".*/\1/p' "$ROOT/Sources/DMSCore/DMSVersion.swift" 2>/dev/null | head -n 1 || true)
+    VERSION=${VERSION:-"0.9.0"}
+fi
 APP_PATH=${2:-"$HOME/Applications/DankMacShell.app"}
 OUTPUT_DMG="$ROOT/dist/DankMacShell-$VERSION.dmg"
 

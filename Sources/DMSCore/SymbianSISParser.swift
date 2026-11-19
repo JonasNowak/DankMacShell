@@ -27,9 +27,21 @@ public enum SymbianSISParser {
         }
     }
 
+    /// Caps on bytes read from disk for header/string parsing, so huge packages
+    /// don't spike RAM (only the header region is ever needed for metadata).
+    private static let maxSISHeaderBytes = 1_048_576      // 1 MiB for SIS/SISX headers
+    private static let maxJarScanBytes = 8_388_608        // 8 MiB raw scan window for JAR manifests
+
+    /// Reads at most `maxBytes` from the start of the file at `url`.
+    private static func readCappedData(from url: URL, maxBytes: Int) -> Data? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        return try? handle.read(upToCount: maxBytes)
+    }
+
     /// Parses a SIS / SISX binary file.
     public static func parseSIS(url: URL, fileName: String, fileSize: Int64, isSisx: Bool) -> SymbianAppPackage {
-        guard let data = try? Data(contentsOf: url, options: [.mappedIfSafe]), data.count >= 16 else {
+        guard let data = readCappedData(from: url, maxBytes: maxSISHeaderBytes), data.count >= 16 else {
             return fallbackPackage(fileName: fileName, url: url, fileSize: fileSize, type: isSisx ? .sisx : .sis)
         }
 
@@ -128,22 +140,47 @@ public enum SymbianSISParser {
     // MARK: - Private String & Manifest Extraction
 
     private static func extractJarManifest(url: URL) -> String? {
-        guard let data = try? Data(contentsOf: url, options: [.mappedIfSafe]) else { return nil }
-
-        // Find "META-INF/MANIFEST.MF" signature in ZIP
-        let pattern = "META-INF/MANIFEST.MF".data(using: .utf8)!
-        guard let range = data.range(of: pattern) else { return nil }
-
-        // Read up to 4096 bytes around or after the manifest header
-        let start = range.upperBound
-        let end = min(data.count, start + 4096)
-        if start < end {
-            let slice = data.subdata(in: start..<end)
-            if let str = String(data: slice, encoding: .utf8) ?? String(data: slice, encoding: .ascii) {
-                return str
+        // 1. Raw scan of a capped prefix for an uncompressed (stored) manifest entry.
+        if let data = readCappedData(from: url, maxBytes: maxJarScanBytes),
+           let pattern = "META-INF/MANIFEST.MF".data(using: .utf8),
+           let range = data.range(of: pattern) {
+            // Read up to 4096 bytes after the manifest header
+            let start = range.upperBound
+            let end = min(data.count, start + 4096)
+            if start < end {
+                let slice = data.subdata(in: start..<end)
+                if let str = String(data: slice, encoding: .utf8) ?? String(data: slice, encoding: .ascii) {
+                    return str
+                }
             }
         }
-        return nil
+
+        // 2. Compressed manifest: delegate to unzip. `--` ends option parsing so a
+        //    path can never be interpreted as a flag; output is capped at 64 KiB.
+        return extractManifestViaUnzip(at: url)
+    }
+
+    private static func extractManifestViaUnzip(at url: URL) -> String? {
+        let unzipPath = "/usr/bin/unzip"
+        guard FileManager.default.isExecutableFile(atPath: unzipPath) else { return nil }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: unzipPath)
+        process.arguments = ["-p", "--", url.path, "META-INF/MANIFEST.MF"]
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = errPipe
+
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        let data = outPipe.fileHandleForReading.readData(ofLength: 65_536)
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, !data.isEmpty else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     private static func extractSISStrings(data: Data) -> (name: String, vendor: String, version: String) {
@@ -174,6 +211,10 @@ public enum SymbianSISParser {
             }
             i += 2
         }
+        // Flush any trailing buffered UTF-16 string not terminated by a separator.
+        if utf16Chars.count >= 3 {
+            foundStrings.append(String(utf16CodeUnits: utf16Chars, count: utf16Chars.count))
+        }
 
         // Also check plain ASCII sequences
         var asciiBytes: [UInt8] = []
@@ -188,6 +229,12 @@ public enum SymbianSISParser {
                     }
                 }
                 asciiBytes.removeAll(keepingCapacity: true)
+            }
+        }
+        // Flush any trailing buffered ASCII string not terminated by a separator.
+        if asciiBytes.count >= 3 {
+            if let s = String(bytes: asciiBytes, encoding: .ascii) {
+                asciiStrings.append(s)
             }
         }
 

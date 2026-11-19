@@ -51,7 +51,7 @@ public struct BarGothCornerShape: Shape {
     }
 
     public func path(in rect: CGRect) -> Path {
-        GothEarCornerShape(
+        let base = GothEarCornerShape(
             edge: edge,
             cornerStyle: materialCornerStyle,
             cornerRadius: cornerRadius,
@@ -60,5 +60,83 @@ public struct BarGothCornerShape: Shape {
             closedSeam: closedSeam
         )
         .path(in: rect)
+
+        // Single-ear wing clipping: `GothEarCornerShape` has no wing parameters, so for a
+        // top bar in gothic style we rebuild the path manually and keep the concave fillet
+        // only on the notch-facing side. The bezel-facing side gets a straight square seam,
+        // so notch wings no longer ignore their wing flags.
+        guard cornerStyle == .gothic,
+              position.lowercased() == "top",
+              rect.width > 0, rect.height > 0,
+              isLeftWing == true || isRightWing == true else {
+            return base
+        }
+
+        let f = min(filletRadius, rect.width * 0.25, rect.height * 0.5)
+        let cr = cornerRadius >= 0 ? cornerRadius : 18
+        let br = min(cr, (rect.width - 2 * f) * 0.5, rect.height * 0.5)
+        let bl = min(cr, (rect.width - 2 * f) * 0.5, rect.height * 0.5)
+
+        var path = Path()
+        if isLeftWing == true {
+            // Left wing: concave ear on the RIGHT (notch side), square seam on the LEFT (bezel)
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addArc(
+                center: CGPoint(x: rect.maxX, y: rect.minY + f),
+                radius: f,
+                startAngle: .degrees(270),
+                endAngle: .degrees(180),
+                clockwise: true
+            )
+            path.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY - br))
+            path.addArc(
+                center: CGPoint(x: rect.maxX - f - br, y: rect.maxY - br),
+                radius: br,
+                startAngle: .degrees(0),
+                endAngle: .degrees(90),
+                clockwise: false
+            )
+            path.addLine(to: CGPoint(x: rect.minX + bl, y: rect.maxY))
+            path.addArc(
+                center: CGPoint(x: rect.minX + bl, y: rect.maxY - bl),
+                radius: bl,
+                startAngle: .degrees(90),
+                endAngle: .degrees(180),
+                clockwise: false
+            )
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.closeSubpath()
+        } else {
+            // Right wing: concave ear on the LEFT (notch side), square seam on the RIGHT (bezel)
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - br))
+            path.addArc(
+                center: CGPoint(x: rect.maxX - br, y: rect.maxY - br),
+                radius: br,
+                startAngle: .degrees(0),
+                endAngle: .degrees(90),
+                clockwise: false
+            )
+            path.addLine(to: CGPoint(x: rect.minX + f + bl, y: rect.maxY))
+            path.addArc(
+                center: CGPoint(x: rect.minX + f + bl, y: rect.maxY - bl),
+                radius: bl,
+                startAngle: .degrees(90),
+                endAngle: .degrees(180),
+                clockwise: false
+            )
+            path.addLine(to: CGPoint(x: rect.minX + f, y: rect.minY + f))
+            path.addArc(
+                center: CGPoint(x: rect.minX, y: rect.minY + f),
+                radius: f,
+                startAngle: .degrees(0),
+                endAngle: .degrees(270),
+                clockwise: true
+            )
+            path.closeSubpath()
+        }
+        return path
     }
 }

@@ -273,4 +273,29 @@ struct OmniWMThemeTests {
             Issue.record("Expected .omniwmTheme(direction, topRightToBottomLeft)")
         }
     }
+
+    @Test("applyThemeThrowing matches applyTheme on valid input and propagates engine errors")
+    func testApplyThemeThrowing() throws {
+        let toml = """
+        [borders.gradient]
+        enabled = false
+        direction = "topRightToBottomLeft"
+        """
+        let palette = StockThemes.purpleDark
+        let viaThrowing = try OmniWMThemeUpdater.applyThemeThrowing(
+            to: toml,
+            palette: palette,
+            mode: .expressive,
+            direction: .topLeftToBottomRight
+        )
+        let viaPlain = OmniWMThemeUpdater.applyTheme(
+            to: toml,
+            palette: palette,
+            mode: .expressive,
+            direction: .topLeftToBottomRight
+        )
+        #expect(viaThrowing == viaPlain)
+        #expect(viaThrowing.contains("enabled = true"))
+        #expect(viaThrowing.contains("direction = \"topLeftToBottomRight\""))
+    }
 }

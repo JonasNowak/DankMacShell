@@ -66,7 +66,9 @@ public struct BrowsePluginsModal: View {
 
                 // Refresh Button
                 Button(action: {
-                    // Trigger refresh / reload registry
+                    // Re-read the lockfile and reload plugin states before confirming
+                    _ = pluginService.restoreLockfile()
+                    pluginService.loadPlugins()
                     ToastCenter.shared.show(icon: "arrow.clockwise", message: "Registry refreshed")
                 }) {
                     Image(systemName: "arrow.clockwise")

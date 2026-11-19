@@ -5,12 +5,18 @@ import DMSCore
 /// Dedicated Bar Popout for Audio output/input device routing and volume controls.
 /// Implements upstream DMS Audio detail popout behavior.
 @MainActor
-public final class AudioPopoutController: ObservableObject {
+public final class AudioPopoutController: ObservableObject, PopoutController {
     public static let shared = AudioPopoutController()
 
     private var panel: ShellPanel?
     @Published public private(set) var isVisible: Bool = false
+    private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
+
+    public var popoutID: String { "audio" }
+    public var popoutPanel: ShellPanel? { panel }
+    public var isPopoutVisible: Bool { isVisible }
+    public func hidePopout() { hide() }
 
     private init() {}
 
@@ -26,15 +32,17 @@ public final class AudioPopoutController: ObservableObject {
         let mouseLoc = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first else { return }
 
-        // Close peer popouts
+        // Close peer popouts and non-popout DMS panels
+        PopoutCoordinator.shared.dismissAll(except: popoutID)
         DashController.shared.hide()
-        BatteryPopoutController.shared.hide()
-        DurationPopoutController.shared.hide()
-        ColorPickerPopoutController.shared.hide()
-        SymbianPopoutController.shared.hide()
-        PowerPopoutController.shared.hide()
         ProcessListController.shared.hide()
         ControlCenterController.shared.hide()
+
+        // Close any existing panel BEFORE creating a new one (fixes leaked ghost panels on double-show)
+        if let existing = panel {
+            existing.orderOut(nil)
+            panel = nil
+        }
 
         let bodyWidth: CGFloat = 255
         let bodyHeight: CGFloat = 348
@@ -53,8 +61,11 @@ public final class AudioPopoutController: ObservableObject {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in
+            self?.hide()
+        }
 
-        let rootView = AudioPopoutView { [weak self] in
+        let rootView = AudioPopoutView(ownerPanel: panel) { [weak self] in
             self?.hide()
         }
         panel.contentView = NSHostingView(rootView: rootView)
@@ -62,13 +73,15 @@ public final class AudioPopoutController: ObservableObject {
         self.panel = panel
         self.isVisible = true
 
+        PopoutCoordinator.shared.register(self)
         PopoutAnimationHelper.animateIn(panel: panel, targetFrame: rect, screen: screen)
-        installClickMonitor()
+        installClickMonitors()
     }
 
     public func hide() {
         guard isVisible else { return }
-        removeClickMonitor()
+        removeClickMonitors()
+        PopoutCoordinator.shared.unregister(popoutID)
         isVisible = false
 
         let panelToClose = self.panel
@@ -78,18 +91,30 @@ public final class AudioPopoutController: ObservableObject {
         PopoutAnimationHelper.animateOut(panel: panelToClose, screen: screen)
     }
 
-    private func installClickMonitor() {
-        removeClickMonitor()
-        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown]
-        ) { [weak self] _ in
+    private func installClickMonitors() {
+        removeClickMonitors()
+        let handler: (NSEvent) -> NSEvent? = { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.hide()
+                guard let self = self, self.isVisible else { return }
+                let clickLoc = NSEvent.mouseLocation
+                // Clicks inside this popout are handled by the popout itself
+                if let p = self.panel, NSMouseInRect(clickLoc, p.frame, false) { return }
+                // Clicks on the DankBar are handled by the bar buttons (toggle)
+                if PopoutCoordinator.shared.isPointInsideAnyBar(clickLoc) { return }
+                // Click on another DMS panel or the desktop dismisses the popout
+                self.hide()
             }
+            return event
         }
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: handler)
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { event in _ = handler(event) })
     }
 
-    private func removeClickMonitor() {
+    private func removeClickMonitors() {
+        if let monitor = localClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            localClickMonitor = nil
+        }
         if let monitor = globalClickMonitor {
             NSEvent.removeMonitor(monitor)
             globalClickMonitor = nil
@@ -100,14 +125,16 @@ public final class AudioPopoutController: ObservableObject {
 /// Popout sheet view wrapping AudioDetailPage with M3 styling.
 public struct AudioPopoutView: View {
     @ObservedObject private var theme = ThemeStore.shared
+    let ownerPanel: NSPanel?
     let onClose: () -> Void
 
-    public init(onClose: @escaping () -> Void) {
+    public init(ownerPanel: NSPanel? = nil, onClose: @escaping () -> Void) {
+        self.ownerPanel = ownerPanel
         self.onClose = onClose
     }
 
     public var body: some View {
-        PopoutSurfaceContainer(bodyWidth: 255, bodyHeight: 348) {
+        PopoutSurfaceContainer(bodyWidth: 255, bodyHeight: 348, ownerPanel: ownerPanel) {
             VStack(spacing: 0) {
                 // Header
                 HStack(spacing: 8) {

@@ -27,7 +27,7 @@ class DmsGop < Formula
 
   service do
     run [opt_bin/"dms-gop", "server"]
-    environment_variables API_PORT: ":63484"
+    environment_variables API_PORT: "127.0.0.1:63484"
     keep_alive true
     process_type :background
     log_path var/"log/dms-gop.log"

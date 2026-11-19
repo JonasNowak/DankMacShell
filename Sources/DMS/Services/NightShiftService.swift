@@ -38,7 +38,9 @@ public final class NightShiftService {
         buffer.initializeMemory(as: UInt8.self, repeating: 0, count: 128)
         let getStatus = unsafeBitCast(imp, to: GetStatus.self)
         if getStatus(client, Self.statusSelector, buffer) {
-            isOn = buffer.load(as: UInt8.self) != 0
+            // StatusData byte 0 is `active` (currently shifting), byte 1 is `enabled`.
+            // Reading offset 0 made isOn report true all day whenever a schedule was set.
+            isOn = buffer.load(fromByteOffset: 1, as: UInt8.self) != 0
         }
     }
 

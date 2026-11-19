@@ -62,6 +62,9 @@ public final class HotkeyService {
 
         if status == noErr, let ref = hotKeyRef {
             references[id] = ref
+        } else {
+            // Registration failed (e.g. hotkey already taken) — drop the orphaned action.
+            actions.removeValue(forKey: id)
         }
     }
 

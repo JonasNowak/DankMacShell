@@ -683,28 +683,90 @@ public struct DMSConfig: Sendable, Codable, Equatable {
 
     public static let `default` = DMSConfig()
 
+    /// Errors thrown by the `loadThrowing` family.
+    public enum ConfigLoadError: Error, Sendable, LocalizedError {
+        case invalidJSON(String)
+        case notJSONObject(String)
+        case decodeFailed(String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .invalidJSON(let msg): return "Config JSON is invalid: \(msg)"
+            case .notJSONObject(let msg): return "Config root is not a JSON object: \(msg)"
+            case .decodeFailed(let msg): return "Config failed to decode: \(msg)"
+            }
+        }
+    }
+
     /// Loads config from Data with optional base directory URL for resolving `$include` fragments.
+    /// Returns `.default` on any error (backward-compatible behavior for existing callers/tests).
     public static func load(from data: Data, baseDirectory: URL? = nil) -> DMSConfig {
-        guard var jsonDict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
-            return .default
+        (try? loadThrowing(from: data, baseDirectory: baseDirectory)) ?? .default
+    }
+
+    /// Loads config from a file URL, resolving `$include` fragments relative to the file's directory.
+    /// Returns `.default` on any error (backward-compatible behavior for existing callers/tests).
+    public static func load(from url: URL) -> DMSConfig {
+        (try? loadThrowing(from: url)) ?? .default
+    }
+
+    /// Throwing variant of `load(from: url:)`. Lets `ConfigStore` keep the last valid
+    /// in-memory config on JSON syntax errors instead of resetting to `.default`.
+    public static func loadThrowing(from url: URL) throws -> DMSConfig {
+        let data = try Data(contentsOf: url)
+        return try loadThrowing(
+            from: data,
+            baseDirectory: url.deletingLastPathComponent(),
+            rootFileURL: url
+        )
+    }
+
+    /// Throwing variant of `load(from: data: baseDirectory:)`.
+    public static func loadThrowing(from data: Data, baseDirectory: URL? = nil, rootFileURL: URL? = nil) throws -> DMSConfig {
+        let jsonObject: Any
+        do {
+            jsonObject = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw ConfigLoadError.invalidJSON(error.localizedDescription)
+        }
+        guard var jsonDict = jsonObject as? [String: Any] else {
+            throw ConfigLoadError.notJSONObject("root is \(type(of: jsonObject))")
         }
 
         if let base = baseDirectory {
             var visited = Set<String>()
-            resolveIncludes(in: &jsonDict, baseDirectory: base, visited: &visited)
-        }
-
-        if let processedData = try? JSONSerialization.data(withJSONObject: jsonDict) {
-            let decoder = JSONDecoder()
-            if let config = try? decoder.decode(DMSConfig.self, from: processedData) {
-                return config
+            if let root = rootFileURL {
+                // Seed with the root config file's resolved path so a fragment that
+                // (via symlink) points back at the root is rejected as a cycle.
+                visited.insert(root.resolvingSymlinksInPath().standardizedFileURL.path)
             }
+            resolveIncludes(in: &jsonDict, baseDirectory: base, visited: &visited, depth: 0)
         }
 
-        return .default
+        let processedData: Data
+        do {
+            processedData = try JSONSerialization.data(withJSONObject: jsonDict)
+        } catch {
+            throw ConfigLoadError.invalidJSON(error.localizedDescription)
+        }
+        do {
+            return try JSONDecoder().decode(DMSConfig.self, from: processedData)
+        } catch {
+            throw ConfigLoadError.decodeFailed(error.localizedDescription)
+        }
     }
 
-    private static func resolveIncludes(in dict: inout [String: Any], baseDirectory: URL, visited: inout Set<String>) {
+    /// Maximum `$include` nesting depth (runaway-recursion guard).
+    private static let maxIncludeDepth = 8
+
+    private static func resolveIncludes(
+        in dict: inout [String: Any],
+        baseDirectory: URL,
+        visited: inout Set<String>,
+        depth: Int = 0
+    ) {
+        guard depth < maxIncludeDepth else { return }
+
         let includeList: [String]
         if let arr = dict["$include"] as? [String] {
             includeList = arr
@@ -714,16 +776,24 @@ public struct DMSConfig: Sendable, Codable, Equatable {
             return
         }
 
+        let resolvedBase = baseDirectory.resolvingSymlinksInPath().standardizedFileURL
+        let basePath = resolvedBase.path
+
         var mergedDict: [String: Any] = [:]
         for fragPath in includeList {
-            let fragURL = baseDirectory.appendingPathComponent(fragPath)
-            let canonical = fragURL.standardizedFileURL.path
+            let fragURL = resolvedBase.appendingPathComponent(fragPath)
+                .resolvingSymlinksInPath()
+                .standardizedFileURL
+            let canonical = fragURL.path
+            // Path traversal protection: after symlink resolution the fragment must stay
+            // inside the base directory — `../` escapes and absolute paths are rejected.
+            guard canonical == basePath || canonical.hasPrefix(basePath + "/") else { continue }
             guard !visited.contains(canonical) else { continue }
             visited.insert(canonical)
 
             if let fragData = try? Data(contentsOf: fragURL),
                var fragDict = (try? JSONSerialization.jsonObject(with: fragData)) as? [String: Any] {
-                resolveIncludes(in: &fragDict, baseDirectory: fragURL.deletingLastPathComponent(), visited: &visited)
+                resolveIncludes(in: &fragDict, baseDirectory: fragURL.deletingLastPathComponent(), visited: &visited, depth: depth + 1)
                 deepMerge(target: &mergedDict, source: fragDict)
             }
         }

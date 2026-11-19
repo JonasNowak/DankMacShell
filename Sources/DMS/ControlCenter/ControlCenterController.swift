@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import DMSCore
+import MaterialMacLibrary
 
 @MainActor
 public final class ControlCenterController {
@@ -32,6 +33,11 @@ public final class ControlCenterController {
     public private(set) var currentSheetHeight: CGFloat = standardSheetHeight
 
     private var globalClickMonitor: Any?
+    private var localClickMonitor: Any?
+
+    /// Monotonic generation counter bumped on every `show()`/`hide()` so a stale
+    /// exit-animation completion can never order out a freshly re-shown panel.
+    private var animationGeneration: UInt64 = 0
 
     private init() {
         panel = ShellPanel(
@@ -40,6 +46,7 @@ public final class ControlCenterController {
             backing: .buffered,
             defer: false
         )
+        panel.onEscape = { [weak self] in self?.hide() }
     }
 
     public func toggle(fromBar: Bool = false) {
@@ -51,16 +58,12 @@ public final class ControlCenterController {
     }
 
     public func show(fromBar: Bool = false) {
+        animationGeneration &+= 1
         DashController.shared.hide()
         LauncherController.shared.hide()
         PowerMenuController.shared.hide()
         ProcessListController.shared.hide()
-        AudioPopoutController.shared.hide()
-        BatteryPopoutController.shared.hide()
-        DurationPopoutController.shared.hide()
-        ColorPickerPopoutController.shared.hide()
-        SymbianPopoutController.shared.hide()
-        PowerPopoutController.shared.hide()
+        PopoutCoordinator.shared.dismissAll()
 
         let mouseLoc = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
@@ -87,17 +90,53 @@ public final class ControlCenterController {
 
     public func hide() {
         guard isVisible else { return }
+        animationGeneration &+= 1
+        let capturedGen = animationGeneration
         removeClickMonitor()
         isVisible = false
         PowerPopoutController.shared.hide()
 
-        let screen = panel.screen ?? NSScreen.main
-        PopoutAnimationHelper.animateOut(panel: panel, screen: screen)
+        let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first
+        animateOut(capturedGen: capturedGen, screen: screen)
+    }
+
+    /// Exit animation mirroring `PopoutAnimationHelper.animateOut`, but the completion
+    /// only orders the panel out when no newer `show()`/`hide()` superseded it. When the
+    /// panel is hidden its content view is detached so SwiftUI timers (e.g. the 30s
+    /// uptime ticker) are suspended and consume zero CPU while hidden.
+    private func animateOut(capturedGen: UInt64, screen: NSScreen?) {
+        let panel = self.panel
+        guard panel.isVisible else {
+            if animationGeneration == capturedGen {
+                panel.orderOut(nil)
+                panel.contentView = nil
+            }
+            return
+        }
+
+        NotificationCenter.default.post(name: .popoutWillDismiss, object: panel)
+
+        let exitCurve = MaterialComponents.PopoutAnimationHelper.exitCurve
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = MaterialComponents.PopoutAnimationHelper.exitDuration
+            ctx.timingFunction = CAMediaTimingFunction(
+                controlPoints: Float(exitCurve.c1x), Float(exitCurve.c1y), Float(exitCurve.c2x), Float(exitCurve.c2y)
+            )
+            panel.animator().alphaValue = 0.0
+        } completionHandler: {
+            MainActor.assumeIsolated { [weak self] in
+                guard let self, self.animationGeneration == capturedGen, !self.isVisible else { return }
+                panel.orderOut(nil)
+                panel.alphaValue = 1.0
+                // Detach the hosting view so timers inside ControlCenterView stop while hidden.
+                panel.contentView = nil
+            }
+        }
     }
 
     public func reposition(on screen: NSScreen) {
         let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
-        let bodyWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
+        let bodyWidth: CGFloat = columns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
         let frame = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
             bodyHeight: currentSheetHeight,
@@ -114,9 +153,9 @@ public final class ControlCenterController {
         }
         guard abs(currentSheetHeight - newHeight) > 1.0 else { return }
         currentSheetHeight = newHeight
-        let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first!
+        guard let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
         let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
-        let bodyWidth: CGFloat = columns == 8 ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
+        let bodyWidth: CGFloat = columns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
         let frame = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
             bodyHeight: newHeight,
@@ -128,12 +167,33 @@ public final class ControlCenterController {
 
     private func installClickMonitor() {
         removeClickMonitor()
+        // Global monitor: clicks in other apps always dismiss (mouse is outside the panel).
         globalClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.hide()
+                guard let self, self.isVisible else { return }
+                let loc = NSEvent.mouseLocation
+                if !NSMouseInRect(loc, self.panel.frame, false),
+                   !PopoutCoordinator.shared.isPointInsideAnyPopout(loc) {
+                    self.hide()
+                }
             }
+        }
+        // Local monitor: clicks inside this app (e.g. another DMS panel) dismiss too,
+        // but clicks within the Control Center panel or an anchored popout are left alone.
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] event in
+            Task { @MainActor [weak self] in
+                guard let self, self.isVisible else { return }
+                let loc = NSEvent.mouseLocation
+                if !NSMouseInRect(loc, self.panel.frame, false),
+                   !PopoutCoordinator.shared.isPointInsideAnyPopout(loc) {
+                    self.hide()
+                }
+            }
+            return event
         }
     }
 
@@ -141,6 +201,10 @@ public final class ControlCenterController {
         if let monitor = globalClickMonitor {
             NSEvent.removeMonitor(monitor)
             globalClickMonitor = nil
+        }
+        if let monitor = localClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            localClickMonitor = nil
         }
     }
 }

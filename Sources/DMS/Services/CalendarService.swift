@@ -83,28 +83,37 @@ public final class CalendarService: ObservableObject {
         let startDate = cal.date(byAdding: .day, value: -7, to: startOfMonth) ?? startOfMonth
         let endDate = cal.date(byAdding: .day, value: 42, to: startOfMonth) ?? startOfMonth
 
-        let predicate = eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: nil)
-        let events = eventStore.events(matching: predicate)
-
-        var keys: Set<String> = []
-        for event in events {
-            let key = CalendarEngine.dateKey(from: event.startDate, calendar: cal)
-            keys.insert(key)
-        }
-
-        if keys.isEmpty {
-            self.eventDateKeys = referenceDateKeys(for: month)
-        } else {
-            self.eventDateKeys = keys
+        let store = eventStore
+        let predicate = store.predicateForEvents(withStart: startDate, end: endDate, calendars: nil)
+        // events(matching:) hits the calendar database — run it off the main actor.
+        Task.detached { [weak self] in
+            let events = store.events(matching: predicate)
+            var keys: Set<String> = []
+            for event in events {
+                keys.insert(CalendarEngine.dateKey(from: event.startDate, calendar: cal))
+            }
+            Task { @MainActor [weak self] in
+                guard let self, !Task.isCancelled else { return }
+                // A legitimately empty month stays empty — no fabricated reference dots.
+                self.eventDateKeys = keys
+            }
         }
     }
 
     public func createEvent(title: String, startDate: Date, endDate: Date) -> Result<String, Error> {
+        checkAuthorization()
+        guard isAuthorized, let calendar = eventStore.defaultCalendarForNewEvents else {
+            return .failure(NSError(
+                domain: "DMS.CalendarService",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Calendar access not authorized or no default calendar available"]
+            ))
+        }
         let event = EKEvent(eventStore: eventStore)
         event.title = title
         event.startDate = startDate
         event.endDate = endDate
-        event.calendar = eventStore.defaultCalendarForNewEvents
+        event.calendar = calendar
 
         do {
             try eventStore.save(event, span: .thisEvent)

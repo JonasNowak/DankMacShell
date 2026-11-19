@@ -45,10 +45,20 @@ public struct ScreenNotchGeometry: Sendable, Codable, Equatable {
         self.screenID = screenID
         self.screenWidth = max(1.0, screenWidth)
         self.screenHeight = max(1.0, screenHeight)
-        self.hasNotch = hasNotch && (notchMaxX > notchMinX) && (notchHeight > 0.0)
-        self.notchMinX = self.hasNotch ? max(0.0, notchMinX) : 0.0
-        self.notchMaxX = self.hasNotch ? min(screenWidth, notchMaxX) : 0.0
-        self.notchHeight = self.hasNotch ? max(0.0, notchHeight) : 0.0
+        var effectiveHasNotch = hasNotch && (notchMaxX > notchMinX) && (notchHeight > 0.0)
+        var clampedMinX = effectiveHasNotch ? max(0.0, notchMinX) : 0.0
+        // Clamp against the sanitized screen width, not the raw parameter
+        var clampedMaxX = effectiveHasNotch ? min(self.screenWidth, notchMaxX) : 0.0
+        if effectiveHasNotch && !(clampedMinX < clampedMaxX) {
+            // Clamping invalidated the notch bounds (e.g. notch entirely past screen edge)
+            effectiveHasNotch = false
+            clampedMinX = 0.0
+            clampedMaxX = 0.0
+        }
+        self.hasNotch = effectiveHasNotch
+        self.notchMinX = clampedMinX
+        self.notchMaxX = clampedMaxX
+        self.notchHeight = effectiveHasNotch ? max(0.0, notchHeight) : 0.0
     }
 
     /// Creates a `ScreenNotchGeometry` from `NSScreen` safe area and auxiliary top area measurements.
@@ -505,8 +515,8 @@ public enum NotchAwareBarLayoutSolver: Sendable {
             rawExclusionMaxX = notch.screenWidth / 2.0
         }
 
-        let leftBound = max(60.0, rawExclusionMinX - barMargin - 8.0)
-        let rightBound = min(notch.screenWidth - barMargin, rawExclusionMaxX - barMargin + 8.0)
+        let leftBound = max(60.0, rawExclusionMinX - barMargin - spacing)
+        let rightBound = min(notch.screenWidth - barMargin, rawExclusionMaxX - barMargin + spacing)
 
         var leftWings = layout.left
         var rightWings = layout.right
@@ -562,8 +572,14 @@ public enum NotchAwareBarLayoutSolver: Sendable {
             islandExclusionWidth: islandExclusionWidth
         )
 
-        let leftEnd = max(60.0, split.leftSafeEndX)
-        let rightStart = min(barLength, split.rightSafeStartX)
+        var leftEnd = max(60.0, split.leftSafeEndX)
+        var rightStart = min(barLength, split.rightSafeStartX)
+        if leftEnd > rightStart {
+            // Narrow bar (< 120): split at the midpoint so the pills never overlap
+            let mid = barLength / 2.0
+            leftEnd = min(leftEnd, mid)
+            rightStart = max(rightStart, mid)
+        }
         let gapStart = leftEnd
         let gapEnd = max(gapStart, rightStart)
 

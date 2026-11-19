@@ -5,12 +5,18 @@ import DMSCore
 /// Dedicated Bar Popout for Color Sampling with quick eyedropper trigger and the last 12 sampled color swatches.
 /// Complies with `docs/spec/20-bar-widgets.md` `ColorPickerPopout.qml`.
 @MainActor
-public final class ColorPickerPopoutController: ObservableObject {
+public final class ColorPickerPopoutController: ObservableObject, PopoutController {
     public static let shared = ColorPickerPopoutController()
 
     private var panel: ShellPanel?
     @Published public private(set) var isVisible: Bool = false
+    private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
+
+    public var popoutID: String { "colorPicker" }
+    public var popoutPanel: ShellPanel? { panel }
+    public var isPopoutVisible: Bool { isVisible }
+    public func hidePopout() { hide() }
 
     private init() {}
 
@@ -26,15 +32,17 @@ public final class ColorPickerPopoutController: ObservableObject {
         let mouseLoc = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first else { return }
 
-        // Close peer popouts
+        // Close peer popouts and non-popout DMS panels
+        PopoutCoordinator.shared.dismissAll(except: popoutID)
         DashController.shared.hide()
-        AudioPopoutController.shared.hide()
-        BatteryPopoutController.shared.hide()
-        DurationPopoutController.shared.hide()
-        PowerPopoutController.shared.hide()
-        SymbianPopoutController.shared.hide()
         ProcessListController.shared.hide()
         ControlCenterController.shared.hide()
+
+        // Close any existing panel BEFORE creating a new one (fixes leaked ghost panels on double-show)
+        if let existing = panel {
+            existing.orderOut(nil)
+            panel = nil
+        }
 
         let bodyWidth: CGFloat = 240
         let bodyHeight: CGFloat = 280
@@ -53,8 +61,11 @@ public final class ColorPickerPopoutController: ObservableObject {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in
+            self?.hide()
+        }
 
-        let rootView = ColorPickerPopoutView { [weak self] in
+        let rootView = ColorPickerPopoutView(ownerPanel: panel) { [weak self] in
             self?.hide()
         }
         panel.contentView = NSHostingView(rootView: rootView)
@@ -62,13 +73,15 @@ public final class ColorPickerPopoutController: ObservableObject {
         self.panel = panel
         self.isVisible = true
 
+        PopoutCoordinator.shared.register(self)
         PopoutAnimationHelper.animateIn(panel: panel, targetFrame: rect, screen: screen)
-        installClickMonitor()
+        installClickMonitors()
     }
 
     public func hide() {
         guard isVisible else { return }
-        removeClickMonitor()
+        removeClickMonitors()
+        PopoutCoordinator.shared.unregister(popoutID)
         isVisible = false
 
         let panelToClose = self.panel
@@ -78,18 +91,27 @@ public final class ColorPickerPopoutController: ObservableObject {
         PopoutAnimationHelper.animateOut(panel: panelToClose, screen: screen)
     }
 
-    private func installClickMonitor() {
-        removeClickMonitor()
-        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown]
-        ) { [weak self] _ in
+    private func installClickMonitors() {
+        removeClickMonitors()
+        let handler: (NSEvent) -> NSEvent? = { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.hide()
+                guard let self = self, self.isVisible else { return }
+                let clickLoc = NSEvent.mouseLocation
+                if let p = self.panel, NSMouseInRect(clickLoc, p.frame, false) { return }
+                if PopoutCoordinator.shared.isPointInsideAnyBar(clickLoc) { return }
+                self.hide()
             }
+            return event
         }
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: handler)
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { event in _ = handler(event) })
     }
 
-    private func removeClickMonitor() {
+    private func removeClickMonitors() {
+        if let monitor = localClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            localClickMonitor = nil
+        }
         if let monitor = globalClickMonitor {
             NSEvent.removeMonitor(monitor)
             globalClickMonitor = nil
@@ -101,14 +123,16 @@ public final class ColorPickerPopoutController: ObservableObject {
 public struct ColorPickerPopoutView: View {
     @ObservedObject private var theme = ThemeStore.shared
     @ObservedObject private var colorPicker = ColorPickerService.shared
+    let ownerPanel: NSPanel?
     let onClose: () -> Void
 
-    public init(onClose: @escaping () -> Void) {
+    public init(ownerPanel: NSPanel? = nil, onClose: @escaping () -> Void) {
+        self.ownerPanel = ownerPanel
         self.onClose = onClose
     }
 
     public var body: some View {
-        PopoutSurfaceContainer(bodyWidth: 240, bodyHeight: 280) {
+        PopoutSurfaceContainer(bodyWidth: 240, bodyHeight: 280, ownerPanel: ownerPanel) {
             VStack(spacing: 0) {
                 // Header
             HStack(spacing: 8) {

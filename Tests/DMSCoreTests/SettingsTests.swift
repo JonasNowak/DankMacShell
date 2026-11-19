@@ -119,6 +119,7 @@ struct SettingsTests {
         #expect(catalog.contains(where: { $0.id == "privacyIndicator" }))
         #expect(catalog.contains(where: { $0.id == "clock" }))
         #expect(catalog.contains(where: { $0.id == "mediaControls" }))
+        #expect(catalog.contains(where: { $0.id == "gpuMonitor" }))
 
         var layout = BarLayout(
             left: [BarWidgetEntry(id: "launcherButton", widgetId: "launcherButton", enabled: true)],
@@ -149,6 +150,26 @@ struct SettingsTests {
 
         SettingsWidgetCatalog.moveWidget(in: .right, fromIndex: 2, toIndex: 0, in: &layout)
         #expect(layout.right.map { $0.widgetId } == ["wifi", "battery", "volume"])
+    }
+
+    @Test("GPU Monitor Widget Catalog Entry")
+    func testGpuMonitorInCatalog() {
+        let catalog = SettingsWidgetCatalog.all
+        let gpu = catalog.first(where: { $0.id == "gpuMonitor" })
+        #expect(gpu != nil)
+        #expect(gpu?.name == "GPU Monitor")
+        #expect(gpu?.icon == "gauge.with.dots.needle.67percent")
+        // Catalog IDs remain unique
+        let ids = catalog.map { $0.id }
+        #expect(ids.count == Set(ids).count)
+    }
+
+    @Test("Island Default Activities Include Dash and Control Center")
+    func testIslandDefaultActivities() {
+        #expect(IslandSettings.defaultActivities.contains("dash"))
+        #expect(IslandSettings.defaultActivities.contains("controlCenter"))
+        #expect(IslandSettings.default.enabledActivities.contains("dash"))
+        #expect(IslandSettings.default.enabledActivities.contains("controlCenter"))
     }
 
     @Test("Island Settings Defaults, Geometry Clamping, and Serialization")

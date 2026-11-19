@@ -7,10 +7,10 @@ import DMSCore
 /// User and system host card with avatar, username, host details, and system uptime.
 public struct UserInfoCard: View {
     @ObservedObject var themeStore = ThemeStore.shared
-    @State private var uptimeString: String = ""
+    @State private var uptimeString: String = UptimeFormatter.format(seconds: ProcessInfo.processInfo.systemUptime)
     @State private var userAvatar: NSImage?
 
-    private let timer = Timer.publish(every: 30.0, on: .main, in: .common).autoconnect()
+    private static let timer = Timer.publish(every: 30.0, on: .main, in: .common).autoconnect()
 
     public init() {}
 
@@ -71,7 +71,7 @@ public struct UserInfoCard: View {
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(Color(hex: p.primary.hex))
 
-                    Text(uptimeString.isEmpty ? "up 16 hours, 22 minutes" : uptimeString)
+                    Text(uptimeString)
                         .font(.system(size: 9.5, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .lineLimit(1)
@@ -91,7 +91,7 @@ public struct UserInfoCard: View {
             updateUptime()
             loadAvatar()
         }
-        .onReceive(timer) { _ in
+        .onReceive(Self.timer) { _ in
             updateUptime()
         }
     }

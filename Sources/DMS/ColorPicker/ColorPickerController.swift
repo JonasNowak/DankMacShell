@@ -23,11 +23,11 @@ public final class ColorPickerController: ObservableObject {
         guard !isVisible else { return }
 
         DashController.shared.hide()
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let visibleFrame = screen.visibleFrame
 
-        let width: CGFloat = 295
-        let height: CGFloat = 255
+        let width: CGFloat = 420
+        let height: CGFloat = 300
         let rect = NSRect(
             x: visibleFrame.minX + (visibleFrame.width - width) / 2,
             y: visibleFrame.minY + (visibleFrame.height - height) / 2,
@@ -42,6 +42,7 @@ public final class ColorPickerController: ObservableObject {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in self?.hide() }
 
         let view = ColorPickerView { [weak self] in
             self?.hide()

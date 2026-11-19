@@ -43,6 +43,7 @@ public enum BarCenterLayoutSolver: Sendable {
         spacing: Double,
         anchor: Anchor?
     ) -> Double {
+        guard !indices.isEmpty else { return 0.0 }
         let configuredMiddle = anchor?.middle ?? (sizes.count / 2)
         let configuredCount = anchor?.count ?? sizes.count
         let configuredPrevious = anchor?.previous ?? (configuredMiddle - 1)

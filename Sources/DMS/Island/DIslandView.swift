@@ -131,14 +131,6 @@ public struct DIslandView: View {
     @ObservedObject public var controller: DIslandController
     @ObservedObject private var theme = ThemeStore.shared
     @ObservedObject private var configStore = ConfigStore.shared
-    @ObservedObject private var nowPlaying = NowPlayingService.shared
-    @ObservedObject private var lyrics = LyricsService.shared
-    @ObservedObject private var weather = WeatherService.shared
-    @ObservedObject private var inhibit = IdleInhibitService.shared
-    @ObservedObject private var clipboard = ClipboardService.shared
-    private let telemetry = TelemetryService.shared
-    private let audio = AudioService.shared
-    private let battery = BatteryService.shared
 
     public init(controller: DIslandController) {
         self.controller = controller
@@ -183,19 +175,35 @@ public struct DIslandView: View {
 
             Group {
                 if controller.presentationState.isExpanded {
-                    if controller.presentationState == .expandedControlCenter {
-                        ControlCenterView()
-                    } else if controller.presentationState == .expandedDash {
-                        DashView(initialTab: DashController.shared.activeTab, onClose: { controller.close() })
-                    } else {
-                        expandedContent(activity: controller.presentationState.activity)
-                            .padding(.horizontal, useGothFillets ? 18 : 12)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    switch controller.presentationState {
+                    case .expandedControlCenter:
+                        ExpandedPanelContainer(controller: controller) {
+                            ControlCenterView()
+                        }
+                    case .expandedDash:
+                        ExpandedPanelContainer(controller: controller) {
+                            DashView(initialTab: DashController.shared.activeTab, onClose: { controller.close() })
+                        }
+                    default:
+                        ExpandedIslandContent(
+                            controller: controller,
+                            activity: controller.presentationState.activity,
+                            settings: settings,
+                            useGothFillets: useGothFillets
+                        )
+                        .padding(.horizontal, useGothFillets ? 18 : 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                 } else {
-                    compactContent(activity: controller.presentationState.activity)
-                        .padding(.vertical, 4)
+                    CompactIslandContent(
+                        controller: controller,
+                        activity: controller.presentationState.activity,
+                        isNotchAttached: isNotchAttached,
+                        useGothFillets: useGothFillets,
+                        settings: settings
+                    )
+                    .padding(.vertical, 4)
                 }
             }
         }
@@ -226,21 +234,36 @@ public struct DIslandView: View {
             )
         }
     }
+}
 
-    // MARK: - Compact / Idle State
+// MARK: - Compact / Idle State (leaf: observes only what the collapsed island shows)
 
-    @ViewBuilder
-    private func compactContent(activity: IslandActivity) -> some View {
+private struct CompactIslandContent: View {
+    @ObservedObject var controller: DIslandController
+    let activity: IslandActivity
+    let isNotchAttached: Bool
+    let useGothFillets: Bool
+    let settings: IslandSettings
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var configStore = ConfigStore.shared
+    @ObservedObject private var nowPlaying = NowPlayingService.shared
+    @ObservedObject private var weather = WeatherService.shared
+    private let audio = AudioService.shared
+
+    var body: some View {
         let notchWidth = isNotchAttached ? CGFloat(controller.currentNotch.notchWidth) : 0
         let gothFlange: CGFloat = useGothFillets ? CGFloat(settings.gothFilletRadius) : 0.0
         let totalW = CGFloat(controller.currentGeometry.width) + gothFlange * 2
         let wingWidth = isNotchAttached ? max(84.0, (totalW - notchWidth) / 2.0) : (totalW / 2.0 - 6.0)
-        let payload = controller.osdPayload ?? (icon: audio.currentOutputIcon, label: "Volume", progress: audio.volume)
+        // AudioService is only touched while an OSD is actually active — never in idle/media,
+        // so volume polling never keeps the collapsed island re-rendering.
+        let payload: (icon: String, label: String, progress: Double?)? =
+            activity == .osd ? (controller.osdPayload ?? (icon: audio.currentOutputIcon, label: "Volume", progress: audio.volume)) : nil
 
         HStack(spacing: 0) {
             // Left Wing (Left of hardware notch)
             HStack(spacing: 5) {
-                if activity == .osd {
+                if activity == .osd, let payload = payload {
                     Image(systemName: payload.icon)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(theme.primary)
@@ -283,7 +306,7 @@ public struct DIslandView: View {
 
             // Right Wing (Right of hardware notch)
             HStack(spacing: 5) {
-                if activity == .osd {
+                if activity == .osd, let payload = payload {
                     if let prog = payload.progress {
                         Capsule()
                             .fill(theme.surfaceContainerHighest.opacity(0.8))
@@ -302,12 +325,11 @@ public struct DIslandView: View {
                             .foregroundColor(isNotchAttached ? .white : theme.onSurface)
                             .lineLimit(1)
                     } else {
-                        Text(payload.label)
-                            .font(theme.font(size: 10, weight: .bold))
-                            .foregroundColor(theme.primary)
-                            .lineLimit(1)
+                        // Non-gauge OSDs (capsLock / audioOutput / idleInhibit) already print the
+                        // label in the left wing — keep the right wing empty instead of duplicating it.
+                        EmptyView()
                     }
-                } else {
+                } else if activity != .osd {
                     let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
                     let temp = isCelsius ? weather.currentWeather.temperatureC : weather.currentWeather.temperatureF
                     Image(systemName: weather.currentWeather.sfSymbol)
@@ -326,11 +348,18 @@ public struct DIslandView: View {
             .clipped()
         }
     }
+}
 
-    // MARK: - Expanded Activity Drawers
+// MARK: - Expanded Island Content (leaf container with activity header)
 
-    @ViewBuilder
-    private func expandedContent(activity: IslandActivity) -> some View {
+private struct ExpandedIslandContent: View {
+    @ObservedObject var controller: DIslandController
+    let activity: IslandActivity
+    let settings: IslandSettings
+    let useGothFillets: Bool
+    @ObservedObject private var theme = ThemeStore.shared
+
+    var body: some View {
         VStack(spacing: 8) {
             // Top Activity Switcher Header
             HStack(spacing: 6) {
@@ -360,6 +389,7 @@ public struct DIslandView: View {
                         .foregroundColor(theme.onSurfaceVariant)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
 
             Divider().opacity(0.2)
@@ -367,23 +397,25 @@ public struct DIslandView: View {
             Group {
                 switch activity {
                 case .media:
-                    expandedMediaView
+                    ExpandedMediaView(controller: controller)
                 case .osd:
-                    expandedOSDView
+                    ExpandedOSDView(controller: controller)
                 case .notification:
-                    expandedNotificationView
+                    ExpandedNotificationView(controller: controller)
                 case .controlCenter:
-                    ControlCenterView()
+                    ExpandedPanelContainer(controller: controller) { ControlCenterView() }
                 case .dash:
-                    DashView(initialTab: DashController.shared.activeTab, onClose: { controller.close() })
+                    ExpandedPanelContainer(controller: controller) {
+                        DashView(initialTab: DashController.shared.activeTab, onClose: { controller.close() })
+                    }
                 case .clipboard:
-                    expandedClipboardView
+                    ExpandedClipboardView(controller: controller)
                 case .weather:
-                    expandedWeatherView
+                    ExpandedWeatherView()
                 case .powerMenu:
-                    expandedPowerMenuView
+                    ExpandedPowerMenuView(controller: controller)
                 case .launcher, .home:
-                    expandedHomeView
+                    ExpandedHomeView(controller: controller)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -405,8 +437,47 @@ public struct DIslandView: View {
         case .weather: return "cloud.sun.fill"
         }
     }
+}
 
-    private var expandedHomeView: some View {
+/// Close header wrapper for full-panel activities (Control Center / Dash) so the user is
+/// never trapped in an expanded island without a visible close button.
+private struct ExpandedPanelContainer<Content: View>: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Spacer()
+                Button {
+                    controller.close()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.onSurfaceVariant)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+            }
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+// MARK: - Expanded Activity Leaves
+
+private struct ExpandedHomeView: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+    private let telemetry = TelemetryService.shared
+    private let battery = BatteryService.shared
+
+    var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
                 IslandMetricPill(
@@ -450,8 +521,17 @@ public struct DIslandView: View {
         }
         .padding(.top, 4)
     }
+}
 
-    private var expandedMediaView: some View {
+private struct ExpandedMediaView: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var nowPlaying = NowPlayingService.shared
+    @ObservedObject private var lyrics = LyricsService.shared
+    // Album artwork is decoded once per artwork change, never inside `body` at 60Hz.
+    @State private var cachedArtwork: NSImage?
+
+    var body: some View {
         let track = nowPlaying.currentTrack
         return VStack(spacing: 10) {
             HStack(spacing: 12) {
@@ -459,8 +539,8 @@ public struct DIslandView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(theme.primaryContainer.opacity(0.4))
                         .frame(width: 48, height: 48)
-                    if let data = track.artworkData, let nsImg = NSImage(data: data) {
-                        Image(nsImage: nsImg)
+                    if let img = cachedArtwork {
+                        Image(nsImage: img)
                             .resizable()
                             .scaledToFill()
                             .frame(width: 48, height: 48)
@@ -550,11 +630,23 @@ public struct DIslandView: View {
             }
         }
         .padding(.top, 4)
-        .onAppear { lyrics.addConsumer("island.media") }
+        .onAppear {
+            cachedArtwork = track.artworkData.flatMap { NSImage(data: $0) }
+            lyrics.addConsumer("island.media")
+        }
         .onDisappear { lyrics.removeConsumer("island.media") }
+        .onChange(of: nowPlaying.currentTrack.artworkData) { _, newData in
+            cachedArtwork = newData.flatMap { NSImage(data: $0) }
+        }
     }
+}
 
-    private var expandedOSDView: some View {
+private struct ExpandedOSDView: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+    private let audio = AudioService.shared
+
+    var body: some View {
         let payload = controller.osdPayload ?? (icon: audio.currentOutputIcon, label: "Volume", progress: audio.volume)
         return HStack(spacing: 12) {
             Image(systemName: payload.icon)
@@ -585,19 +677,18 @@ public struct DIslandView: View {
                     .foregroundColor(theme.onSurfaceVariant)
                     .frame(width: 36, alignment: .trailing)
             } else {
+                // Non-gauge OSDs already print the label on the left — no duplicate badge here.
                 Spacer()
-                Text(payload.label)
-                    .font(theme.font(size: 11, weight: .bold))
-                    .foregroundColor(theme.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(theme.surfaceContainerHigh)
-                    .clipShape(Capsule())
             }
         }
     }
+}
 
-    private var expandedNotificationView: some View {
+private struct ExpandedNotificationView: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+
+    var body: some View {
         let toast = controller.toastPayload ?? (title: "DMS Notification", body: "No unread notifications", level: "info")
         return HStack(spacing: 10) {
             Image(systemName: toast.level == "error" ? "exclamationmark.triangle.fill" : "bell.badge.fill")
@@ -617,8 +708,15 @@ public struct DIslandView: View {
             Spacer()
         }
     }
+}
 
-    private var expandedControlCenterView: some View {
+private struct ExpandedControlCenterView: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var inhibit = IdleInhibitService.shared
+    private let audio = AudioService.shared
+
+    var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 IslandActionButton(
@@ -658,12 +756,15 @@ public struct DIslandView: View {
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
+                                guard geo.size.width > 0 else { return }
                                 let newVol = min(1.0, max(0.0, Double(value.location.x / geo.size.width)))
                                 audio.setVolume(newVol)
                             }
                     )
                 }
                 .frame(height: 10)
+                .accessibilityLabel("Volume")
+                .accessibilityValue("\(Int(round(audio.volume * 100))) percent")
 
                 Text("\(Int(round(audio.volume * 100)))%")
                     .font(theme.font(size: 11, weight: .bold, mono: true))
@@ -692,8 +793,14 @@ public struct DIslandView: View {
         }
         .padding(.top, 4)
     }
+}
 
-    private var expandedClipboardView: some View {
+private struct ExpandedClipboardView: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var clipboard = ClipboardService.shared
+
+    var body: some View {
         let recent = Array(clipboard.items.prefix(3))
         return VStack(alignment: .leading, spacing: 5) {
             if recent.isEmpty {
@@ -729,8 +836,14 @@ public struct DIslandView: View {
         }
         .padding(.top, 4)
     }
+}
 
-    private var expandedWeatherView: some View {
+private struct ExpandedWeatherView: View {
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var configStore = ConfigStore.shared
+    @ObservedObject private var weather = WeatherService.shared
+
+    var body: some View {
         let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
         let w = weather.currentWeather
         let temp = isCelsius ? w.temperatureC : w.temperatureF
@@ -776,8 +889,12 @@ public struct DIslandView: View {
         }
         .padding(.top, 4)
     }
+}
 
-    private var expandedPowerMenuView: some View {
+private struct ExpandedPowerMenuView: View {
+    @ObservedObject var controller: DIslandController
+
+    var body: some View {
         HStack(spacing: 8) {
             IslandActionButton(icon: "lock.fill", label: "Lock") {
                 controller.close()
@@ -794,7 +911,6 @@ public struct DIslandView: View {
         }
     }
 }
-
 private struct IslandMetricPill: View {
     let icon: String
     let title: String

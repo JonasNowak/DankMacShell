@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Darwin
 import DMSCore
 import MaterialMacLibrary
 
@@ -19,6 +20,9 @@ public final class SymbianThemeStore: ObservableObject {
     private let configDirectory: URL
     private var watcherSource: (any DispatchSourceFileSystemObject)?
     private var watcherFD: Int32 = -1
+    private var appearanceObserver: Any?
+    private var currentThemeMode: String = "dark"
+    private var refreshGeneration: Int = 0
 
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -27,6 +31,7 @@ public final class SymbianThemeStore: ObservableObject {
         self.palette = StockThemes.theme(named: "purple", isDark: true)
         refresh()
         startWatching()
+        startAppearanceObserver()
     }
 
     // MARK: - Config loading
@@ -46,6 +51,7 @@ public final class SymbianThemeStore: ObservableObject {
 
     public func refresh() {
         let config = loadConfig() ?? .default
+        currentThemeMode = config.themeMode
         let lower = config.theme.lowercased()
 
         // Light/dark: explicit themeMode wins, then system appearance
@@ -57,14 +63,13 @@ public final class SymbianThemeStore: ObservableObject {
         default: light = config.isLightMode
         }
         self.isLightMode = light
+        applyAppearance(light: light)
 
         let contrast: ContrastLevel = config.matugenContrast >= 0.5 ? .high : (config.matugenContrast >= 0.2 ? .medium : .standard)
         let scheme = config.matugenScheme
 
         if lower == "dynamic" {
-            let seed = dynamicSeed(from: config) ?? M3Color(config.themeSeedColor)
-            let (dark, lightPalette) = DynamicThemeGenerator.generate(from: seed, name: "Dynamic", contrast: contrast, scheme: scheme)
-            self.palette = light ? lightPalette : dark
+            applyDynamicTheme(config: config, light: light, contrast: contrast, scheme: scheme)
         } else if lower == "custom" || lower.hasPrefix("#") {
             let hex = lower.hasPrefix("#") ? config.theme : config.themeSeedColor
             let seed = M3Color(hex)
@@ -73,18 +78,37 @@ public final class SymbianThemeStore: ObservableObject {
         } else {
             self.palette = StockThemes.theme(named: config.theme, isDark: !light)
         }
+    }
 
+    private func applyAppearance(light: Bool) {
         let targetAppearance: NSAppearance.Name = light ? .aqua : .darkAqua
         if let app = NSApp, app.appearance?.name != targetAppearance {
             app.appearance = NSAppearance(named: targetAppearance)
         }
     }
 
-    /// Seed color for the dynamic theme: dominant color of the configured wallpaper.
-    private func dynamicSeed(from config: DMSConfig) -> M3Color? {
-        let path = config.wallpaperPath
-        guard !path.isEmpty else { return nil }
-        return WallpaperSeedColor.dominantColor(from: URL(fileURLWithPath: path))
+    /// Dynamic theme: the wallpaper seed extraction (`WallpaperSeedColor.dominantColor`,
+    /// a potentially slow image decode) runs on a detached task — never on the main actor.
+    private func applyDynamicTheme(config: DMSConfig, light: Bool, contrast: ContrastLevel, scheme: MatugenScheme) {
+        let generation = refreshGeneration + 1
+        refreshGeneration = generation
+        let seedHex = config.themeSeedColor
+        let wallpaperPath = config.wallpaperPath
+
+        // Provisional palette from the configured seed hex so the UI updates immediately.
+        let provisional = M3Color(seedHex)
+        let (provDark, provLight) = DynamicThemeGenerator.generate(from: provisional, name: "Dynamic", contrast: contrast, scheme: scheme)
+        self.palette = light ? provLight : provDark
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let seed = wallpaperPath.isEmpty ? nil : WallpaperSeedColor.dominantColor(from: URL(fileURLWithPath: wallpaperPath))
+            let resolved = seed ?? M3Color(seedHex)
+            let (dark, lightPalette) = DynamicThemeGenerator.generate(from: resolved, name: "Dynamic", contrast: contrast, scheme: scheme)
+            await MainActor.run { [weak self] in
+                guard let self, self.refreshGeneration == generation else { return }
+                self.palette = light ? lightPalette : dark
+            }
+        }
     }
 
     private static func detectSystemLightMode() -> Bool {
@@ -98,29 +122,49 @@ public final class SymbianThemeStore: ObservableObject {
 
     private func startWatching() {
         let path = configFile.path
-        watcherFD = open(path, O_EVTONLY)
-        guard watcherFD >= 0 else { return }
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        watcherFD = fd
         let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: watcherFD,
+            fileDescriptor: fd,
             eventMask: [.write, .rename, .delete],
             queue: .main
         )
         source.setEventHandler { [weak self] in
-            // The file may be replaced (atomic rename); reopen the descriptor.
-            self?.reopenWatcher()
+            // settings.json may have been atomically replaced (rename/delete): the old
+            // descriptor is now stale, so cancel the old source and watch the new file.
+            self?.restartWatcher()
             self?.refresh()
         }
         source.setCancelHandler { [weak self] in
-            if let fd = self?.watcherFD, fd >= 0 { close(fd) }
-            self?.watcherFD = -1
+            // Capture the local fd: never close a descriptor that has been reused.
+            close(fd)
+            if self?.watcherFD == fd { self?.watcherFD = -1 }
         }
         source.resume()
         watcherSource = source
     }
 
-    private func reopenWatcher() {
-        if watcherFD >= 0 { close(watcherFD) }
-        watcherFD = open(configFile.path, O_EVTONLY)
+    private func restartWatcher() {
+        watcherSource?.cancel()
+        watcherSource = nil
+        watcherFD = -1
+        startWatching()
+    }
+
+    // MARK: - System appearance observer (themeMode == "system")
+
+    private func startAppearanceObserver() {
+        appearanceObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.currentThemeMode.lowercased() == "system" else { return }
+                self.refresh()
+            }
+        }
     }
 }
 

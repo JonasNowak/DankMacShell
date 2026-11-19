@@ -52,6 +52,9 @@ public final class DoNotDisturbService: ObservableObject {
     @Published public private(set) var endDate: Date?
     @Published public private(set) var remainingSeconds: TimeInterval?
 
+    /// Alias used by ToastCenter/SoundEffectService gating.
+    public var isActive: Bool { isEnabled }
+
     private var countdownTimer: Timer?
 
     private init() {}
@@ -76,24 +79,28 @@ public final class DoNotDisturbService: ObservableObject {
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
                     if let end = self.endDate, Date() >= end {
-                        self.disable()
-                        ToastCenter.shared.show(icon: "bell", message: "Do Not Disturb expired")
+                        // Disable silently first so the "Off" toast doesn't overwrite the
+                        // "expired" toast.
+                        self.disable(silently: true)
+                        ToastCenter.shared.show(icon: "bell", message: "Do Not Disturb expired", bypassDND: true)
                     } else {
                         self.updateRemaining()
                     }
                 }
             }
         }
-        ToastCenter.shared.show(icon: "bell.slash.fill", message: "Do Not Disturb: \(preset.label)")
+        ToastCenter.shared.show(icon: "bell.slash.fill", message: "Do Not Disturb: \(preset.label)", bypassDND: true)
     }
 
-    public func disable() {
+    public func disable(silently: Bool = false) {
         countdownTimer?.invalidate()
         countdownTimer = nil
         isEnabled = false
         endDate = nil
         remainingSeconds = nil
-        ToastCenter.shared.show(icon: "bell", message: "Do Not Disturb: Off")
+        if !silently {
+            ToastCenter.shared.show(icon: "bell", message: "Do Not Disturb: Off", bypassDND: true)
+        }
     }
 
     private func updateRemaining() {

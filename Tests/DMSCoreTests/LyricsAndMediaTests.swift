@@ -130,6 +130,55 @@ struct LyricsAndMediaTests {
         #expect(abs(parsed.lines[0].words[1].startTime - 10.0) < 1e-9)
     }
 
+    @Test("Non-finite [offset:] values are rejected instead of poisoning timestamps")
+    func testNonFiniteOffsetRejected() {
+        for bad in ["nan", "inf", "-inf", "+inf", "NaN", "Infinity"] {
+            let parsed = LRCLyricsParser.parse("[offset:\(bad)]\n[00:10.00]x\n[00:20.00]y")
+            #expect(parsed.offsetSeconds == 0, "offset '\(bad)' must be rejected")
+            #expect(parsed.lines.count == 2)
+            #expect(parsed.lines[0].time == 10.0)
+            #expect(parsed.lines[1].time == 20.0)
+            #expect(parsed.lines.allSatisfy { $0.time.isFinite })
+        }
+    }
+
+    @Test("Word timestamps shift by the raw offset even when the line start clamps to zero")
+    func testWordShiftWhenLineClampsToZero() {
+        // +5s offset pushes the 2s line to 0; words shift by -5s directly (clamped at 0)
+        let parsed = LRCLyricsParser.parse("[offset:+5000]\n[00:02.00]<00:02.00>a <00:03.00>b")
+        #expect(parsed.lines[0].time == 0)
+        #expect(parsed.lines[0].words.map(\.startTime) == [0.0, 0.0])
+
+        // Partial clamp: +2.5s offset on a 2s line -> line at 0, words at max(0, t-2.5)
+        let partial = LRCLyricsParser.parse("[offset:+2500]\n[00:02.00]<00:02.00>a <00:04.00>b")
+        #expect(partial.lines[0].time == 0)
+        #expect(partial.lines[0].words.map(\.startTime) == [0.0, 1.5])
+    }
+
+    @Test("Repeated-timestamp lines rebase their enhanced word timestamps")
+    func testRepeatedTimestampWordRebase() {
+        let parsed = LRCLyricsParser.parse("[00:12.00][00:24.00]<00:12.00>La <00:13.00>la")
+        #expect(parsed.lines.count == 2)
+        #expect(parsed.lines[0].time == 12.0)
+        #expect(parsed.lines[1].time == 24.0)
+        #expect(parsed.lines[0].words.map(\.startTime) == [12.0, 13.0])
+        // Second occurrence's words are rebased by t - firstTimestamp = 12
+        #expect(parsed.lines[1].words.map(\.startTime) == [24.0, 25.0])
+    }
+
+    @Test("cacheKey guards non-finite durations instead of trapping")
+    func testCacheKeyNonFiniteDuration() {
+        let nanKey = LRCLyricsParser.cacheKey(title: "T", artist: "A", album: "", duration: .nan)
+        #expect(!nanKey.isEmpty)
+        #expect(nanKey.hasPrefix("a-t-"))
+
+        let infKey = LRCLyricsParser.cacheKey(title: "T", artist: "A", album: "", duration: .infinity)
+        #expect(!infKey.isEmpty)
+
+        let hugeKey = LRCLyricsParser.cacheKey(title: "T", artist: "A", album: "", duration: 1e300)
+        #expect(!hugeKey.isEmpty)
+    }
+
     // MARK: - Binary search solver
 
     private func threeLines() -> ParsedLyrics {

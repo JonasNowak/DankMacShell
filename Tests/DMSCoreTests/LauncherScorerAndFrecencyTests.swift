@@ -107,9 +107,21 @@ struct LauncherScorerAndFrecencyTests {
         #expect(noMatch == nil)
     }
 
+    @Test("Levenshtein Distance Is Emoji and Non-BMP Safe")
+    func testLevenshteinEmoji() {
+        #expect(LauncherScorer.levenshteinDistance("🎉🎊", "🎉") == 1)
+        #expect(LauncherScorer.levenshteinDistance("🎉", "🎊") == 1)
+        #expect(LauncherScorer.levenshteinDistance("🎉🎉🎉", "🎉") == 2)
+        #expect(LauncherScorer.levenshteinDistance("a🎉b", "a🎉b") == 0)
+        // ZWJ family emoji is a single Character (7 UTF-16 units) — must not trip the length pre-check
+        #expect(LauncherScorer.levenshteinDistance("👨‍👩‍👧‍👦", "👨‍👩‍👧") == 1)
+        // Bounded at 3 when lengths differ by more than 2 Characters
+        #expect(LauncherScorer.levenshteinDistance("🎉🎉🎉🎉", "🎉") == 3)
+    }
+
     @Test("Half-Life Frecency Decay Mathematical Model")
     func testFrecencyDecayFormula() {
-        let now = Date()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
 
         // 0 launches -> 0
         #expect(LauncherScorer.calculateFrecency(launchCount: 0, lastLaunch: now, now: now) == 0)
@@ -142,7 +154,7 @@ struct LauncherScorerAndFrecencyTests {
         #expect(store.launchInfo(for: "com.apple.Safari").count == 0)
         #expect(store.launchInfo(for: "com.apple.Safari").lastLaunch == nil)
 
-        let date1 = Date()
+        let date1 = Date(timeIntervalSince1970: 1_700_000_000)
         store.recordLaunch(id: "com.apple.Safari", date: date1)
         #expect(store.launchInfo(for: "com.apple.Safari").count == 1)
 
@@ -245,7 +257,7 @@ struct LauncherScorerAndFrecencyTests {
                     identifier: "org.test.app\(i)",
                     type: .app,
                     launchCount: i % 10,
-                    lastLaunchTime: Date()
+                    lastLaunchTime: Date(timeIntervalSince1970: 1_700_000_000)
                 )
             )
         }

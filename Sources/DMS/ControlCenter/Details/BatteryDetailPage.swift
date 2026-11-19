@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import DMSCore
 
 /// Battery diagnostics, real-time power draw (Watts), health %, and 24h discharge curve subpage.
@@ -13,6 +14,11 @@ public struct BatteryDetailPage: View {
         configStore.config.getSetting("batteryProfile")?.stringValue ?? "balanced"
     }
 
+    /// True on laptops with a real AppleSmartBattery; false on desktop Macs / VMs.
+    private var hasBattery: Bool {
+        detailedInfo.hasHardwareTelemetry || battery.status != nil
+    }
+
     public init() {}
 
     public var body: some View {
@@ -25,7 +31,7 @@ public struct BatteryDetailPage: View {
                         .frame(width: 72, height: 72)
 
                     Circle()
-                        .trim(from: 0, to: CGFloat(detailedInfo.capacity) / 100.0)
+                        .trim(from: 0, to: hasBattery ? CGFloat(detailedInfo.capacity) / 100.0 : 0)
                         .stroke(
                             detailedInfo.capacity <= 20 ? theme.error : (detailedInfo.isCharging ? theme.primary : theme.secondary),
                             style: StrokeStyle(lineWidth: 8, lineCap: .round)
@@ -34,10 +40,10 @@ public struct BatteryDetailPage: View {
                         .frame(width: 72, height: 72)
 
                     VStack(spacing: 0) {
-                        Text("\(detailedInfo.capacity)%")
+                        Text(hasBattery ? "\(detailedInfo.capacity)%" : "--")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundColor(theme.onSurface)
-                        if detailedInfo.isCharging {
+                        if hasBattery && detailedInfo.isCharging {
                             Image(systemName: "bolt.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(theme.primary)
@@ -46,35 +52,57 @@ public struct BatteryDetailPage: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(detailedInfo.isCharging ? "Charging" : (detailedInfo.onACPower ? "Power Adapter Connected" : "On Battery Power"))
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.onSurface)
+                    if hasBattery {
+                        Text(detailedInfo.isCharging ? "Charging" : (detailedInfo.onACPower ? "Power Adapter Connected" : "On Battery Power"))
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundColor(theme.onSurface)
 
-                    if detailedInfo.timeToEmptyMinutes > 0 {
-                        Text("\(detailedInfo.timeToEmptyMinutes / 60)h \(detailedInfo.timeToEmptyMinutes % 60)m remaining")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.onSurfaceVariant)
-                    } else if detailedInfo.timeToFullMinutes > 0 {
-                        Text("\(detailedInfo.timeToFullMinutes / 60)h \(detailedInfo.timeToFullMinutes % 60)m until full")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.onSurfaceVariant)
+                        if detailedInfo.timeToEmptyMinutes > 0 {
+                            Text("\(detailedInfo.timeToEmptyMinutes / 60)h \(detailedInfo.timeToEmptyMinutes % 60)m remaining")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(theme.onSurfaceVariant)
+                        } else if detailedInfo.timeToFullMinutes > 0 {
+                            Text("\(detailedInfo.timeToFullMinutes / 60)h \(detailedInfo.timeToFullMinutes % 60)m until full")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(theme.onSurfaceVariant)
+                        } else {
+                            Text(detailedInfo.isCharged ? "Fully Charged" : "Calculating time...")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(theme.onSurfaceVariant)
+                        }
+
+                        // Wattage draw
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.badge.clock.fill")
+                                .font(.system(size: 11))
+                            Text(String(format: "%.1f W Draw", detailedInfo.powerWatts))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        }
+                        .foregroundColor(theme.primary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(theme.primaryContainer)
+                        .clipShape(Capsule())
                     } else {
-                        Text(detailedInfo.isCharged ? "Fully Charged" : "Calculating time...")
+                        Text("No internal battery")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundColor(theme.onSurface)
+                        Text("This Mac has no smart battery (desktop or VM)")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
 
-                    // Wattage draw
+                    // Live macOS Low Power Mode state
                     HStack(spacing: 4) {
-                        Image(systemName: "bolt.badge.clock.fill")
+                        Image(systemName: battery.isLowPowerModeEnabled ? "leaf.fill" : "gauge.open")
                             .font(.system(size: 11))
-                        Text(String(format: "%.1f W Draw", detailedInfo.powerWatts))
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        Text(battery.isLowPowerModeEnabled ? "Low Power Mode Active" : "Standard Power Mode")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
                     }
-                    .foregroundColor(theme.primary)
+                    .foregroundColor(battery.isLowPowerModeEnabled ? theme.secondary : theme.onSurfaceVariant)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(theme.primaryContainer)
+                    .background(theme.surfaceContainerHighest)
                     .clipShape(Capsule())
                 }
             }
@@ -90,9 +118,9 @@ public struct BatteryDetailPage: View {
                     .foregroundColor(theme.outline)
 
                 HStack(spacing: 10) {
-                    metricTile(label: "Maximum Health", value: "\(detailedInfo.healthPercent)%")
-                    metricTile(label: "Cycle Count", value: "\(detailedInfo.cycleCount)")
-                    metricTile(label: "Voltage", value: String(format: "%.2f V", detailedInfo.voltageVolts))
+                    metricTile(label: "Maximum Health", value: hasBattery ? "\(detailedInfo.healthPercent)%" : "--")
+                    metricTile(label: "Cycle Count", value: hasBattery ? "\(detailedInfo.cycleCount)" : "--")
+                    metricTile(label: "Voltage", value: hasBattery ? String(format: "%.2f V", detailedInfo.voltageVolts) : "--")
                 }
             }
 
@@ -107,6 +135,38 @@ public struct BatteryDetailPage: View {
                     profileButton(name: "balanced", label: "Balanced", icon: "scale.3d")
                     profileButton(name: "performance", label: "Performance", icon: "flame.fill")
                 }
+
+                // Live macOS Low Power Mode state + shortcut into macOS Battery Settings
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: battery.isLowPowerModeEnabled ? "leaf.fill" : "gauge.open")
+                            .font(.system(size: 11))
+                            .foregroundColor(battery.isLowPowerModeEnabled ? theme.secondary : theme.onSurfaceVariant)
+                        Text(battery.isLowPowerModeEnabled ? "Low Power Mode Active" : "Standard Power Mode")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(theme.onSurface)
+                    }
+                    Spacer()
+                    Button {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.system(size: 10))
+                            Text("Battery Settings…")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(theme.surfaceContainerHighest)
+                        .foregroundColor(theme.primary)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open macOS Battery Settings")
+                }
             }
 
             // MARK: - 24-Hour Discharge Curve
@@ -115,14 +175,28 @@ public struct BatteryDetailPage: View {
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(theme.outline)
 
-                DischargeCurveChart()
-                    .frame(height: 80)
-                    .padding(10)
-                    .background(theme.surfaceContainerHigh)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                if hasBattery {
+                    DischargeCurveChart()
+                        .frame(height: 80)
+                        .padding(10)
+                        .background(theme.surfaceContainerHigh)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else {
+                    Text("No battery telemetry available on this Mac")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(theme.onSurfaceVariant)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(height: 80)
+                        .padding(10)
+                        .background(theme.surfaceContainerHigh)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
             }
         }
         .onAppear {
+            detailedInfo = battery.getDetailedInfo()
+        }
+        .onChange(of: battery.status) { _, _ in
             detailedInfo = battery.getDetailedInfo()
         }
     }

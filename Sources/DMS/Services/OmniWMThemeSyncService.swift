@@ -16,13 +16,13 @@ public final class OmniWMThemeSyncService: ObservableObject {
     @Published public private(set) var isSyncing: Bool = false
 
     public static var settingsURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/omniwm/settings.toml")
+        TerminalThemePaths.configHome()
+            .appendingPathComponent("omniwm/settings.toml")
     }
 
     public static var backupURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/omniwm/settings.toml.dms-backup")
+        TerminalThemePaths.configHome()
+            .appendingPathComponent("omniwm/settings.toml.dms-backup")
     }
 
     private init() {}
@@ -49,7 +49,9 @@ public final class OmniWMThemeSyncService: ObservableObject {
             skipIfUnchanged: !force,
             successMessage: "Successfully updated OmniWM borders with theme '\(palette.name)' (mode: \(effectiveConfig.omniwmGradientMode.rawValue))"
         ) { currentContent in
-            OmniWMThemeUpdater.applyTheme(
+            // Throwing variant: when `DankThemeEngine.updateOmniWMToml` fails, the error
+            // propagates and the sync reports failure instead of a false-positive success.
+            try OmniWMThemeUpdater.applyThemeThrowing(
                 to: currentContent,
                 palette: palette,
                 secondarySeed: secondarySeed,
@@ -96,7 +98,7 @@ public final class OmniWMThemeSyncService: ObservableObject {
         backupURL: URL,
         skipIfUnchanged: Bool,
         successMessage: String,
-        transform: (String) -> String
+        transform: (String) throws -> String
     ) -> Bool {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             logger.info("OmniWM settings.toml not found at \(fileURL.path); skipping sync")
@@ -108,18 +110,22 @@ public final class OmniWMThemeSyncService: ObservableObject {
             return false
         }
 
+        // Resolve writable non-Nix symlinks (e.g. a dotfiles-managed settings.toml) so the
+        // atomic write replaces the *target* file instead of detaching the user's symlink.
+        let writeURL = fileURL.resolvingSymlinksInPath()
+
         isSyncing = true
         defer { isSyncing = false }
 
         // Ensure safety backup exists on first synchronization
         if !FileManager.default.fileExists(atPath: backupURL.path) {
-            try? FileManager.default.copyItem(at: fileURL, to: backupURL)
+            try? FileManager.default.copyItem(at: writeURL, to: backupURL)
             logger.info("Created initial OmniWM settings backup at \(backupURL.path)")
         }
 
         do {
-            let currentContent = try String(contentsOf: fileURL, encoding: .utf8)
-            let updatedContent = transform(currentContent)
+            let currentContent = try String(contentsOf: writeURL, encoding: .utf8)
+            let updatedContent = try transform(currentContent)
 
             if skipIfUnchanged && updatedContent == currentContent {
                 lastSyncError = nil
@@ -127,7 +133,7 @@ public final class OmniWMThemeSyncService: ObservableObject {
             }
 
             // Write atomically to trigger OmniWM's settingsFileWatcher
-            try updatedContent.write(to: fileURL, atomically: true, encoding: .utf8)
+            try updatedContent.write(to: writeURL, atomically: true, encoding: .utf8)
             lastSyncDate = Date()
             lastSyncError = nil
             logger.info("\(successMessage)")

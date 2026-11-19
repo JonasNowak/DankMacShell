@@ -12,6 +12,7 @@ public struct SettingsSidebar: View {
         .personalization,
         .primaryBar
     ]
+    @ObservedObject private var configStore = ConfigStore.shared
 
     public init(
         selectedTab: Binding<DMSSettingsTab>,
@@ -174,7 +175,7 @@ public struct SettingsSidebar: View {
         .frame(width: 230)
         .background(
             Color(hex: palette.surfaceContainerLow.hex)
-                .opacity(ConfigStore.shared.config.barTransparent || ConfigStore.shared.config.surfaceOpacity < 0.99 ? 0.55 : 1.0)
+                .opacity(configStore.config.barTransparent || configStore.config.surfaceOpacity < 0.99 ? 0.55 : 1.0)
         )
     }
 

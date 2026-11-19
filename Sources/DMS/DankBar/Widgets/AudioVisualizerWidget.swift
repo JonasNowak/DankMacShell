@@ -23,10 +23,10 @@ public struct AudioVisualizerWidget: View {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(theme.primary)
                         .frame(width: 2.0, height: max(3, barHeights[idx] * 14))
-                        .animation(.easeInOut(duration: 0.12), value: barHeights[idx])
+                        .animation(theme.motionTokens.reducedMotion ? nil : .easeInOut(duration: 0.12), value: barHeights[idx])
                 }
             }
-            .frame(width: isVertical ? 24 : nil, height: isVertical ? 24 : 22)
+            .frame(width: isVertical ? 24 : nil, height: 28)
             .padding(.horizontal, isVertical ? 0 : 4)
             .contentShape(Rectangle())
         }
@@ -44,7 +44,7 @@ public struct AudioVisualizerWidget: View {
 
 
     private func updateAnimationState(isPlaying: Bool) {
-        if isPlaying {
+        if isPlaying && !theme.motionTokens.reducedMotion {
             startAnimation()
         } else {
             stopAnimation()

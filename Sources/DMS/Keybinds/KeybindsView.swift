@@ -57,8 +57,6 @@ public struct KeybindsView: View {
                 title: "Slanted Wallpaper Picker",
                 keys: cfg.wallpaperPickerHotkey ? HotkeyHelper.displayString(key: cfg.wallpaperPickerHotkeyKey, modifiers: cfg.wallpaperPickerHotkeyModifiers) : "Disabled"
             ),
-            ShortcutEntry(category: "DankMaterialShell", title: "Control Center", keys: "⌥ C"),
-            ShortcutEntry(category: "DankMaterialShell", title: "Power & Session Menu", keys: "⌥ P"),
 
             // In-panel shortcuts (v0.6)
             ShortcutEntry(category: "In-Panel Shortcuts", title: "Notepad: Find & Replace", keys: "⌘ F", description: "Opens the find & replace bar in the notepad"),
@@ -82,14 +80,21 @@ public struct KeybindsView: View {
         ]
     }
 
+    private func matchesSearch(_ entry: ShortcutEntry) -> Bool {
+        guard !searchText.isEmpty else { return true }
+        let needle = searchText.lowercased()
+        return entry.title.lowercased().contains(needle)
+            || entry.keys.lowercased().contains(needle)
+            || entry.description.lowercased().contains(needle)
+            || entry.category.lowercased().contains(needle)
+    }
+
+    private var filteredShortcuts: [ShortcutEntry] {
+        shortcuts.filter(matchesSearch)
+    }
+
     private var filteredCategories: [String] {
-        let matching = shortcuts.filter {
-            searchText.isEmpty ||
-            $0.title.lowercased().contains(searchText.lowercased()) ||
-            $0.keys.lowercased().contains(searchText.lowercased()) ||
-            $0.category.lowercased().contains(searchText.lowercased())
-        }
-        return Array(Set(matching.map { $0.category })).sorted()
+        Array(Set(filteredShortcuts.map { $0.category })).sorted()
     }
 
     public var body: some View {
@@ -152,19 +157,26 @@ public struct KeybindsView: View {
                                 .padding(.horizontal, 4)
 
                             VStack(spacing: 6) {
-                                ForEach(shortcuts.filter { $0.category == cat }) { entry in
-                                    HStack {
-                                        Text(entry.title)
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundColor(Color(hex: p.onSurface.hex))
-                                        Spacer()
-                                        Text(entry.keys)
-                                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                            .foregroundColor(Color(hex: p.primary.hex))
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color(hex: p.primaryContainer.hex))
-                                            .cornerRadius(6)
+                                ForEach(filteredShortcuts.filter { $0.category == cat }) { entry in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack {
+                                            Text(entry.title)
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundColor(Color(hex: p.onSurface.hex))
+                                            Spacer()
+                                            Text(entry.keys)
+                                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                                .foregroundColor(Color(hex: p.primary.hex))
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color(hex: p.primaryContainer.hex))
+                                                .cornerRadius(6)
+                                        }
+                                        if !entry.description.isEmpty {
+                                            Text(entry.description)
+                                                .font(.system(size: 11))
+                                                .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
+                                        }
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)

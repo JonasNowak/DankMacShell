@@ -151,10 +151,12 @@ public enum LRCLyricsParser {
                     case "al": if album.isEmpty { album = value }
                     case "offset":
                         let cleaned = value.hasPrefix("+") ? String(value.dropFirst()) : value
-                        offsetMs = Double(cleaned) ?? 0
+                        // Reject non-finite offsets ([offset:nan] / [offset:inf]) instead of poisoning all timestamps.
+                        if let parsed = Double(cleaned), parsed.isFinite {
+                            offsetMs = parsed
+                        }
                     default: break
                     }
-                } else {
                 }
                 rest = rest[rest.index(after: close)...]
                 if times.isEmpty { break }   // metadata line: stop after first tag
@@ -163,8 +165,22 @@ public enum LRCLyricsParser {
             guard !times.isEmpty else { continue }
 
             let (text, words) = parseEnhancedText(String(rest))
+            // Rebase word timestamps of repeated-timestamp lines (e.g. `[00:12.00][00:24.00]<00:12.00>la`)
+            // by `t - firstTimestamp` so the second occurrence's words follow its own line time.
+            let firstTimestamp = times[0]
             for t in times {
-                raws.append(RawLine(time: t, text: text, words: words, order: order))
+                let rebased: [LyricWord]
+                if t == firstTimestamp {
+                    rebased = words
+                } else {
+                    let delta = t - firstTimestamp
+                    rebased = words.map { w in
+                        var w = w
+                        w.startTime = max(0, w.startTime + delta)
+                        return w
+                    }
+                }
+                raws.append(RawLine(time: t, text: text, words: rebased, order: order))
                 order += 1
             }
         }
@@ -175,11 +191,12 @@ public enum LRCLyricsParser {
             var r = r
             let delta = r.time - offsetSeconds
             let applied = max(0, delta)
-            let shift = applied - r.time
             r.time = applied
+            // Shift enhanced word timestamps by the raw offset directly, so words stay
+            // consistent even when the line start itself clamps to 0.
             r.words = r.words.map { w in
                 var w = w
-                w.startTime = max(0, w.startTime + shift)
+                w.startTime = max(0, w.startTime - offsetSeconds)
                 return w
             }
             return r
@@ -368,7 +385,8 @@ public enum LRCLyricsParser {
                 .joined(separator: " ")
         }
         let t = norm(title), a = norm(artist), al = norm(album)
-        let d = Int(duration.rounded())
+        // Int(Double) traps on NaN/Infinity; guard before converting.
+        let d = duration.isFinite ? Int(min(max(duration.rounded(), 0.0), Double(Int.max - 1024))) : 0
         let canonical = "\(t)|\(a)|\(al)|\(d)"
 
         var hash: UInt64 = 0xcbf29ce484222325

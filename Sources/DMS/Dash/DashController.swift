@@ -87,7 +87,7 @@ public final class DashController: ObservableObject {
         let fullFrame = targetScreen.frame
         let bodyWidth: CGFloat = Self.defaultWidth
         let bodyHeight: CGFloat = Self.defaultHeight
-        let targetX = (anchorX != nil && anchorX! > 0) ? anchorX! : fullFrame.midX
+        let targetX = anchorX ?? fullFrame.midX
 
         let rect = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
@@ -107,6 +107,7 @@ public final class DashController: ObservableObject {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.ignoresMouseEvents = false
+        panel.onEscape = { [weak self] in self?.hide() }
 
         let dashView = DashView(initialTab: activeTab) { [weak self] in
             self?.hide()

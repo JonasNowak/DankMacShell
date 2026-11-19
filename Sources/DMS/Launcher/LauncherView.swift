@@ -33,6 +33,15 @@ public final class AppIconCache {
 public struct LauncherView: View {
     @ObservedObject private var theme = ThemeStore.shared
     @ObservedObject private var clipboard = ClipboardService.shared
+    // AppCatalogService / RunningAppsService are `@Observable`, so plain stored properties
+    // are tracked by the Observation framework (no `@ObservedObject` wrapper needed).
+    private let appCatalog = AppCatalogService.shared
+    private let runningApps = RunningAppsService.shared
+    @ObservedObject private var configStore = ConfigStore.shared
+
+    /// Fresh per-presentation identity; applied via `.id(sessionID)` so SwiftUI recreates
+    /// all `@State` and re-runs `.onAppear` on every `show` / `showDMenu` call.
+    public let sessionID: UUID
 
     @State private var query: String
     @State private var selectedIndex: Int = 0
@@ -53,16 +62,30 @@ public struct LauncherView: View {
     @State private var dmenuCandidates: [String] = []
 
     public var onClose: () -> Void
+    /// v0.7 CLI: called after a dmenu selection/cancel has been delivered so the controller
+    /// can clear its in-flight request ID.
+    public var onDMenuResolved: (() -> Void)?
 
-    public init(initialQuery: String = "", onClose: @escaping () -> Void) {
+    public init(initialQuery: String = "", sessionID: UUID = UUID(), onClose: @escaping () -> Void) {
         self._query = State(initialValue: initialQuery)
+        self.sessionID = sessionID
         self.onClose = onClose
+        self.onDMenuResolved = nil
     }
 
     /// v0.7 CLI: dmenu mode — candidates are staged in `candidatesFile` by `dms dmenu`.
-    public init(dmenuPrompt: String, candidatesFile: String, requestID: String, onClose: @escaping () -> Void) {
+    public init(
+        dmenuPrompt: String,
+        candidatesFile: String,
+        requestID: String,
+        sessionID: UUID = UUID(),
+        onDMenuResolved: (() -> Void)? = nil,
+        onClose: @escaping () -> Void
+    ) {
         self._query = State(initialValue: "")
+        self.sessionID = sessionID
         self.onClose = onClose
+        self.onDMenuResolved = onDMenuResolved
         self._dmenuRequestID = State(initialValue: requestID)
         self._dmenuPrompt = State(initialValue: dmenuPrompt)
         self._dmenuCandidates = State(initialValue: DMenuStaging.readCandidates(at: URL(fileURLWithPath: candidatesFile)))
@@ -111,7 +134,7 @@ public struct LauncherView: View {
         if isDMenuMode || isFileSearch {
             return (nil, [])
         }
-        return AppCatalogService.shared.search(query: query)
+        return appCatalog.search(query: query)
     }
 
     private var fileResults: [FileItem] {
@@ -119,7 +142,7 @@ public struct LauncherView: View {
     }
 
     private var currentApps: [AppItem] {
-        let runningService = RunningAppsService.shared
+        let runningService = runningApps
         return appSearchResult.results.map { res in
             let app = res.app
             let isRunning = runningService.isRunning(bundleID: app.bundleID)
@@ -252,6 +275,7 @@ public struct LauncherView: View {
                                     .foregroundColor(theme.onSurfaceVariant)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Clear search")
                         }
                     }
                     .padding(.horizontal, 16)
@@ -281,6 +305,7 @@ public struct LauncherView: View {
                         }
                         .buttonStyle(.plain)
                         .help("List View")
+                        .accessibilityLabel("List view")
 
                         Button {
                             withAnimation(.easeInOut(duration: 0.15)) {
@@ -296,6 +321,7 @@ public struct LauncherView: View {
                         }
                         .buttonStyle(.plain)
                         .help("Grid / Tile View")
+                        .accessibilityLabel("Grid / tile view")
                     }
                     .padding(4)
                     .background(theme.surfaceContainerHigh.opacity(0.7))
@@ -469,9 +495,9 @@ public struct LauncherView: View {
                                             isSelected: app.id == curSelectedApp?.id,
                                             onSelect: { launchApp(app) },
                                             onShowInFinder: { showInFinder(app) },
-                                            onUnhideInBackground: { RunningAppsService.shared.unhide(app: app, inBackground: true) },
-                                            onHide: { RunningAppsService.shared.hide(app: app) },
-                                            onQuit: { RunningAppsService.shared.quit(app: app) },
+                                            onUnhideInBackground: { runningApps.unhide(app: app, inBackground: true) },
+                                            onHide: { runningApps.hide(app: app) },
+                                            onQuit: { runningApps.quit(app: app) },
                                             onCopyID: { copyToClipboard(text: app.bundleID) },
                                             onCopyPath: { copyToClipboard(text: app.path) },
                                             onEdit: { editingApp = app }
@@ -493,9 +519,9 @@ public struct LauncherView: View {
                                             isSelected: app.id == curSelectedApp?.id,
                                             onSelect: { launchApp(app) },
                                             onShowInFinder: { showInFinder(app) },
-                                            onUnhideInBackground: { RunningAppsService.shared.unhide(app: app, inBackground: true) },
-                                            onHide: { RunningAppsService.shared.hide(app: app) },
-                                            onQuit: { RunningAppsService.shared.quit(app: app) },
+                                            onUnhideInBackground: { runningApps.unhide(app: app, inBackground: true) },
+                                            onHide: { runningApps.hide(app: app) },
+                                            onQuit: { runningApps.quit(app: app) },
                                             onCopyID: { copyToClipboard(text: app.bundleID) },
                                             onCopyPath: { copyToClipboard(text: app.path) },
                                             onEdit: { editingApp = app }
@@ -571,7 +597,7 @@ public struct LauncherView: View {
                 .padding(.vertical, 10)
                 .background(theme.panelHeaderBackground)
             }
-            .frame(width: 680)
+            .frame(maxWidth: .infinity)
 
             // MARK: - ActionPanel Sidebar (Spec 18-launcher.md Section 0 & 3)
             if showActionPanel, let app = curSelectedApp {
@@ -608,8 +634,8 @@ public struct LauncherView: View {
                         .background(theme.outlineVariant.opacity(0.3))
 
                     VStack(spacing: 8) {
-                        let isRunning = RunningAppsService.shared.isRunning(bundleID: app.bundleID)
-                        let isHidden = RunningAppsService.shared.isHidden(bundleID: app.bundleID)
+                        let isRunning = runningApps.isRunning(bundleID: app.bundleID)
+                        let isHidden = runningApps.isHidden(bundleID: app.bundleID)
 
                         if isRunning && isHidden {
                             ActionPanelButton(
@@ -625,7 +651,7 @@ public struct LauncherView: View {
                                 icon: "eye.slash.fill",
                                 theme: theme
                             ) {
-                                RunningAppsService.shared.unhide(app: app, inBackground: true)
+                                runningApps.unhide(app: app, inBackground: true)
                             }
                         } else {
                             ActionPanelButton(
@@ -643,7 +669,7 @@ public struct LauncherView: View {
                                 icon: "eye.slash",
                                 theme: theme
                             ) {
-                                RunningAppsService.shared.hide(app: app)
+                                runningApps.hide(app: app)
                             }
                         }
 
@@ -653,7 +679,7 @@ public struct LauncherView: View {
                                 icon: "xmark.circle.fill",
                                 theme: theme
                             ) {
-                                RunningAppsService.shared.quit(app: app)
+                                runningApps.quit(app: app)
                             }
                         }
 
@@ -709,6 +735,11 @@ public struct LauncherView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        .id(sessionID)
+        .onChange(of: showActionPanel) { _, newValue in
+            // Grow the panel to 900pt so the 220pt action sidebar fits without clipping.
+            LauncherController.shared.resizeForActionPanel(newValue)
+        }
         .background(GlassSurfaceBackground())
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
@@ -736,14 +767,16 @@ public struct LauncherView: View {
             return .handled
         }
         .onKeyPress(.rightArrow) {
-            if !isFileSearch && viewMode == .tile {
+            // Only navigate tiles when the search field is empty, so left/right still move
+            // the text cursor inside the query field while typing.
+            if !isDMenuMode && !isFileSearch && viewMode == .tile && query.isEmpty {
                 navigate(delta: 1)
                 return .handled
             }
             return .ignored
         }
         .onKeyPress(.leftArrow) {
-            if !isFileSearch && viewMode == .tile {
+            if !isDMenuMode && !isFileSearch && viewMode == .tile && query.isEmpty {
                 navigate(delta: -1)
                 return .handled
             }
@@ -799,6 +832,7 @@ public struct LauncherView: View {
         if let requestID = dmenuRequestID {
             IPCSocketServer.shared.deliverDMenuResult(requestID: requestID, line: line, cancelled: false)
         }
+        onDMenuResolved?()
         onClose()
     }
 
@@ -807,6 +841,7 @@ public struct LauncherView: View {
         if let requestID = dmenuRequestID {
             IPCSocketServer.shared.deliverDMenuResult(requestID: requestID, line: nil, cancelled: true)
         }
+        onDMenuResolved?()
         onClose()
     }
 
@@ -883,8 +918,8 @@ public struct LauncherView: View {
             onClose()
             return
         }
-        AppCatalogService.shared.recordLaunch(app: app)
-        RunningAppsService.shared.activate(app: app)
+        appCatalog.recordLaunch(app: app)
+        runningApps.activate(app: app)
         onClose()
     }
 
@@ -894,9 +929,19 @@ public struct LauncherView: View {
     }
 
     private func openInTerminal(_ app: AppItem) {
-        let terminal = ConfigStore.shared.config.apps.terminal
-        if let termApp = AppCatalogService.shared.apps.first(where: { $0.name.localizedCaseInsensitiveContains(terminal) }) {
-            RunningAppsService.shared.activate(app: termApp)
+        let terminal = configStore.config.apps.terminal
+        guard let termApp = appCatalog.apps.first(where: { $0.name.localizedCaseInsensitiveContains(terminal) }) else {
+            onClose()
+            return
+        }
+        // Open the app's bundle in the configured terminal: `open -a <terminal> <app path>`.
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-a", termApp.path, app.path]
+        do {
+            try process.run()
+        } catch {
+            runningApps.activate(app: termApp)
         }
         onClose()
     }
@@ -915,7 +960,7 @@ public struct LauncherView: View {
     }
 
     private func openWebSearch(query: String) {
-        if let url = AppSearch.webSearchURL(query: query, provider: ConfigStore.shared.config.webSearchProvider) {
+        if let url = AppSearch.webSearchURL(query: query, provider: configStore.config.webSearchProvider) {
             NSWorkspace.shared.open(url)
         }
     }

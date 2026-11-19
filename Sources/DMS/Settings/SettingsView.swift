@@ -1,4 +1,5 @@
 import SwiftUI
+import ApplicationServices
 import DMSCore
 
 /// Material 3 comprehensive Settings modal view for DMS on macOS.
@@ -10,6 +11,12 @@ public struct SettingsView: View {
     @ObservedObject var pluginService = PluginService.shared
     @ObservedObject var controller = SettingsController.shared
     @ObservedObject var wallpaperService = WallpaperService.shared
+    @ObservedObject var omniWMThemeSync = OmniWMThemeSyncService.shared
+    @ObservedObject var terminalThemeExporter = TerminalThemeExporter.shared
+    @ObservedObject var weatherService = WeatherService.shared
+    @ObservedObject var wellbeingService = WellbeingService.shared
+    @ObservedObject var updateCheckService = UpdateCheckService.shared
+    @Bindable var mediaKeyInterceptor = MediaKeyInterceptor.shared
 
     public typealias SettingsSection = DMSSettingsTab
 
@@ -178,6 +185,7 @@ public struct SettingsView: View {
             onClose()
             return .handled
         }
+        .onAppear { DesktopWidgetsController.shared.start() }
     }
 
     // MARK: - Tab Router
@@ -269,6 +277,10 @@ public struct SettingsView: View {
 
                 Button("Use Custom Seed") {
                     let clean = customSeedHexInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard clean.range(of: "^#?[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else {
+                        ToastCenter.shared.show(icon: "exclamationmark.triangle.fill", message: "Invalid hex color — enter 6 hex digits, e.g. #D0BCFF")
+                        return
+                    }
                     let hex = clean.hasPrefix("#") ? clean : "#\(clean)"
                     configStore.update {
                         $0.themeSeedColor = hex
@@ -362,7 +374,7 @@ public struct SettingsView: View {
                     set: { val in
                         configStore.update { $0.autoThemeOmniWM = val }
                         if val {
-                            OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                            omniWMThemeSync.syncTheme(palette: palette, force: true)
                         }
                     }
                 ),
@@ -389,7 +401,7 @@ public struct SettingsView: View {
                         ForEach(OmniWMGradientMode.allCases, id: \.self) { mode in
                             Button(action: {
                                 configStore.update { $0.omniwmGradientMode = mode }
-                                OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                                omniWMThemeSync.syncTheme(palette: palette, force: true)
                             }) {
                                 HStack(spacing: 6) {
                                     Image(systemName: configStore.config.omniwmGradientMode == mode ? "checkmark.circle.fill" : "circle")
@@ -436,7 +448,7 @@ public struct SettingsView: View {
                             get: { configStore.config.omniwmGradientDirection },
                             set: { val in
                                 configStore.update { $0.omniwmGradientDirection = val }
-                                OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                                omniWMThemeSync.syncTheme(palette: palette, force: true)
                             }
                         ),
                         palette: palette
@@ -452,21 +464,21 @@ public struct SettingsView: View {
                         get: { configStore.config.omniwmSyncOverview },
                         set: { val in
                             configStore.update { $0.omniwmSyncOverview = val }
-                            OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                            omniWMThemeSync.syncTheme(palette: palette, force: true)
                         }
                     ),
                     palette: palette
                 )
 
                 HStack {
-                    if let lastSync = OmniWMThemeSyncService.shared.lastSyncDate {
+                    if let lastSync = omniWMThemeSync.lastSyncDate {
                         Text("Last synced: \(lastSync.formatted(date: .omitted, time: .standard))")
                             .font(.system(size: 9.5))
                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     }
                     Spacer()
                     Button(action: {
-                        OmniWMThemeSyncService.shared.syncTheme(palette: palette, force: true)
+                        omniWMThemeSync.syncTheme(palette: palette, force: true)
                     }) {
                         HStack(spacing: 5) {
                             Image(systemName: "arrow.triangle.2.circlepath")
@@ -494,7 +506,7 @@ public struct SettingsView: View {
                     set: { val in
                         configStore.update { $0.terminalThemeSync = val }
                         if val {
-                            TerminalThemeExporter.shared.exportIfEnabled(
+                            terminalThemeExporter.exportIfEnabled(
                                 palette: themeStore.palette,
                                 themeName: themeStore.themeName,
                                 isDark: themeStore.palette.isDark
@@ -522,7 +534,7 @@ public struct SettingsView: View {
                                 get: { configStore.config[keyPath: keyPath] },
                                 set: { val in
                                     configStore.update { $0[keyPath: keyPath] = val }
-                                    TerminalThemeExporter.shared.exportIfEnabled(
+                                    terminalThemeExporter.exportIfEnabled(
                                         palette: themeStore.palette,
                                         themeName: themeStore.themeName,
                                         isDark: themeStore.palette.isDark
@@ -537,19 +549,19 @@ public struct SettingsView: View {
                 Divider().opacity(0.3)
 
                 HStack {
-                    if let lastExport = TerminalThemeExporter.shared.lastExportDate {
+                    if let lastExport = terminalThemeExporter.lastExportDate {
                         Text("Last exported: \(lastExport.formatted(date: .omitted, time: .standard))")
                             .font(.system(size: 9.5))
                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     }
-                    if !TerminalThemeExporter.shared.lastSkippedManaged.isEmpty {
-                        Text("Skipped (nix-managed): \(TerminalThemeExporter.shared.lastSkippedManaged.joined(separator: ", "))")
+                    if !terminalThemeExporter.lastSkippedManaged.isEmpty {
+                        Text("Skipped (nix-managed): \(terminalThemeExporter.lastSkippedManaged.joined(separator: ", "))")
                             .font(.system(size: 9.5))
                             .foregroundColor(Color(hex: palette.warning.hex))
                     }
                     Spacer()
                     Button(action: {
-                        TerminalThemeExporter.shared.exportIfEnabled(
+                        terminalThemeExporter.exportIfEnabled(
                             palette: themeStore.palette,
                             themeName: themeStore.themeName,
                             isDark: themeStore.palette.isDark
@@ -1470,7 +1482,7 @@ public struct SettingsView: View {
                 Button("Set") {
                     let trimmed = weatherLocationInput.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmed.isEmpty {
-                        WeatherService.shared.setManualLocation(trimmed)
+                        weatherService.setManualLocation(trimmed)
                         ToastCenter.shared.show(icon: "checkmark", message: "Weather Location Updated")
                     }
                 }
@@ -1484,7 +1496,7 @@ public struct SettingsView: View {
 
                 Button("Auto") {
                     weatherLocationInput = "auto"
-                    WeatherService.shared.setManualLocation("auto")
+                    weatherService.setManualLocation("auto")
                     ToastCenter.shared.show(icon: "location.fill", message: "Weather Auto GPS Enabled")
                 }
                 .buttonStyle(.plain)
@@ -1495,7 +1507,7 @@ public struct SettingsView: View {
                 .cornerRadius(6)
             }
 
-            Text("Current: \(WeatherService.shared.locationName)")
+            Text("Current: \(weatherService.locationName)")
                 .font(.system(size: 10))
                 .foregroundColor(Color(hex: palette.outline.hex))
         }
@@ -1964,7 +1976,7 @@ public struct SettingsView: View {
         let layout = barConfig.layout
 
         VStack(alignment: .leading, spacing: 10) {
-            Text("Reorder widgets with ↑/↓, move between sections, toggle visibility, or click thepaintbrush icon for per-widget styling.")
+            Text("Reorder widgets with ↑/↓, move between sections, toggle visibility, or click the Edit Layout button for per-widget styling.")
                 .font(.system(size: 10))
                 .foregroundColor(Color(hex: palette.outline.hex))
 
@@ -1997,7 +2009,7 @@ public struct SettingsView: View {
                                         guard index > 0 else { return }
                                         var updated = layout
                                         SettingsWidgetCatalog.moveWidget(in: secEnum, fromIndex: index, toIndex: index - 1, in: &updated)
-                                        configStore.update { $0.barConfigs[0].layout = updated }
+                                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                                     }) {
                                         Image(systemName: "chevron.up")
                                             .font(.system(size: 9, weight: .bold))
@@ -2011,7 +2023,7 @@ public struct SettingsView: View {
                                         guard index + 1 < items.count else { return }
                                         var updated = layout
                                         SettingsWidgetCatalog.moveWidget(in: secEnum, fromIndex: index, toIndex: index + 1, in: &updated)
-                                        configStore.update { $0.barConfigs[0].layout = updated }
+                                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                                     }) {
                                         Image(systemName: "chevron.down")
                                             .font(.system(size: 9, weight: .bold))
@@ -2035,7 +2047,7 @@ public struct SettingsView: View {
                                     Button(action: {
                                         var updated = layout
                                         SettingsWidgetCatalog.toggleWidget(id: item.id, in: &updated)
-                                        configStore.update { $0.barConfigs[0].layout = updated }
+                                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                                     }) {
                                         Image(systemName: item.enabled ? "eye" : "eye.slash")
                                             .font(.system(size: 10))
@@ -2047,7 +2059,7 @@ public struct SettingsView: View {
                                     Button(action: {
                                         var updated = layout
                                         SettingsWidgetCatalog.removeWidget(id: item.id, in: &updated)
-                                        configStore.update { $0.barConfigs[0].layout = updated }
+                                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                                     }) {
                                         Image(systemName: "xmark")
                                             .font(.system(size: 10))
@@ -2101,7 +2113,7 @@ public struct SettingsView: View {
                     set: { val in
                         var updated = layout
                         SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "compactMode", value: AnyCodable(val), in: &updated)
-                        configStore.update { $0.barConfigs[0].layout = updated }
+                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                     }
                 ))
                 .font(.system(size: 10))
@@ -2111,7 +2123,7 @@ public struct SettingsView: View {
                     set: { val in
                         var updated = layout
                         SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "showIcon", value: AnyCodable(val), in: &updated)
-                        configStore.update { $0.barConfigs[0].layout = updated }
+                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                     }
                 ))
                 .font(.system(size: 10))
@@ -2121,7 +2133,7 @@ public struct SettingsView: View {
                     set: { val in
                         var updated = layout
                         SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "showLabel", value: AnyCodable(val), in: &updated)
-                        configStore.update { $0.barConfigs[0].layout = updated }
+                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                     }
                 ))
                 .font(.system(size: 10))
@@ -2134,7 +2146,7 @@ public struct SettingsView: View {
                         set: { val in
                             var updated = layout
                             SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "timeFormat", value: AnyCodable(val ? "24h" : "12h"), in: &updated)
-                            configStore.update { $0.barConfigs[0].layout = updated }
+                            configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                         }
                     ))
                     .font(.system(size: 10))
@@ -2144,7 +2156,7 @@ public struct SettingsView: View {
                         set: { val in
                             var updated = layout
                             SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "showSeconds", value: AnyCodable(val), in: &updated)
-                            configStore.update { $0.barConfigs[0].layout = updated }
+                            configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                         }
                     ))
                     .font(.system(size: 10))
@@ -2154,7 +2166,7 @@ public struct SettingsView: View {
                         set: { val in
                             var updated = layout
                             SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "showDate", value: AnyCodable(val), in: &updated)
-                            configStore.update { $0.barConfigs[0].layout = updated }
+                            configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
                         }
                     ))
                     .font(.system(size: 10))
@@ -2488,7 +2500,7 @@ public struct SettingsView: View {
                     set: { val in
                         var updated = island
                         updated.gothCorners = val
-                        configStore.update { $0.islandSettings = updated }
+                        configStore.update { $0.rawSettings.merge(updated.toDictionary()) { _, new in new } }
                         DIslandController.shared.reposition()
                     }
                 ),
@@ -2504,7 +2516,7 @@ public struct SettingsView: View {
                         set: { val in
                             var updated = island
                             updated.gothFilletRadius = val
-                            configStore.update(immediate: false) { $0.islandSettings = updated }
+                            configStore.update(immediate: false) { $0.rawSettings.merge(updated.toDictionary()) { _, new in new } }
                             DIslandController.shared.reposition()
                         }
                     ),
@@ -2539,7 +2551,7 @@ public struct SettingsView: View {
         VStack(spacing: 12) {
             SettingsCard(icon: "gauge", title: "DankDash Overview", subtitle: "Full-screen calendar & system dashboard", palette: palette) {
                 SettingsToggleRow(
-                    title: "Global Dash Hotkey (⌥D)",
+                    title: "Global Dash Hotkey (\(HotkeyHelper.displayString(key: configStore.config.dashHotkeyKey, modifiers: configStore.config.dashHotkeyModifiers)))",
                     subtitle: "Quick toggle overlay with celestial cards and calendar",
                     isOn: Binding(
                         get: { configStore.config.dashHotkey },
@@ -2584,13 +2596,13 @@ public struct SettingsView: View {
                         Text("macOS Screen Time Integration")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Color(hex: palette.onSurface.hex))
-                        Text(WellbeingService.shared.isMacOSScreenTimeActive ? "macOS ScreenTimeAgent is running and active" : "macOS ScreenTimeAgent is inactive or disabled")
+                        Text(wellbeingService.isMacOSScreenTimeActive ? "macOS ScreenTimeAgent is running and active" : "macOS ScreenTimeAgent is inactive or disabled")
                             .font(.system(size: 11))
-                            .foregroundColor(WellbeingService.shared.isMacOSScreenTimeActive ? Color(hex: palette.primary.hex) : Color(hex: palette.error.hex))
+                            .foregroundColor(wellbeingService.isMacOSScreenTimeActive ? Color(hex: palette.primary.hex) : Color(hex: palette.error.hex))
                     }
                     Spacer()
                     Button(action: {
-                        WellbeingService.shared.openMacOSScreenTimeSettings()
+                        wellbeingService.openMacOSScreenTimeSettings()
                     }) {
                         HStack(spacing: 5) {
                             Image(systemName: "arrow.up.forward.app")
@@ -2747,7 +2759,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private func mediaKeyInterceptionStatusView(palette: DMSPalette) -> some View {
-        let interceptor = MediaKeyInterceptor.shared
+        let interceptor = mediaKeyInterceptor
         switch interceptor.mode {
         case .active:
             HStack(spacing: 8) {
@@ -2782,7 +2794,7 @@ public struct SettingsView: View {
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.open.fill")
-                        Text("Open Device Control & Data Access (macOS 27+)")
+                        Text("Open Device Control & Data Access (macOS 15+)")
                     }
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 10)
@@ -2808,7 +2820,7 @@ public struct SettingsView: View {
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                     Spacer()
                 }
-                Text("Native macOS volume HUD is suppressed and volume adjustments trigger the HUD via CoreAudio. In macOS 27+, Accessibility is renamed to 'Device Control and Data Access'.")
+                Text("Native macOS volume HUD is suppressed and volume adjustments trigger the HUD via CoreAudio. In macOS 15+, Accessibility is renamed to 'Device Control and Data Access'.")
                     .font(.caption2)
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
@@ -3347,18 +3359,71 @@ public struct SettingsView: View {
     // MARK: - 21. About Tab
     @ViewBuilder
     private func aboutTab(palette: DMSPalette) -> some View {
-        SettingsCard(icon: "info.circle.fill", title: "DankMaterialShell (DMS)", subtitle: "Native macOS Port", palette: palette) {
+        SettingsCard(icon: "info.circle.fill", title: "DankMacShell (DMS)", subtitle: "Native macOS Port", palette: palette) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Native Swift 6 & SwiftUI port of AvengeMedia/DankMaterialShell. Follows complete Material Design 3 guidelines with zero idle CPU and native macOS integration.")
+                HStack(spacing: 8) {
+                    Text("Version \(DMSVersion.displayVersion)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color(hex: palette.onPrimary.hex))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color(hex: palette.primary.hex))
+                        .cornerRadius(6)
+                    Spacer()
+                }
+
+                Text("DankMacShell — a native Swift 6 & SwiftUI shell for macOS. Follows complete Material Design 3 guidelines with zero idle CPU and native macOS integration.")
                     .font(.system(size: 10))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
                 HStack(spacing: 12) {
-                    Link("Documentation", destination: URL(string: "https://danklinux.com/docs")!)
-                    Link("GitHub Repository", destination: URL(string: "https://github.com/AvengeMedia/DankMaterialShell")!)
+                    Link("Documentation", destination: URL(string: "https://github.com/JonasNowak/DankMacShell#readme")!)
+                    Link("GitHub Repository", destination: URL(string: "https://github.com/JonasNowak/DankMacShell")!)
+                    Link("Report an Issue", destination: URL(string: "https://github.com/JonasNowak/DankMacShell/issues")!)
                 }
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(Color(hex: palette.primary.hex))
+
+                Divider().opacity(0.3).padding(.vertical, 2)
+
+                HStack(spacing: 8) {
+                    Button(action: {
+                        Task { @MainActor in updateCheckService.checkNow(force: true) }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: updateCheckService.isChecking ? "arrow.triangle.2.circlepath" : "arrow.down.circle.fill")
+                                .font(.system(size: 11))
+                            Text(updateCheckService.isChecking ? "Checking for Updates…" : "Check for Updates")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundColor(Color(hex: palette.onPrimary.hex))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(hex: palette.primary.hex))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(updateCheckService.isChecking)
+
+                    Spacer()
+
+                    if updateCheckService.hasUpdate, let latest = updateCheckService.latestVersion {
+                        Button(action: {
+                            if let url = updateCheckService.releaseURL {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }) {
+                            Text("Update available: v\(latest)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(Color(hex: palette.error.hex))
+                        }
+                        .buttonStyle(.plain)
+                    } else if !updateCheckService.isChecking {
+                        Text("Up to date (v\(DMSVersion.displayVersion))")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color(hex: palette.outline.hex))
+                    }
+                }
 
                 Divider().opacity(0.3).padding(.vertical, 2)
 
@@ -3366,14 +3431,17 @@ public struct SettingsView: View {
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(Color(hex: palette.outline.hex))
 
+                let socketPath = NSHomeDirectory() + "/Library/Application Support/DMS/dms.sock"
+                let socketRunning = FileManager.default.fileExists(atPath: socketPath)
+                let accessibilityTrusted = AXIsProcessTrusted()
+
                 VStack(spacing: 4) {
-                    diagnosticRow(name: "CoreAudio Engine", status: "Active", ok: true, palette: palette)
-                    diagnosticRow(name: "CoreWLAN Network", status: "Active", ok: true, palette: palette)
-                    diagnosticRow(name: "IOBluetooth Controller", status: "Active", ok: true, palette: palette)
-                    diagnosticRow(name: "IOKit Power & Battery", status: "Active", ok: true, palette: palette)
-                    diagnosticRow(name: "DisplayServices (dlopen)", status: "Loaded", ok: true, palette: palette)
-                    diagnosticRow(name: "CBBlueLightClient (dlopen)", status: "Loaded", ok: true, palette: palette)
-                    diagnosticRow(name: "Unix Socket Daemon", status: "Listening (dms.sock)", ok: true, palette: palette)
+                    diagnosticRow(name: "Accessibility (Device Control & Data Access)", status: accessibilityTrusted ? "Trusted" : "Not trusted", ok: accessibilityTrusted, palette: palette)
+                    diagnosticRow(name: "Media Key Interceptor", status: mediaKeyInterceptor.mode == .active ? "Active tap" : (mediaKeyInterceptor.mode == .passive ? "Passive tap" : "CoreAudio fallback"), ok: mediaKeyInterceptor.mode != .fallback, palette: palette)
+                    diagnosticRow(name: "Native OSD Suppression", status: SystemOSDManager.shared.isSuppressed ? "Suppressed" : "Not suppressed", ok: SystemOSDManager.shared.isSuppressed, palette: palette)
+                    diagnosticRow(name: "IPC Socket Server", status: socketRunning ? "Listening (dms.sock)" : "Not running", ok: socketRunning, palette: palette)
+                    diagnosticRow(name: "Weather Service", status: weatherService.lastFetchTime != nil ? "Live" : "No data yet", ok: weatherService.lastFetchTime != nil, palette: palette)
+                    diagnosticRow(name: "Update Check", status: updateCheckService.isChecking ? "Checking…" : (updateCheckService.hasUpdate ? "Update available" : "Up to date"), ok: !updateCheckService.hasUpdate, palette: palette)
                     diagnosticRow(
                         name: "DankSearch Fault-Tolerant Engine",
                         status: DankSearchClient.shared.healthState == .healthy ? "Healthy" : (DankSearchClient.shared.healthState.statusMessage ?? "Degraded"),

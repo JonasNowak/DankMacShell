@@ -121,6 +121,13 @@ public final class AudioService {
     }
 
     public func refresh() {
+        // Refresh the device lists BEFORE resolving the default output so a newly plugged-in
+        // device reports the correct name/icon in onDefaultOutputChanged.
+        let list = Self.outputDevices(defaultID: Self.defaultOutputDevice())
+        if list != outputs { outputs = list }
+        let inList = Self.inputDevicesList()
+        if inList != inputs { inputs = inList }
+
         let newDevice = Self.defaultOutputDevice()
         if newDevice != device {
             let oldDevice = device
@@ -135,10 +142,14 @@ public final class AudioService {
         let oldMute = isMuted
         if let v = Self.getDeviceVolume(device) { volume = Double(v) }
         if let m = Self.uint32(device, kAudioDevicePropertyMute) { isMuted = m != 0 }
-        let list = Self.outputDevices(defaultID: device)
-        if list != outputs { outputs = list }
-        let inList = Self.inputDevicesList()
-        if inList != inputs { inputs = inList }
+        // Read input (microphone) volume & mute from the CoreAudio HAL input scope.
+        let inputDevice = Self.defaultInputDevice()
+        if let iv = Self.float(inputDevice, Self.scalarVolume, scope: kAudioDevicePropertyScopeInput) {
+            inputVolume = Double(iv)
+        }
+        if let im = Self.uint32(inputDevice, kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeInput) {
+            isMicMuted = im != 0
+        }
         EventSubscriptionBroker.shared.broadcast(event: "events.audio", payload: ["volume": volume, "isMuted": isMuted])
 
         if isInitialized && (abs(volume - oldVol) > 0.001 || isMuted != oldMute) {
@@ -182,11 +193,11 @@ public final class AudioService {
 
     public func setMicMuted(_ muted: Bool) {
         isMicMuted = muted
-        let script = muted ? "set volume input volume 0" : "set volume input volume 100"
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-        }
+        // CoreAudio HAL mute on the default input device (input scope) — no main-thread
+        // blocking AppleScript.
+        let dev = Self.defaultInputDevice()
+        guard dev != 0 else { return }
+        Self.setUInt32(dev, kAudioDevicePropertyMute, muted ? 1 : 0, scope: kAudioDevicePropertyScopeInput)
         onMicMuteChanged?(muted)
     }
 
@@ -317,30 +328,30 @@ public final class AudioService {
         return id
     }
 
-    private static func float(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector) -> Float32? {
-        var address = address(selector, scope: kAudioDevicePropertyScopeOutput)
+    private static func float(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioDevicePropertyScopeOutput) -> Float32? {
+        var address = address(selector, scope: scope)
         guard device != 0, AudioObjectHasProperty(device, &address) else { return nil }
         var value = Float32(0)
         var size = UInt32(MemoryLayout<Float32>.size)
         return AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr ? value : nil
     }
 
-    private static func uint32(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector) -> UInt32? {
-        var address = address(selector, scope: kAudioDevicePropertyScopeOutput)
+    private static func uint32(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioDevicePropertyScopeOutput) -> UInt32? {
+        var address = address(selector, scope: scope)
         guard device != 0, AudioObjectHasProperty(device, &address) else { return nil }
         var value = UInt32(0)
         var size = UInt32(MemoryLayout<UInt32>.size)
         return AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr ? value : nil
     }
 
-    private static func setFloat(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector, _ value: Float32) {
-        var address = address(selector, scope: kAudioDevicePropertyScopeOutput)
+    private static func setFloat(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector, _ value: Float32, scope: AudioObjectPropertyScope = kAudioDevicePropertyScopeOutput) {
+        var address = address(selector, scope: scope)
         var v = value
         AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &v)
     }
 
-    private static func setUInt32(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector, _ value: UInt32) {
-        var address = address(selector, scope: kAudioDevicePropertyScopeOutput)
+    private static func setUInt32(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector, _ value: UInt32, scope: AudioObjectPropertyScope = kAudioDevicePropertyScopeOutput) {
+        var address = address(selector, scope: scope)
         var v = value
         AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &v)
     }
@@ -357,8 +368,11 @@ public final class AudioService {
             let data = malloc(Int(configSize))
             defer { free(data) }
             if let data = data, AudioObjectGetPropertyData(id, &configAddr, 0, nil, &configSize, data) == noErr {
-                let bufferList = data.bindMemory(to: AudioBufferList.self, capacity: 1)
-                if bufferList.pointee.mNumberBuffers > 0 {
+                // AudioBufferList.mNumberBuffers is the leading UInt32; read it directly instead
+                // of bindMemory(to: AudioBufferList.self) which is UB when configSize is smaller
+                // than a full AudioBufferList.
+                if configSize >= MemoryLayout<UInt32>.size,
+                   data.load(fromByteOffset: 0, as: UInt32.self) > 0 {
                     return true
                 }
             }
@@ -378,8 +392,8 @@ public final class AudioService {
             let data = malloc(Int(configSize))
             defer { free(data) }
             if let data = data, AudioObjectGetPropertyData(id, &configAddr, 0, nil, &configSize, data) == noErr {
-                let bufferList = data.bindMemory(to: AudioBufferList.self, capacity: 1)
-                if bufferList.pointee.mNumberBuffers > 0 {
+                if configSize >= MemoryLayout<UInt32>.size,
+                   data.load(fromByteOffset: 0, as: UInt32.self) > 0 {
                     return true
                 }
             }
@@ -411,11 +425,24 @@ public final class AudioService {
     public var inputVolume: Double = 0.75
 
     public func setInputVolume(_ value: Double) {
-        inputVolume = min(1.0, max(0.0, value))
-        let script = "set volume input volume \(Int(inputVolume * 100))"
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
+        let clamped = Float32(min(1.0, max(0.0, value)))
+        inputVolume = Double(clamped)
+        // CoreAudio HAL volume on the default input device (input scope) — no main-thread
+        // blocking AppleScript.
+        let dev = Self.defaultInputDevice()
+        guard dev != 0 else { return }
+        Self.setFloat(dev, Self.virtualMainVolume, clamped, scope: kAudioDevicePropertyScopeInput)
+        Self.setFloat(dev, Self.scalarVolume, clamped, scope: kAudioDevicePropertyScopeInput)
+        for el in [1, 2] as [AudioObjectPropertyElement] {
+            var addr = AudioObjectPropertyAddress(
+                mSelector: Self.scalarVolume,
+                mScope: kAudioDevicePropertyScopeInput,
+                mElement: el
+            )
+            if AudioObjectHasProperty(dev, &addr) {
+                var v = clamped
+                AudioObjectSetPropertyData(dev, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &v)
+            }
         }
     }
 

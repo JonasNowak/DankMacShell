@@ -51,7 +51,7 @@ struct WeatherTests {
 
     @Test("HourlyForecastPoint and DailyForecastPoint Models")
     func testForecastPoints() {
-        let now = Date()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
         let hourly = HourlyForecastPoint(
             time: now,
             hourLabel: "Now",
@@ -89,7 +89,7 @@ struct WeatherTests {
     @Test("CelestialEngine Day Progress with Sunrise and Sunset")
     func testCelestialEngineDayProgress() {
         let calendar = Calendar.current
-        let today = Date()
+        let today = Date(timeIntervalSince1970: 1_700_000_000)
         let sunrise = calendar.date(bySettingHour: 6, minute: 0, second: 0, of: today)!
         let sunset = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: today)!
 

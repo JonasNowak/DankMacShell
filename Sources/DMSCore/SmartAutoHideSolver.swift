@@ -2,7 +2,7 @@ import Foundation
 
 /// Geometry evaluation engine for Smart Auto-Hide detection.
 /// Computes whether an active frontmost or on-screen application window covers or overlaps
-/// a display screen (fullscreen/maximized) or intersects the bar/dock boundary.
+/// a display screen (fullscreen/maximized) or overlaps the bar area.
 public struct SmartAutoHideSolver: Sendable {
     /// Evaluates if a given window's coordinates and dimensions cover the target screen.
     ///

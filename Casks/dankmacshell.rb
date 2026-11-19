@@ -10,6 +10,7 @@ cask "dankmacshell" do
   desc "Material Design 3 desktop shell for macOS"
   homepage "https://github.com/JonasNowak/DankMacShell"
 
+  depends_on macos: ">= :sonoma"
   depends_on formula: "jonasnowak/dankmac/dank-theme-engine"
   depends_on formula: "jonasnowak/dankmac/dms-gop"
 

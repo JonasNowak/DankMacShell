@@ -6,13 +6,14 @@ public struct WeatherOverviewCard: View {
     @ObservedObject var themeStore = ThemeStore.shared
     @ObservedObject var weather = WeatherService.shared
     @ObservedObject var controller = DashController.shared
+    @ObservedObject var configStore = ConfigStore.shared
 
     public init() {}
 
     public var body: some View {
         let p = themeStore.palette
         let current = weather.currentWeather
-        let isCelsius = ConfigStore.shared.config.weatherUnits.lowercased() == "celsius"
+        let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
         let tempStr = isCelsius ? "\(Int(round(current.temperatureC)))°C" : "\(Int(round(current.temperatureF)))°F"
 
         Button(action: {

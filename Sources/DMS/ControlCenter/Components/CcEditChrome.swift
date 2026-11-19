@@ -17,8 +17,6 @@ public struct CcEditChrome: View {
     public let onReset: () -> Void
     public let onDone: () -> Void
 
-    @Environment(\.materialTheme) private var m3
-
     public init(
         canUndo: Bool,
         canRedo: Bool,
@@ -52,7 +50,10 @@ public struct CcEditChrome: View {
     }
 
     private var undoButton: some View {
-        Button(action: onUndo) {
+        // Read the bridged theme directly from themeStore; the @Environment value above
+        // the .materialTheme(...) modifier is not populated for these sibling views.
+        let m3 = themeStore.materialTheme
+        return Button(action: onUndo) {
             Image(systemName: "arrow.uturn.backward")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(canUndo ? m3.onSurface : m3.outline.opacity(0.4))
@@ -62,10 +63,12 @@ public struct CcEditChrome: View {
         }
         .buttonStyle(.plain)
         .disabled(!canUndo)
+        .accessibilityLabel("Undo")
     }
 
     private var redoButton: some View {
-        Button(action: onRedo) {
+        let m3 = themeStore.materialTheme
+        return Button(action: onRedo) {
             Image(systemName: "arrow.uturn.forward")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(canRedo ? m3.onSurface : m3.outline.opacity(0.4))
@@ -75,5 +78,6 @@ public struct CcEditChrome: View {
         }
         .buttonStyle(.plain)
         .disabled(!canRedo)
+        .accessibilityLabel("Redo")
     }
 }

@@ -149,7 +149,8 @@ public struct OmniWMMarginUpdater: Sendable {
             if inGapsOuter,
                let kv = parseKeyValue(line),
                let newValue = updates[kv.key] {
-                output.append("\(kv.leadingWhitespace)\(kv.key) = \(newValue)")
+                // Preserve any trailing inline comment (e.g. `top = 60.0 # bar`).
+                output.append("\(kv.leadingWhitespace)\(kv.key) = \(newValue)\(kv.trailingComment)")
                 seenKeys.insert(kv.key)
                 continue
             }
@@ -196,7 +197,7 @@ public struct OmniWMMarginUpdater: Sendable {
         return .table(name)
     }
 
-    private static func parseKeyValue(_ line: String) -> (leadingWhitespace: String, key: String, value: String)? {
+    private static func parseKeyValue(_ line: String) -> (leadingWhitespace: String, key: String, value: String, trailingComment: String)? {
         let leadingWhitespace = String(line.prefix(while: { $0 == " " || $0 == "\t" }))
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, !trimmed.hasPrefix("#"),
@@ -208,9 +209,19 @@ public struct OmniWMMarginUpdater: Sendable {
         guard !key.isEmpty else { return nil }
 
         let rhsFull = trimmed[trimmed.index(after: eqIdx)...]
-        let rhsWithoutComment = rhsFull.firstIndex(of: "#").map { rhsFull[..<$0] } ?? rhsFull
-        let value = rhsWithoutComment.trimmingCharacters(in: .whitespaces)
-        return (leadingWhitespace, key, value)
+        let valuePart: Substring
+        var trailingComment = ""
+        if let hashIdx = rhsFull.firstIndex(of: "#") {
+            // Keep the whitespace between the value and the `#` so the comment stays aligned.
+            let beforeHash = rhsFull[..<hashIdx]
+            let gap = String(String(beforeHash).reversed().prefix(while: { $0 == " " || $0 == "\t" }).reversed())
+            trailingComment = gap + String(rhsFull[hashIdx...])
+            valuePart = beforeHash
+        } else {
+            valuePart = rhsFull
+        }
+        let value = valuePart.trimmingCharacters(in: .whitespaces)
+        return (leadingWhitespace, key, value, trailingComment)
     }
 
     private static func isValidTOMLNumber(_ raw: String) -> Bool {

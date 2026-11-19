@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CryptoKit
 import ImageIO
 import DMSCore
 
@@ -17,7 +18,8 @@ public final class WallpaperService: ObservableObject {
     private var scanTask: Task<Void, Never>?
 
     private init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support", isDirectory: true)
         self.thumbsDir = appSupport.appendingPathComponent("DMS/wallpaper_thumbs", isDirectory: true)
         try? FileManager.default.createDirectory(at: thumbsDir, withIntermediateDirectories: true)
 
@@ -52,16 +54,18 @@ public final class WallpaperService: ObservableObject {
         scanTask = Task { @MainActor [weak self] in
             let allItems = await Task.detached(priority: .userInitiated) { () -> [WallpaperItem] in
                 var discovered: [WallpaperItem] = []
+                var seenPaths = Set<String>()
                 let fileManager = FileManager.default
 
                 // 1. Scan ~/Pictures
-                let picturesURL = fileManager.urls(for: .picturesDirectory, in: .userDomainMask).first!
-                Self.scanDirectory(url: picturesURL, source: .pictures, results: &discovered)
+                let picturesURL = fileManager.urls(for: .picturesDirectory, in: .userDomainMask).first
+                    ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Pictures", isDirectory: true)
+                Self.scanDirectory(url: picturesURL, source: .pictures, results: &discovered, seenPaths: &seenPaths)
 
                 // 2. Scan /System/Library/Desktop Pictures
                 let systemWallpapers = URL(fileURLWithPath: "/System/Library/Desktop Pictures")
                 if fileManager.fileExists(atPath: systemWallpapers.path) {
-                    Self.scanDirectory(url: systemWallpapers, source: .system, results: &discovered)
+                    Self.scanDirectory(url: systemWallpapers, source: .system, results: &discovered, seenPaths: &seenPaths)
                 }
 
                 // 3. Scan user-configured custom folders
@@ -69,7 +73,7 @@ public final class WallpaperService: ObservableObject {
                     let expanded = (folderPath as NSString).expandingTildeInPath
                     let folderURL = URL(fileURLWithPath: expanded)
                     if fileManager.fileExists(atPath: folderURL.path) {
-                        Self.scanDirectory(url: folderURL, source: .custom, results: &discovered)
+                        Self.scanDirectory(url: folderURL, source: .custom, results: &discovered, seenPaths: &seenPaths)
                     }
                 }
 
@@ -95,7 +99,8 @@ public final class WallpaperService: ObservableObject {
     private nonisolated static func scanDirectory(
         url: URL,
         source: WallpaperSource,
-        results: inout [WallpaperItem]
+        results: inout [WallpaperItem],
+        seenPaths: inout Set<String>
     ) {
         let fileManager = FileManager.default
         guard let enumerator = fileManager.enumerator(
@@ -108,11 +113,15 @@ public final class WallpaperService: ObservableObject {
             let ext = fileURL.pathExtension.lowercased()
             guard WallpaperItem.supportedExtensions.contains(ext) else { continue }
 
+            // Deduplicate by standardized path (same file reachable via symlinked folders).
+            let standardized = fileURL.standardizedFileURL.path
+            guard seenPaths.insert(standardized).inserted else { continue }
+
             let name = fileURL.deletingPathExtension().lastPathComponent
             let item = WallpaperItem(
-                id: fileURL.path,
+                id: standardized,
                 name: name,
-                path: fileURL.path,
+                path: standardized,
                 source: source
             )
             results.append(item)
@@ -147,6 +156,13 @@ public final class WallpaperService: ObservableObject {
         return memoryThumbCache.object(forKey: path as NSString)
     }
 
+    /// SHA-256 cache filename — base64 names blow past the 255-byte filename limit
+    /// (ENAMETOOLONG) for long paths and silently fail to cache.
+    private static func cacheFileName(for path: String) -> String {
+        let digest = SHA256.hash(data: Data(path.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined() + ".jpg"
+    }
+
     /// Asynchronously retrieves or generates a downsampled thumbnail for the wallpaper image.
     public func thumbnail(for item: WallpaperItem) async -> NSImage? {
         guard let path = item.path else { return nil }
@@ -156,26 +172,24 @@ public final class WallpaperService: ObservableObject {
             return cached
         }
 
-        // 2. Check disk cache
-        let safeName = Data(path.utf8).base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "+", with: "-") + ".jpg"
-        let thumbURL = thumbsDir.appendingPathComponent(safeName)
-
-        if FileManager.default.fileExists(atPath: thumbURL.path),
-           let diskImg = NSImage(contentsOf: thumbURL) {
-            memoryThumbCache.setObject(diskImg, forKey: path as NSString)
-            return diskImg
-        }
-
-        // 3. Generate thumbnail off main thread via ImageIO
-        let targetURL = thumbURL
+        // 2 & 3. Disk cache lookup and thumbnail generation both run off the main actor.
+        let thumbURL = thumbsDir.appendingPathComponent(Self.cacheFileName(for: path))
         let cgThumb = await Task.detached(priority: .utility) { () -> CGImage? in
-            Self.generateThumbnail(at: path, targetURL: targetURL)
+            if FileManager.default.fileExists(atPath: thumbURL.path),
+               let data = try? Data(contentsOf: thumbURL),
+               let src = CGImageSourceCreateWithData(data as CFData, nil),
+               let img = CGImageSourceCreateImageAtIndex(src, 0, nil) {
+                return img
+            }
+            return Self.generateThumbnail(at: path, targetURL: thumbURL)
         }.value
 
         guard let cgThumb else { return nil }
-        let generated = NSImage(cgImage: cgThumb, size: NSSize(width: 160, height: 100))
+        // Preserve the source aspect ratio; cap the max dimension at 800px.
+        let srcW = CGFloat(cgThumb.width)
+        let srcH = CGFloat(cgThumb.height)
+        let scale = min(1.0, 800.0 / max(srcW, srcH, 1))
+        let generated = NSImage(cgImage: cgThumb, size: NSSize(width: srcW * scale, height: srcH * scale))
         memoryThumbCache.setObject(generated, forKey: path as NSString)
         return generated
     }
@@ -188,7 +202,7 @@ public final class WallpaperService: ObservableObject {
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: 320
+            kCGImageSourceThumbnailMaxPixelSize: 800
         ]
 
         guard let cgThumb = CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary) else {
@@ -287,13 +301,15 @@ public final class WallpaperService: ObservableObject {
         let config = ConfigStore.shared.config
         if config.wallpaperPickerOnlyFolder && !config.wallpaperPickerFolder.isEmpty {
             let target = (config.wallpaperPickerFolder as NSString).expandingTildeInPath
+            // Match only paths inside the folder (or its subdirectories), not sibling folders
+            // that merely share a string prefix.
+            let prefix = target.hasSuffix("/") ? target : target + "/"
             let matched = wallpapers.filter { item in
                 guard let p = item.path else { return false }
-                return p.hasPrefix(target)
+                return p.hasPrefix(prefix)
             }
-            if !matched.isEmpty {
-                return matched
-            }
+            // A restricted folder with 0 matches returns [] — never fall back to all wallpapers.
+            return matched
         }
         return wallpapers
     }

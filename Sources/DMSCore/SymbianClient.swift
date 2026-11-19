@@ -82,6 +82,16 @@ public final class SymbianClient: @unchecked Sendable {
         }
     }
 
+    /// Normalizes a user-supplied path argument to an absolute, standardized path so a
+    /// leading `-` can never be interpreted as a CLI flag by the `dms-symbian` process.
+    private static func normalizePathArgument(_ arg: String) -> String {
+        guard !arg.isEmpty, arg.hasPrefix("-") || arg.contains("/") else { return arg }
+        let expanded = (arg as NSString).expandingTildeInPath
+        // URL(fileURLWithPath:) resolves relative paths against the current working
+        // directory and standardizes the result (collapsing `..` components).
+        return URL(fileURLWithPath: expanded).path
+    }
+
     /// Executes a headless command (e.g. `status`, `sync`, `clean`, `install`) via `SafeProcessRunner`.
     public func runAction(_ action: String, arguments: [String] = [], timeout: TimeInterval = 60.0) -> Result<String, SymbianClientError> {
         guard let path = resolveExecutablePath() else {
@@ -89,7 +99,7 @@ public final class SymbianClient: @unchecked Sendable {
         }
 
         var fullArgs = [action]
-        fullArgs.append(contentsOf: arguments)
+        fullArgs.append(contentsOf: arguments.map(Self.normalizePathArgument))
 
         let result = SafeProcessRunner.run(executablePath: path, arguments: fullArgs, timeout: timeout)
         switch result {

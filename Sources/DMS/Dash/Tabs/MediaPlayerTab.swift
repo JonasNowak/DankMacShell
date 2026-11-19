@@ -9,7 +9,7 @@ public struct MediaPlayerTab: View {
     @ObservedObject var nowPlaying = NowPlayingService.shared
     @ObservedObject var lyrics = LyricsService.shared
     @ObservedObject var configStore = ConfigStore.shared
-    let audio = AudioService.shared
+    private let audioService = AudioService.shared
 
     @State private var artImage: NSImage?
     @State private var artAverage: Color?
@@ -340,32 +340,32 @@ public struct MediaPlayerTab: View {
 
     private func volumeRow(_ p: ThemePalette) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: audio.volume > 0.5 ? "speaker.wave.3.fill" : (audio.volume > 0 ? "speaker.wave.1.fill" : "speaker.slash.fill"))
+            Image(systemName: audioService.volume > 0.5 ? "speaker.wave.3.fill" : (audioService.volume > 0 ? "speaker.wave.1.fill" : "speaker.slash.fill"))
                 .font(.system(size: 12))
                 .foregroundColor(Color(hex: p.primary.hex))
                 .frame(width: 16)
 
             Slider(value: Binding(
-                get: { audio.volume },
-                set: { val in audio.setVolume(val) }
+                get: { audioService.volume },
+                set: { val in audioService.setVolume(val) }
             ), in: 0...1)
             .tint(Color(hex: p.primary.hex))
 
             Menu {
-                let devices = audio.outputs.isEmpty
-                    ? [AudioOutput(id: 0, name: audio.currentOutputName, isDefault: true)]
-                    : audio.outputs
+                let devices = audioService.outputs.isEmpty
+                    ? [AudioOutput(id: 0, name: audioService.currentOutputName, isDefault: true)]
+                    : audioService.outputs
 
                 ForEach(devices) { dev in
                     Button(dev.name) {
-                        audio.setDefaultOutput(dev.id)
+                        audioService.setDefaultOutput(dev.id)
                     }
                 }
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "hifispeaker.fill")
                         .font(.system(size: 10))
-                    Text(audio.currentOutputName)
+                    Text(audioService.currentOutputName)
                         .font(.system(size: 10, weight: .medium))
                         .lineLimit(1)
                 }

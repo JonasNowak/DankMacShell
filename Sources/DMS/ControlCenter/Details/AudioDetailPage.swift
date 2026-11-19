@@ -34,6 +34,7 @@ public struct AudioDetailPage: View {
                                 .foregroundColor(theme.primary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(audio.isMuted ? "Unmute output" : "Mute output")
 
                         Text("Master Volume")
                             .font(.system(size: 12, weight: .semibold))
@@ -51,6 +52,7 @@ public struct AudioDetailPage: View {
                         set: { audio.setVolume($0) }
                     ), in: 0...1)
                     .tint(theme.primary)
+                    .accessibilityLabel("Master volume")
                 }
                 .padding(12)
                 .background(theme.surfaceContainerHigh)
@@ -112,6 +114,7 @@ public struct AudioDetailPage: View {
                                 .foregroundColor(audio.isMicMuted ? theme.error : theme.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(audio.isMicMuted ? "Unmute microphone" : "Mute microphone")
 
                         Text("Microphone Gain")
                             .font(.system(size: 12, weight: .semibold))
@@ -129,6 +132,7 @@ public struct AudioDetailPage: View {
                         set: { audio.setInputVolume($0) }
                     ), in: 0...1)
                     .tint(theme.secondary)
+                    .accessibilityLabel("Microphone gain")
                 }
                 .padding(12)
                 .background(theme.surfaceContainerHigh)

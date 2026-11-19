@@ -20,7 +20,9 @@ public struct WallpapersTab: View {
             source: selectedSource,
             query: searchQuery
         )
-        let currentSelection = selectedWallpaper ?? filtered.first ?? WallpaperItem.defaultPresets[0]
+        // Validate the selection against the currently filtered list so applying never
+        // targets a wallpaper hidden by the active source/search filter.
+        let currentSelection = filtered.first { $0.id == selectedWallpaper?.id } ?? filtered.first ?? WallpaperItem.defaultPresets[0]
 
         VStack(spacing: 12) {
             // Category Filter Pills & Actions

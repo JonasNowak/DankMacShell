@@ -47,7 +47,7 @@ public final class MediaKeyInterceptor {
     }
 
     public static var isOSDUIHelperSuppressed: Bool {
-        SystemOSDManager.isOSDUIHelperRunning()
+        SystemOSDManager.shared.isSuppressed
     }
 
     private init() {}
@@ -129,48 +129,78 @@ public final class MediaKeyInterceptor {
 
     // MARK: - Permission Polling
 
+    /// Exponential backoff schedule for the accessibility-trust check: 2s -> 5s -> 15s -> 30s.
+    private static let permissionBackoffIntervals: [TimeInterval] = [2, 5, 15, 30]
+    @ObservationIgnored private var permissionBackoffStep = 0
+
     private func startPermissionObserver() {
-        guard permissionPollTimer == nil else { return }
+        guard activeObserver == nil else { return }
 
-        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.checkPermissionsAndRetryTaps()
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        permissionPollTimer = timer
-
-        activeObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didBecomeActiveNotification,
+        activeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.checkPermissionsAndRetryTaps()
+                guard let self = self else { return }
+                // The user switched apps: re-check trust immediately with a fresh backoff.
+                self.permissionBackoffStep = 0
+                if !self.checkPermissionsAndRetryTaps() {
+                    self.schedulePermissionCheck()
+                }
             }
         }
+
+        schedulePermissionCheck()
+    }
+
+    private func schedulePermissionCheck() {
+        guard isWanted, mode != .active else { return }
+        permissionPollTimer?.invalidate()
+        let step = min(permissionBackoffStep, Self.permissionBackoffIntervals.count - 1)
+        let interval = Self.permissionBackoffIntervals[step]
+        permissionBackoffStep = min(permissionBackoffStep + 1, Self.permissionBackoffIntervals.count - 1)
+        let timer = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if self.checkPermissionsAndRetryTaps() {
+                    self.permissionBackoffStep = 0
+                } else if self.isWanted && self.mode != .active {
+                    self.schedulePermissionCheck()
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        permissionPollTimer = timer
     }
 
     private func stopPermissionObserver() {
         permissionPollTimer?.invalidate()
         permissionPollTimer = nil
         if let obs = activeObserver {
-            NotificationCenter.default.removeObserver(obs)
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
             activeObserver = nil
         }
+        permissionBackoffStep = 0
     }
 
     @discardableResult
     public func checkPermissionsAndRetryTaps() -> Bool {
         guard isWanted else { return false }
-        if mode != .active {
-            if installTaps() && mode == .active {
+        if hasAccessibilityPermission {
+            // Accessibility actually transitioned to trusted: this is the only path
+            // allowed to tear down an existing (passive) tap and install the active one.
+            if mode != .active {
+                _ = installTaps()
+            }
+            if mode == .active {
                 stopPermissionObserver()
                 return true
             }
-        } else {
-            stopPermissionObserver()
-            return true
+        } else if sessionTap == nil && hidTap == nil {
+            // No working tap yet: try to install one (active -> passive -> fallback).
+            // A working `.passive` tap is never torn down while trust is missing.
+            _ = installTaps()
         }
         return mode == .active
     }
@@ -210,6 +240,15 @@ public final class MediaKeyInterceptor {
             let currentMode = MediaKeyInterceptor.shared.mode
 
             if currentMode == .active {
+                // Keyboard backlight and eject keys pass through to macOS: swallowing
+                // them only feeds a dead static OSD.
+                switch key {
+                case .illuminationUp, .illuminationDown, .illuminationToggle, .eject:
+                    return Unmanaged.passUnretained(event)
+                default:
+                    break
+                }
+
                 // Swallow key-up events immediately so macOS never triggers native HUD
                 guard isDown else {
                     return nil
@@ -398,12 +437,10 @@ public final class MediaKeyInterceptor {
             let step = SystemKey.step(fine: fine)
             let next = max(0.0, cur - step)
             OSDController.shared.show(type: .brightness, value: next)
-        case .playPause:
-            NowPlayingService.shared.playPause()
-        case .next, .fast:
-            NowPlayingService.shared.next()
-        case .previous, .rewind:
-            NowPlayingService.shared.previous()
+        case .playPause, .next, .fast, .previous, .rewind:
+            // Passive listen-only mode: the OS already delivers media keys to the
+            // active player, so dispatching them again here would double-trigger.
+            break
         case .illuminationUp, .illuminationDown, .illuminationToggle:
             OSDController.shared.show(type: .keyboardBacklight)
         case .eject:

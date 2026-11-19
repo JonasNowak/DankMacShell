@@ -83,6 +83,7 @@ public final class ThemeStore: ObservableObject {
     private var dynamicSeedColor: M3Color?
     private var dynamicSecondarySeedColor: M3Color?
     private var lastWallpaperURL: URL?
+    private var extractionTask: Task<Void, Never>?
 
     // MARK: - Cached SwiftUI Colors (Eliminates per-render hex string parsing)
     public private(set) var primary: Color = .clear
@@ -293,17 +294,21 @@ public final class ThemeStore: ObservableObject {
         ConfigStore.shared.update { $0.theme = "dynamic" }
         self.lastWallpaperURL = url
 
-        Task { @MainActor [weak self] in
+        extractionTask?.cancel()
+        let task = Task { @MainActor [weak self] in
             let (seedColor, secondarySeed) = await Task.detached(priority: .userInitiated) { () -> (M3Color?, M3Color?) in
                 let seeds = Self.extractPaletteSeedsOffMainThread(from: url)
                 let primarySeed = seeds?.primary ?? Self.extractDominantColorOffMainThread(from: url)
                 return (primarySeed, seeds?.secondary)
             }.value
-            guard let self = self, let seedColor = seedColor else { return }
+            // A newer wallpaper change may have started its own extraction — never apply
+            // stale results out of order.
+            guard let self = self, !Task.isCancelled, let seedColor = seedColor else { return }
             self.dynamicSeedColor = seedColor
             self.dynamicSecondarySeedColor = secondarySeed
             self.refreshTheme()
         }
+        extractionTask = task
     }
 
     public func toggleLightMode() {
@@ -518,7 +523,7 @@ public final class ThemeStore: ObservableObject {
         if let customURL = customURL {
             url = customURL
         } else {
-            guard let screen = NSScreen.main,
+            guard let screen = NSScreen.main ?? NSScreen.screens.first,
                   let desktopURL = NSWorkspace.shared.desktopImageURL(for: screen) else {
                 return
             }
@@ -529,16 +534,18 @@ public final class ThemeStore: ObservableObject {
         }
         lastWallpaperURL = url
 
-        Task { @MainActor [weak self] in
+        extractionTask?.cancel()
+        let task = Task { @MainActor [weak self] in
             let seedColor = await Task.detached(priority: .utility) { () -> M3Color? in
                 Self.extractDominantColorOffMainThread(from: url)
             }.value
-            guard let self = self, let seedColor = seedColor else { return }
+            guard let self = self, !Task.isCancelled, let seedColor = seedColor else { return }
             self.dynamicSeedColor = seedColor
             if self.themeName.lowercased() == "dynamic" {
                 self.refreshTheme()
             }
         }
+        extractionTask = task
     }
 
     nonisolated private static func extractDominantColorOffMainThread(from url: URL) -> M3Color? {

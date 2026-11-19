@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import ObjectiveC
 import Observation
 
 /// Bluetooth power state through IOBluetooth private preferences.
@@ -10,8 +11,22 @@ public final class BluetoothService {
 
     private typealias GetPower = @convention(c) () -> Int32
     private typealias SetPower = @convention(c) (Int32) -> Int32
+    // Typed IMPs for primitive-returning IOBluetoothDevice selectors (verified via the ObjC
+    // runtime: isConnected -> BOOL 'B', openConnection/closeConnection -> IOReturn 'i',
+    // batteryPercentSingle -> unsigned char 'C'). NSObject.perform(_:) on these returns an
+    // Unmanaged whose opaque pointer is the raw return value reinterpreted as an object — UB.
+    private typealias IsConnectedIMP = @convention(c) (AnyObject, Selector) -> Bool
+    private typealias OpenConnectionIMP = @convention(c) (AnyObject, Selector) -> Int32
+    private typealias CloseConnectionIMP = @convention(c) (AnyObject, Selector) -> Int32
+    private typealias BatteryPercentSingleIMP = @convention(c) (AnyObject, Selector) -> UInt8
+
+    private nonisolated static let isConnectedSelector = NSSelectorFromString("isConnected")
+    private nonisolated static let openConnectionSelector = NSSelectorFromString("openConnection")
+    private nonisolated static let closeConnectionSelector = NSSelectorFromString("closeConnection")
+    private nonisolated static let batteryPercentSingleSelector = NSSelectorFromString("batteryPercentSingle")
 
     public private(set) var isOn = false
+    public private(set) var connectedDevicesSummary: String = "Off"
     public let isAvailable: Bool
 
     @ObservationIgnored private var getPower: GetPower?
@@ -31,17 +46,19 @@ public final class BluetoothService {
 
     public func refresh() {
         isOn = (getPower?() ?? 0) != 0
-    }
-
-    public var connectedDevicesSummary: String {
-        guard isOn else { return "Off" }
+        // Cache the summary as a published property so SwiftUI renders never run ObjC
+        // reflection per frame.
+        guard isOn else {
+            connectedDevicesSummary = "Off"
+            return
+        }
         let connected = pairedDevices().filter { $0.isConnected }
         if connected.isEmpty {
-            return "No devices"
+            connectedDevicesSummary = "No devices"
         } else if connected.count == 1 {
-            return connected[0].name
+            connectedDevicesSummary = connected[0].name
         } else {
-            return "\(connected.count) connected"
+            connectedDevicesSummary = "\(connected.count) connected"
         }
     }
 
@@ -67,22 +84,20 @@ public final class BluetoothService {
             let addr = (dev.perform(NSSelectorFromString("addressString"))?.takeUnretainedValue() as? String) ?? UUID().uuidString
 
             var isConn = false
-            let isConnectedSel = NSSelectorFromString("isConnected")
-            if dev.responds(to: isConnectedSel) {
-                if let unmanaged = dev.perform(isConnectedSel) {
-                    let ptr = unmanaged.toOpaque()
-                    isConn = ptr != UnsafeMutableRawPointer(bitPattern: 0)
-                }
+            if dev.responds(to: Self.isConnectedSelector),
+               let imp = class_getMethodImplementation(type(of: dev), Self.isConnectedSelector) {
+                let fn = unsafeBitCast(imp, to: IsConnectedIMP.self)
+                isConn = fn(dev, Self.isConnectedSelector)
             }
 
             var battery: Int? = nil
-            let batterySel = NSSelectorFromString("batteryPercentSingle")
-            if dev.responds(to: batterySel) {
-                if let val = dev.perform(batterySel) {
-                    let intVal = Int(bitPattern: val.toOpaque())
-                    if intVal > 0 && intVal <= 100 {
-                        battery = intVal
-                    }
+            if dev.responds(to: Self.batteryPercentSingleSelector),
+               let imp = class_getMethodImplementation(type(of: dev), Self.batteryPercentSingleSelector) {
+                let fn = unsafeBitCast(imp, to: BatteryPercentSingleIMP.self)
+                let raw = fn(dev, Self.batteryPercentSingleSelector)
+                let pct = Int(raw)
+                if pct > 0 && pct <= 100 {
+                    battery = pct
                 }
             }
 
@@ -97,25 +112,42 @@ public final class BluetoothService {
     }
 
     public func connectDevice(address: String) {
-        guard let deviceClass = NSClassFromString("IOBluetoothDevice") as? NSObject.Type else { return }
-        let withAddrSel = NSSelectorFromString("deviceWithAddressString:")
-        guard deviceClass.responds(to: withAddrSel),
-              let dev = deviceClass.perform(withAddrSel, with: address)?.takeUnretainedValue() as? NSObject else { return }
-        let openSel = NSSelectorFromString("openConnection")
-        if dev.responds(to: openSel) {
-            _ = dev.perform(openSel)
+        guard let dev = Self.device(withAddress: address),
+              dev.responds(to: Self.openConnectionSelector),
+              let imp = class_getMethodImplementation(type(of: dev), Self.openConnectionSelector) else { return }
+        let fn = unsafeBitCast(imp, to: OpenConnectionIMP.self)
+        // openConnection blocks while pairing/connecting — run it off the main actor.
+        Task.detached { [weak dev] in
+            guard let dev else { return }
+            _ = fn(dev, Self.openConnectionSelector)
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                BluetoothService.shared.refresh()
+            }
         }
     }
 
     public func disconnectDevice(address: String) {
-        guard let deviceClass = NSClassFromString("IOBluetoothDevice") as? NSObject.Type else { return }
+        guard let dev = Self.device(withAddress: address),
+              dev.responds(to: Self.closeConnectionSelector),
+              let imp = class_getMethodImplementation(type(of: dev), Self.closeConnectionSelector) else { return }
+        let fn = unsafeBitCast(imp, to: CloseConnectionIMP.self)
+        Task.detached { [weak dev] in
+            guard let dev else { return }
+            _ = fn(dev, Self.closeConnectionSelector)
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                BluetoothService.shared.refresh()
+            }
+        }
+    }
+
+    private static func device(withAddress address: String) -> NSObject? {
+        guard let deviceClass = NSClassFromString("IOBluetoothDevice") as? NSObject.Type else { return nil }
         let withAddrSel = NSSelectorFromString("deviceWithAddressString:")
         guard deviceClass.responds(to: withAddrSel),
-              let dev = deviceClass.perform(withAddrSel, with: address)?.takeUnretainedValue() as? NSObject else { return }
-        let closeSel = NSSelectorFromString("closeConnection")
-        if dev.responds(to: closeSel) {
-            _ = dev.perform(closeSel)
-        }
+              let dev = deviceClass.perform(withAddrSel, with: address)?.takeUnretainedValue() as? NSObject else { return nil }
+        return dev
     }
 }
 

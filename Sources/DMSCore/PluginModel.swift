@@ -263,7 +263,7 @@ public enum DMSPluginRegistry {
             isInstalled: false,
             isEnabled: false,
             icon: "phone.and.waveform",
-            repoURL: "https://github.com/AvengeMedia/dms-plugin-symbian-sync",
+            repoURL: "https://github.com/JonasNowak/DankMacShell",
             tags: ["nokia", "symbian", "c7", "belle", "usb", "sync", "sisx", "mp3"],
             isOfficial: true
         )

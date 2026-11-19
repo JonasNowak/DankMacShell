@@ -1,17 +1,26 @@
 import CoreWLAN
+import CoreLocation
 import Observation
 
 /// Wi-Fi power and connection state through CoreWLAN events.
 @MainActor
 @Observable
-public final class WiFiService: NSObject, CWEventDelegate {
+public final class WiFiService: NSObject, CWEventDelegate, CLLocationManagerDelegate {
     public static let shared = WiFiService()
 
     public private(set) var isPowerOn = false
     public private(set) var isConnected = false
     public private(set) var ssid: String?
+    /// False until CoreLocation authorization is granted — on macOS 14.4+ CoreWLAN redacts
+    /// ssid()/scanForNetworks to nil/empty without it.
+    public private(set) var locationAuthorized = false
+    /// Latest scan results, updated by the background scan task.
+    public private(set) var lastScannedNetworks: [ScannedNetwork] = []
+    public private(set) var isScanningNetworks = false
 
     @ObservationIgnored private let client = CWWiFiClient.shared()
+    @ObservationIgnored private var locationManager: CLLocationManager?
+    @ObservationIgnored private var scanTask: Task<Void, Never>?
 
     private override init() {
         super.init()
@@ -19,7 +28,33 @@ public final class WiFiService: NSObject, CWEventDelegate {
         for event in [CWEventType.powerDidChange, .ssidDidChange, .linkDidChange] {
             try? client.startMonitoringEvent(with: event)
         }
+        requestLocationAuthorizationIfNeeded()
         refresh()
+    }
+
+    /// Requests CoreLocation authorization if needed so CoreWLAN can report SSIDs on macOS 14.4+.
+    public func requestLocationAuthorizationIfNeeded() {
+        let manager = CLLocationManager()
+        locationManager = manager
+        manager.delegate = self
+        let status = manager.authorizationStatus
+        locationAuthorized = Self.isAuthorized(status)
+        if status == .notDetermined {
+            manager.requestWhenInUseAuthorization()
+        }
+    }
+
+    private nonisolated static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
+        // On macOS the "when in use" equivalent is `.authorized`.
+        status == .authorizedAlways || status == .authorized
+    }
+
+    nonisolated public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        Task { @MainActor in
+            WiFiService.shared.locationAuthorized = Self.isAuthorized(status)
+            WiFiService.shared.refresh()
+        }
     }
 
     public var symbolName: String {
@@ -58,7 +93,53 @@ public final class WiFiService: NSObject, CWEventDelegate {
         refresh()
     }
 
+    /// Kicks off a background scan and returns the most recent cached results immediately, so
+    /// synchronous callers (ControlCenter, IPCSocketServer) keep compiling and never block the
+    /// main actor on the CoreWLAN scan.
     public func scanNetworks() -> [ScannedNetwork] {
+        startBackgroundScan()
+        return lastScannedNetworks
+    }
+
+    /// Awaits a fresh background scan and returns its results.
+    public func scanNetworksAsync() async -> [ScannedNetwork] {
+        await startBackgroundScanAsync()
+        return lastScannedNetworks
+    }
+
+    private func startBackgroundScan() {
+        guard scanTask == nil else { return }
+        isScanningNetworks = true
+        scanTask = Task.detached { [weak self] in
+            let results = Self.performScan()
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.lastScannedNetworks = results
+                self.isScanningNetworks = false
+                self.scanTask = nil
+            }
+        }
+    }
+
+    private func startBackgroundScanAsync() async {
+        if let scanTask { await scanTask.value; return }
+        isScanningNetworks = true
+        let task = Task.detached { [weak self] in
+            let results = Self.performScan()
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.lastScannedNetworks = results
+                self.isScanningNetworks = false
+                self.scanTask = nil
+            }
+        }
+        scanTask = task
+        await task.value
+    }
+
+    /// Blocking CoreWLAN scan — must only run off the main actor.
+    private nonisolated static func performScan() -> [ScannedNetwork] {
+        let client = CWWiFiClient.shared()
         guard let interface = client.interface(), interface.powerOn() else { return [] }
         let networks = (try? interface.scanForNetworks(withName: nil)) ?? []
         let currentBSSID = interface.bssid() ?? ""
@@ -97,11 +178,17 @@ public final class WiFiService: NSObject, CWEventDelegate {
     }
 
     public func connect(to networkSSID: String, password: String?) {
-        guard let interface = client.interface() else { return }
-        let networks = (try? interface.scanForNetworks(withName: networkSSID)) ?? []
-        if let target = networks.first {
-            try? interface.associate(to: target, password: password)
-            refresh()
+        // scanForNetworks + associate block — run them off the main actor.
+        Task.detached { [weak self] in
+            let client = CWWiFiClient.shared()
+            guard let interface = client.interface() else { return }
+            let networks = (try? interface.scanForNetworks(withName: networkSSID)) ?? []
+            if let target = networks.first {
+                try? interface.associate(to: target, password: password)
+            }
+            Task { @MainActor in
+                self?.refresh()
+            }
         }
     }
 

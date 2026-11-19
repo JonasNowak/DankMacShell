@@ -93,10 +93,15 @@ public final class NotepadController: NSObject, ObservableObject, NSWindowDelega
     public func hide() {
         guard isVisible else { return }
         NotepadService.shared.flushPendingSave()
+        let closingWindow = window
         window?.orderOut(nil)
         isVisible = false
         DispatchQueue.main.async { [weak self] in
-            self?.window = nil
+            // Only nil out the window if it is still the one being closed, so a quick
+            // close→reopen doesn't clear the freshly created window.
+            if self?.window === closingWindow {
+                self?.window = nil
+            }
         }
     }
 
@@ -108,8 +113,11 @@ public final class NotepadController: NSObject, ObservableObject, NSWindowDelega
     public func windowWillClose(_ notification: Notification) {
         isVisible = false
         NotepadService.shared.flushPendingSave()
+        let closingWindow = self.window
         DispatchQueue.main.async { [weak self] in
-            self?.window = nil
+            if self?.window === closingWindow {
+                self?.window = nil
+            }
         }
     }
 }

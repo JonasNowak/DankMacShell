@@ -34,15 +34,21 @@ public struct MarkdownPreviewView: View {
     private func blockView(_ block: MarkdownBlock, palette p: DMSPalette) -> some View {
         switch block {
         case .heading(let level, let runs):
-            inlineText(runs, palette: p)
-                .font(.system(size: headingSize(level), weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: p.onSurface.hex))
+            inlineText(
+                runs,
+                palette: p,
+                baseFont: .systemFont(ofSize: headingSize(level), weight: .bold),
+                baseColor: NSColor(Color(hex: p.onSurface.hex))
+            )
 
         case .paragraph(let runs):
-            inlineText(runs, palette: p)
-                .font(.system(size: 13))
-                .foregroundColor(Color(hex: p.onSurface.hex))
-                .fixedSize(horizontal: false, vertical: true)
+            inlineText(
+                runs,
+                palette: p,
+                baseFont: .systemFont(ofSize: 13),
+                baseColor: NSColor(Color(hex: p.onSurface.hex))
+            )
+            .fixedSize(horizontal: false, vertical: true)
 
         case .codeBlock(let language, let code):
             VStack(alignment: .leading, spacing: 4) {
@@ -66,10 +72,13 @@ public struct MarkdownPreviewView: View {
                 Rectangle()
                     .fill(Color(hex: p.primary.hex).opacity(0.6))
                     .frame(width: 3)
-                inlineText(runs, palette: p)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
-                    .fixedSize(horizontal: false, vertical: true)
+                inlineText(
+                    runs,
+                    palette: p,
+                    baseFont: .systemFont(ofSize: 13, weight: .regular),
+                    baseColor: NSColor(Color(hex: p.onSurfaceVariant.hex))
+                )
+                .fixedSize(horizontal: false, vertical: true)
             }
 
         case .unorderedList(let items):
@@ -79,10 +88,13 @@ public struct MarkdownPreviewView: View {
                         Text("•")
                             .font(.system(size: 13, weight: .bold))
                             .foregroundColor(Color(hex: p.primary.hex))
-                        inlineText(item, palette: p)
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(hex: p.onSurface.hex))
-                            .fixedSize(horizontal: false, vertical: true)
+                        inlineText(
+                            item,
+                            palette: p,
+                            baseFont: .systemFont(ofSize: 13),
+                            baseColor: NSColor(Color(hex: p.onSurface.hex))
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -95,19 +107,22 @@ public struct MarkdownPreviewView: View {
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(Color(hex: p.primary.hex))
                             .frame(width: 20, alignment: .trailing)
-                        inlineText(item, palette: p)
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(hex: p.onSurface.hex))
-                            .fixedSize(horizontal: false, vertical: true)
+                        inlineText(
+                            item,
+                            palette: p,
+                            baseFont: .systemFont(ofSize: 13),
+                            baseColor: NSColor(Color(hex: p.onSurface.hex))
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
 
         case .table(let header, let rows):
             VStack(alignment: .leading, spacing: 0) {
-                tableRow(header.map { inlineText($0, palette: p) }, palette: p, isHeader: true)
+                tableRow(header.map { inlineText($0, palette: p, baseFont: .systemFont(ofSize: 11, weight: .bold), baseColor: NSColor(Color(hex: p.onSurface.hex))) }, palette: p, isHeader: true)
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    tableRow(row.map { inlineText($0, palette: p) }, palette: p, isHeader: false)
+                    tableRow(row.map { inlineText($0, palette: p, baseFont: .systemFont(ofSize: 11), baseColor: NSColor(Color(hex: p.onSurfaceVariant.hex))) }, palette: p, isHeader: false)
                 }
             }
             .background(Color(hex: p.surfaceContainerHigh.hex).opacity(0.5))
@@ -133,8 +148,6 @@ public struct MarkdownPreviewView: View {
         HStack(spacing: 0) {
             ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
                 cell
-                    .font(.system(size: 11, weight: isHeader ? .bold : .regular))
-                    .foregroundColor(Color(hex: isHeader ? p.onSurface.hex : p.onSurfaceVariant.hex))
                     .lineLimit(2)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
@@ -145,44 +158,55 @@ public struct MarkdownPreviewView: View {
     }
 
     /// Flattens inline runs into a single styled `Text` (recursive for bold/italic/strike).
-    private func inlineText(_ runs: [MarkdownInlineRun], palette p: DMSPalette) -> Text {
-        Text(attributed(runs, palette: p))
+    private func inlineText(_ runs: [MarkdownInlineRun], palette p: DMSPalette, baseFont: NSFont? = nil, baseColor: NSColor? = nil) -> Text {
+        Text(attributed(runs, palette: p, baseFont: baseFont, baseColor: baseColor))
     }
 
     /// Builds an `AttributedString` from inline runs so per-run styling (color, weight,
-    /// strike, underline) composes inside one wrapping `Text`.
-    private func attributed(_ runs: [MarkdownInlineRun], palette p: DMSPalette, baseSize: CGFloat = 13) -> AttributedString {
+    /// strike, underline) composes inside one wrapping `Text`. `baseFont`/`baseColor`
+    /// carry the block-level typography so inline runs never override heading sizes or
+    /// blockquote colors.
+    private func attributed(_ runs: [MarkdownInlineRun], palette p: DMSPalette, baseFont: NSFont? = nil, baseColor: NSColor? = nil) -> AttributedString {
+        attributed(
+            runs,
+            palette: p,
+            baseFont: baseFont ?? .systemFont(ofSize: 13),
+            baseColor: baseColor ?? NSColor(Color(hex: p.onSurface.hex)),
+            traits: []
+        )
+    }
+
+    private func attributed(_ runs: [MarkdownInlineRun], palette p: DMSPalette, baseFont: NSFont, baseColor: NSColor, traits: NSFontTraitMask) -> AttributedString {
+        let styledFont = traits.isEmpty ? Font(baseFont) : Font(NSFontManager.shared.convert(baseFont, toHaveTrait: traits))
         var result = AttributedString()
         for run in runs {
             switch run {
             case .text(let string):
                 var a = AttributedString(string)
-                a.font = .systemFont(ofSize: baseSize)
-                a.foregroundColor = NSColor(Color(hex: p.onSurface.hex))
+                a.font = styledFont
+                a.foregroundColor = baseColor
                 result.append(a)
             case .bold(let inner):
-                var a = attributed(inner, palette: p, baseSize: baseSize)
-                a.font = .systemFont(ofSize: baseSize, weight: .bold)
-                result.append(a)
+                result.append(attributed(inner, palette: p, baseFont: baseFont, baseColor: baseColor, traits: traits.union(.boldFontMask)))
             case .italic(let inner):
-                var a = attributed(inner, palette: p, baseSize: baseSize)
-                let base = NSFont.systemFont(ofSize: baseSize)
-                a.font = NSFontManager.shared.convert(base, toHaveTrait: .italicFontMask)
-                result.append(a)
+                result.append(attributed(inner, palette: p, baseFont: baseFont, baseColor: baseColor, traits: traits.union(.italicFontMask)))
             case .strikethrough(let inner):
-                var a = attributed(inner, palette: p, baseSize: baseSize)
+                var a = attributed(inner, palette: p, baseFont: baseFont, baseColor: baseColor, traits: traits)
                 a.strikethroughStyle = .single
                 result.append(a)
             case .code(let code):
                 var a = AttributedString(code)
-                a.font = .monospacedSystemFont(ofSize: baseSize - 1, weight: .regular)
+                a.font = Font.system(size: max(9, baseFont.pointSize - 1), weight: .regular, design: .monospaced)
                 a.foregroundColor = NSColor(Color(hex: p.primary.hex))
                 result.append(a)
-            case .link(let text, _):
+            case .link(let text, let url):
                 var a = AttributedString(text)
-                a.font = .systemFont(ofSize: baseSize)
+                a.font = styledFont
                 a.foregroundColor = NSColor(Color(hex: p.primary.hex))
                 a.underlineStyle = .single
+                if let linkURL = URL(string: url) {
+                    a.link = linkURL
+                }
                 result.append(a)
             }
         }

@@ -17,7 +17,7 @@
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.8.2</string>
+	<string>0.9.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>CFBundleURLTypes</key>
@@ -32,7 +32,7 @@
 		</dict>
 	</array>
 	<key>LSMinimumSystemVersion</key>
-	<string>26.0</string>
+	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSSupportsAutomaticTermination</key>
@@ -40,7 +40,13 @@
 	<key>NSSupportsSuddenTermination</key>
 	<false/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>DMS uses System Events for Log Out, Restart and Shut Down in the power menu.</string>
+	<string>DMS uses System Events and Automation for power menu actions (Log Out, Restart, Shut Down), media playback integration, and window management.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>DMS reads and creates calendar events for the DankDash calendar overview.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>DMS reads and creates calendar events for the DankDash calendar overview.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>DMS uses Location Services so macOS CoreWLAN can read the active Wi-Fi network name (SSID) and scan nearby networks.</string>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>DMS uses Device Control &amp; Accessibility to intercept hardware media and volume keys, manage virtual workspaces, and detect running application windows.</string>
 	<key>NSInputMonitoringUsageDescription</key>

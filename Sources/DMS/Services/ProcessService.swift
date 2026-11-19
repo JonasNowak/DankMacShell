@@ -22,6 +22,9 @@ public final class ProcessService: ObservableObject {
     }
 
     public func killProcess(pid: Int32, force: Bool = false) -> Bool {
+        // Guard against kill(-1) (wipes the whole user session), kill(0) (process group),
+        // kill(1) (init) and self-kill.
+        guard pid > 1, pid != getpid() else { return false }
         let signal = force ? SIGKILL : SIGTERM
         let res = kill(pid, signal)
         refresh()
@@ -35,7 +38,13 @@ public final class ProcessService: ObservableObject {
 
         let pipe = Pipe()
         task.standardOutput = pipe
-        try? task.run()
+        do {
+            try task.run()
+        } catch {
+            // /bin/ps failed to launch — an uncatchable NSInvalidArgumentException would
+            // otherwise crash the whole shell.
+            return []
+        }
 
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()

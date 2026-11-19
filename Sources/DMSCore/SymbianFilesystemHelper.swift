@@ -8,32 +8,60 @@ public enum SymbianFilesystemHelper {
     public static let symbianSystemFolders = ["sys", "resource", "private", "system"]
     public static let symbianUserFolders = ["music", "installs", "images", "videos", "cities", "data", "others"]
 
+    /// macOS system / backup / user volume markers — a volume containing any of
+    /// these is never a Symbian device, no matter what else it contains.
+    private static let macOSVolumeMarkers = [
+        "System/Library",
+        "Applications",
+        "Users",
+        "private/var/db"
+    ]
+
+    /// Concrete Symbian-specific subdirectories — strong signature markers.
+    private static let symbianConcreteSubdirs = [
+        "sys/bin",
+        "private/10202be9",
+        "resource/apps",
+        "cities/diskcache"
+    ]
+
     /// Tests if a directory contains Symbian OS markers.
     public static func hasSymbianSignature(at url: URL) -> Bool {
         let fm = FileManager.default
         let path = url.path
-        if path == "/" || path == "/System/Volumes/Data" || fm.fileExists(atPath: url.appendingPathComponent("System/Library").path) {
+        if path == "/" || path == "/System/Volumes/Data" {
             return false
         }
-        guard let contents = try? fm.contentsOfDirectory(atPath: url.path) else { return false }
-        let lowercased = contents.map { $0.lowercased() }
 
-        var systemMatches = 0
-        for folder in symbianSystemFolders {
-            if lowercased.contains(folder) {
-                systemMatches += 1
+        // Reject macOS system / backup / user volumes outright.
+        for marker in macOSVolumeMarkers {
+            if fm.fileExists(atPath: url.appendingPathComponent(marker).path) {
+                return false
             }
         }
 
-        var userMatches = 0
-        for folder in symbianUserFolders {
-            if lowercased.contains(folder) {
-                userMatches += 1
+        guard let contents = try? fm.contentsOfDirectory(atPath: path) else { return false }
+        let lowercased = Set(contents.map { $0.lowercased() })
+
+        // Strong marker: at least one concrete Symbian subdirectory.
+        var isDir: ObjCBool = false
+        for sub in symbianConcreteSubdirs {
+            if fm.fileExists(atPath: url.appendingPathComponent(sub).path, isDirectory: &isDir), isDir.boolValue {
+                return true
             }
         }
 
-        // Presence of at least 1 system folder (like 'private' or 'sys') or 2 characteristic folders
-        return systemMatches >= 1 || (systemMatches + userMatches >= 2)
+        // Otherwise require a realistic Symbian top-level layout: at least 3 Symbian
+        // dirs, including at least one of sys/resource/private alongside at least one
+        // of installs/cities/others. A single generic `private` or `system` folder
+        // (common on macOS/external volumes) must never match.
+        let coreDirs = ["sys", "resource", "private"]
+        let companionDirs = ["installs", "cities", "others"]
+        let allSymbianDirs = symbianSystemFolders + symbianUserFolders
+        let total = allSymbianDirs.filter { lowercased.contains($0) }.count
+        let core = coreDirs.filter { lowercased.contains($0) }.count
+        let companion = companionDirs.filter { lowercased.contains($0) }.count
+        return total >= 3 && core >= 1 && companion >= 1
     }
 
     /// Evaluates if a volume likely belongs to a Nokia C7 or Symbian Belle phone.
@@ -43,8 +71,11 @@ public enum SymbianFilesystemHelper {
             return nil
         }
         let fm = FileManager.default
-        if fm.fileExists(atPath: mountURL.appendingPathComponent("System/Library").path) {
-            return nil
+        // Never classify a macOS system/backup/user volume as a Symbian device.
+        for marker in macOSVolumeMarkers {
+            if fm.fileExists(atPath: mountURL.appendingPathComponent(marker).path) {
+                return nil
+            }
         }
         let hasSignature = hasSymbianSignature(at: mountURL)
 
@@ -158,15 +189,20 @@ public enum SymbianFilesystemHelper {
         return total
     }
 
+    /// Maximum recursion depth for dotfile cleaning (guards against pathological trees).
+    private static let maxCleanDepth = 32
+
     /// Removes macOS hidden AppleDouble (`._*`) and `.DS_Store` files using POSIX direct filesystem traversal.
+    /// Uses `lstat()` and never follows symlinks, so a link can never drag the cleaner off the volume.
     @discardableResult
     public static func cleanAppleDoubleFiles(at rootURL: URL) -> Int {
         var count = 0
-        cleanRecursive(path: rootURL.path, count: &count)
+        cleanRecursive(path: rootURL.path, depth: 0, count: &count)
         return count
     }
 
-    private static func cleanRecursive(path: String, count: inout Int) {
+    private static func cleanRecursive(path: String, depth: Int, count: inout Int) {
+        guard depth <= maxCleanDepth else { return }
         guard let dir = opendir(path) else { return }
         defer { closedir(dir) }
 
@@ -178,24 +214,26 @@ public enum SymbianFilesystemHelper {
 
             let fullPath = (path as NSString).appendingPathComponent(name)
 
-            var isDir = (entry.pointee.d_type == DT_DIR)
-            if entry.pointee.d_type == DT_UNKNOWN {
-                var st = stat()
-                if stat(fullPath, &st) == 0 {
-                    isDir = (st.st_mode & S_IFMT) == S_IFDIR
-                }
+            // lstat (not stat): inspect the link itself, never its target.
+            var st = stat()
+            guard lstat(fullPath, &st) == 0 else { continue }
+            let fileType = st.st_mode & S_IFMT
+
+            if fileType == S_IFLNK {
+                // Never follow or delete through symlinks — they may point off the volume.
+                continue
             }
 
-            if !isDir {
+            if fileType == S_IFDIR {
+                // Don't recurse into .fseventsd or .Spotlight-V100 or .Trashes
+                if name != ".Spotlight-V100" && name != ".fseventsd" && name != ".Trashes" {
+                    cleanRecursive(path: fullPath, depth: depth + 1, count: &count)
+                }
+            } else {
                 if name.hasPrefix("._") || name == ".DS_Store" {
                     if unlink(fullPath) == 0 {
                         count += 1
                     }
-                }
-            } else {
-                // Don't recurse into .fseventsd or .Spotlight-V100 or .Trashes
-                if name != ".Spotlight-V100" && name != ".fseventsd" && name != ".Trashes" {
-                    cleanRecursive(path: fullPath, count: &count)
                 }
             }
         }

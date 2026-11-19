@@ -65,9 +65,8 @@ public struct NetworkMonitorWidget: View {
                         .foregroundColor(tintColor)
                         .lineLimit(1)
                 }
-                .frame(width: 28, height: 32)
+                .frame(width: 28, height: 28)
                 .background(backgroundColor)
-                .clipShape(Capsule())
             } else {
                 HStack(spacing: 5) {
                     if style.showIcon {
@@ -105,9 +104,8 @@ public struct NetworkMonitorWidget: View {
                     }
                 }
                 .padding(.horizontal, 7)
-                .frame(height: 26)
+                .frame(height: 28)
                 .background(backgroundColor)
-                .clipShape(Capsule())
             }
         }
         .buttonStyle(.plain)

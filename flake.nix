@@ -140,7 +140,10 @@
                       programs.dankmacshell = lib.recursiveUpdate {
                         enable = true;
                         package = sysPkgs.dankmacshell;
-                        dmsGop.package = sysPkgs.dms-gop;
+                        dmsGop = {
+                          enable = true;
+                          package = sysPkgs.dms-gop;
+                        };
                         themeEngine.package = sysPkgs.dank-theme-engine;
                       } extra;
                     }
@@ -162,6 +165,10 @@
                   { lib, ... }:
                   {
                     options = {
+                      assertions = lib.mkOption {
+                        type = lib.types.listOf lib.types.anything;
+                        default = [ ];
+                      };
                       system.primaryUser = lib.mkOption {
                         type = lib.types.nullOr lib.types.str;
                         default = "tester";
@@ -182,7 +189,10 @@
                     config.programs.dankmacshell = {
                       enable = true;
                       package = sysPkgs.dankmacshell;
-                      dmsGop.package = sysPkgs.dms-gop;
+                      dmsGop = {
+                        enable = true;
+                        package = sysPkgs.dms-gop;
+                      };
                       themeEngine = {
                         package = sysPkgs.dank-theme-engine;
                         launchd.enable = true;

@@ -347,6 +347,9 @@ public enum AppSearch {
             return nil
         }
 
+        // Reject pathologically long inputs before parsing (DoS guard).
+        guard clean.count <= SafeMathParser.maxInputLength else { return nil }
+
         var parser = SafeMathParser(clean)
         guard let value = parser.evaluate(),
               parser.didUseOperatorOrFunction,
@@ -357,12 +360,31 @@ public enum AppSearch {
     }
 
     private struct SafeMathParser {
+        /// Maximum nesting depth (parens, powers, unary chains) to prevent stack overflows.
+        static let maxDepth = 64
+        /// Maximum accepted input length in characters.
+        static let maxInputLength = 512
+
         private let chars: [Character]
         private var index: Int = 0
+        private var depth: Int = 0
         var didUseOperatorOrFunction: Bool = false
 
         init(_ input: String) {
             self.chars = Array(input)
+        }
+
+        private mutating func pushDepth() -> Bool {
+            depth += 1
+            if depth > Self.maxDepth {
+                depth -= 1
+                return false
+            }
+            return true
+        }
+
+        private mutating func popDepth() {
+            depth = max(0, depth - 1)
         }
 
         mutating func evaluate() -> Double? {
@@ -396,8 +418,8 @@ public enum AppSearch {
                 guard let op = current, op == "+" || op == "-" else { break }
                 index += 1
                 skipWhitespace()
-                // Reject consecutive +/- or operator right after +/-
-                if let next = current, "+-*/%^)".contains(next) {
+                // Reject dangling binary operators after +/-; a unary +/- is allowed ("5 + -3").
+                if let next = current, "*/%^)".contains(next) {
                     return nil
                 }
                 guard let rhs = parseTerm() else { return nil }
@@ -408,9 +430,9 @@ public enum AppSearch {
             return lhs
         }
 
-        // Term := Power (( '*' | '/' | '%' ) Power)*
+        // Term := Unary (( '*' | '/' | '%' ) Unary)*
         private mutating func parseTerm() -> Double? {
-            guard var lhs = parsePower() else { return nil }
+            guard var lhs = parseUnary() else { return nil }
             while true {
                 skipWhitespace()
                 guard let op = current, op == "*" || op == "/" || op == "%" else { break }
@@ -419,7 +441,7 @@ public enum AppSearch {
                 if let next = current, "*/%^)".contains(next) {
                     return nil
                 }
-                guard let rhs = parsePower() else { return nil }
+                guard let rhs = parseUnary() else { return nil }
                 didUseOperatorOrFunction = true
                 if op == "*" {
                     lhs *= rhs
@@ -435,38 +457,42 @@ public enum AppSearch {
             return lhs
         }
 
-        // Power := Unary ( '^' Power )?
-        private mutating func parsePower() -> Double? {
-            guard let base = parseUnary() else { return nil }
-            skipWhitespace()
-            if current == "^" {
-                index += 1
-                skipWhitespace()
-                if let next = current, "*/%^)".contains(next) {
-                    return nil
-                }
-                guard let exp = parsePower() else { return nil }
-                didUseOperatorOrFunction = true
-                let res = Foundation.pow(base, exp)
-                return res.isFinite ? res : nil
-            }
-            return base
-        }
-
-        // Unary := ('+' | '-')? Primary
+        // Unary := ('+' | '-') Unary | Power
         private mutating func parseUnary() -> Double? {
             skipWhitespace()
             if let c = current, c == "+" || c == "-" {
+                guard pushDepth() else { return nil }
+                defer { popDepth() }
                 index += 1
                 skipWhitespace()
                 // Do not allow chained unary operators like "++5" or "--5"
                 if let next = current, "+-*/%^)".contains(next) {
                     return nil
                 }
-                guard let val = parsePrimary() else { return nil }
+                guard let val = parseUnary() else { return nil }
                 return (c == "-") ? -val : val
             }
-            return parsePrimary()
+            return parsePower()
+        }
+
+        // Power := Primary ( '^' Unary )?   -- right-associative; '^' binds tighter than unary '-'
+        private mutating func parsePower() -> Double? {
+            guard let base = parsePrimary() else { return nil }
+            skipWhitespace()
+            if current == "^" {
+                guard pushDepth() else { return nil }
+                defer { popDepth() }
+                index += 1
+                skipWhitespace()
+                if let next = current, "*/%^)".contains(next) {
+                    return nil
+                }
+                guard let exp = parseUnary() else { return nil }
+                didUseOperatorOrFunction = true
+                let res = Foundation.pow(base, exp)
+                return res.isFinite ? res : nil
+            }
+            return base
         }
 
         // Primary := '(' Expression ')' | FunctionOrConstant | Number
@@ -475,6 +501,8 @@ public enum AppSearch {
             guard let c = current else { return nil }
 
             if c == "(" {
+                guard pushDepth() else { return nil }
+                defer { popDepth() }
                 index += 1
                 skipWhitespace()
                 if current == ")" { return nil } // reject empty "()"
@@ -486,6 +514,8 @@ public enum AppSearch {
             }
 
             if c.isLetter {
+                guard pushDepth() else { return nil }
+                defer { popDepth() }
                 return parseIdentifier()
             }
 
@@ -809,38 +839,67 @@ public enum AppSearch {
     }
 
     /// Generates web search URL for configured provider.
+    /// Uses `URLComponents` + `URLQueryItem` so `&`, `+`, `=`, `?`, `#` and spaces in the
+    /// query are percent-encoded correctly (e.g. "C++" -> `C%2B%2B`).
     public static func webSearchURL(query: String, provider: String = "google") -> URL? {
-        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            return nil
-        }
+        var components = URLComponents()
+        // Strict RFC 3986 encoding: only unreserved characters pass through, so
+        // `+`, `&`, `=`, `?`, `#`, `%` in the search text are percent-encoded
+        // (`URLQueryItem` would leave `+` and `?` literal, corrupting the query).
+        let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: unreserved) else { return nil }
+        components.percentEncodedQuery = "q=\(encoded)"
         switch provider.lowercased() {
         case "duckduckgo", "ddg":
-            return URL(string: "https://duckduckgo.com/?q=\(encoded)")
+            components.scheme = "https"
+            components.host = "duckduckgo.com"
+            components.path = "/"
         case "bing":
-            return URL(string: "https://www.bing.com/search?q=\(encoded)")
+            components.scheme = "https"
+            components.host = "www.bing.com"
+            components.path = "/search"
         case "kagi":
-            return URL(string: "https://kagi.com/search?q=\(encoded)")
+            components.scheme = "https"
+            components.host = "kagi.com"
+            components.path = "/search"
         default:
-            return URL(string: "https://www.google.com/search?q=\(encoded)")
+            components.scheme = "https"
+            components.host = "www.google.com"
+            components.path = "/search"
+        }
+        return components.url
+    }
+
+    /// Swift-6-safe locked box around a non-Sendable `NumberFormatter`.
+    private final class LockedFormatter: @unchecked Sendable {
+        private let lock = NSLock()
+        private let formatter: NumberFormatter
+
+        init(_ configure: (NumberFormatter) -> Void) {
+            let f = NumberFormatter()
+            configure(f)
+            self.formatter = f
+        }
+
+        func string(from number: NSNumber) -> String? {
+            lock.lock()
+            defer { lock.unlock() }
+            return formatter.string(from: number)
         }
     }
 
-    private static let sharedDecimalFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
+    private static let sharedDecimalFormatter: LockedFormatter = LockedFormatter { formatter in
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 6
         formatter.numberStyle = .decimal
-        return formatter
-    }()
-
-    private static let formatterLock = NSLock()
+    }
 
     private static func formatNumber(_ num: Double) -> String {
-        if floor(num) == num && abs(num) < 1e12 {
-            return String(format: "%.0f", num)
+        // Normalize -0.0 to 0.0 so we never format "-0".
+        let normalized = num == 0 ? 0.0 : num
+        if floor(normalized) == normalized && abs(normalized) < 1e12 {
+            return String(format: "%.0f", normalized)
         }
-        formatterLock.lock()
-        defer { formatterLock.unlock() }
-        return sharedDecimalFormatter.string(from: NSNumber(value: num)) ?? "\(num)"
+        return sharedDecimalFormatter.string(from: NSNumber(value: normalized)) ?? "\(normalized)"
     }
 }

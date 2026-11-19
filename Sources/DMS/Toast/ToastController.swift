@@ -34,7 +34,7 @@ public final class ToastController {
     }
 
     public func reposition() {
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let width: CGFloat = 320
         let height: CGFloat = 60
         let xPos = screen.frame.maxX - width - 20

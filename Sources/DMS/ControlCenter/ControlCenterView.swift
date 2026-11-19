@@ -36,6 +36,12 @@ public struct ControlCenterView: View {
     @State private var uptimeText: String = ""
     @State private var timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
+    // Cached disk I/O results — loaded off the body so 60fps drags never hit the disk.
+    @State private var avatarImage: NSImage? = nil
+    @State private var diskUsage: (usedGB: Double, totalGB: Double, percent: Double, formatted: String)? = nil
+    // Height update deferred while a tile drag is in progress (applied when the drag ends).
+    @State private var pendingSheetHeight: CGFloat? = nil
+
     // Drag-and-drop state
     @State private var draggingWidgetID: String? = nil
     @State private var dragOffset: CGSize = .zero
@@ -98,18 +104,23 @@ public struct ControlCenterView: View {
         navigationStack.last ?? .root
     }
 
+    /// Spring animation honoring `theme.motionTokens.reducedMotion` (nil disables animation).
+    private func ccSpring(_ response: Double = 0.3, _ dampingFraction: Double = 0.85) -> Animation? {
+        theme.motionTokens.reducedMotion ? nil : .spring(response: response, dampingFraction: dampingFraction)
+    }
+
     public var body: some View {
         PopoutSurfaceContainer(bodyWidth: sheetWidth, bodyHeight: sheetHeight) {
             ZStack {
                 if activePage == .root {
                     rootDashboardView
-                        .transition(.asymmetric(
+                        .transition(theme.motionTokens.reducedMotion ? .opacity : .asymmetric(
                             insertion: .opacity.combined(with: .scale(scale: 0.96)),
                             removal: .opacity.combined(with: .scale(scale: 0.96))
                         ))
                 } else {
                     detailPageView
-                        .transition(.asymmetric(
+                        .transition(theme.motionTokens.reducedMotion ? .opacity : .asymmetric(
                             insertion: .move(edge: .trailing).combined(with: .opacity),
                             removal: .move(edge: .trailing).combined(with: .opacity)
                         ))
@@ -120,7 +131,7 @@ public struct ControlCenterView: View {
                     Color.black.opacity(0.4)
                         .edgesIgnoringSafeArea(.all)
                         .onTapGesture {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            withAnimation(ccSpring(0.25, 0.8)) {
                                 showTileLibrary = false
                             }
                         }
@@ -129,30 +140,37 @@ public struct ControlCenterView: View {
                         activeWidgetIDs: Set(gridWidgets.map(\.id)),
                         onAddWidget: { tile in
                             addWidget(tile)
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            withAnimation(ccSpring(0.25, 0.8)) {
                                 showTileLibrary = false
                             }
                         },
                         onClose: {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            withAnimation(ccSpring(0.25, 0.8)) {
                                 showTileLibrary = false
                             }
                         }
                     )
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    .transition(theme.motionTokens.reducedMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
                     .zIndex(100)
                 }
             }
         }
         .onAppear {
             updateUptime()
+            refreshCachedDiskIO()
             if !isEditingLayout {
                 undoStack.reset(widgets: gridWidgets, columns: currentColumns)
             }
             ControlCenterController.shared.updateHeight(to: sheetHeight)
         }
         .onChange(of: sheetHeight) { _, newH in
-            ControlCenterController.shared.updateHeight(to: newH)
+            // Defer the window resize while a tile drag is active so the panel doesn't
+            // animate out from under the cursor mid-drag; applied once the drag ends.
+            if draggingWidgetID != nil {
+                pendingSheetHeight = newH
+            } else {
+                ControlCenterController.shared.updateHeight(to: newH)
+            }
         }
         .onChange(of: isEditingLayout) { _, newValue in
             if newValue {
@@ -170,7 +188,14 @@ public struct ControlCenterView: View {
         }
         .onReceive(timer) { _ in
             updateUptime()
+            refreshCachedDiskIO()
         }
+    }
+
+    /// Loads avatar image and disk usage off the view body (disk I/O), cached in @State.
+    private func refreshCachedDiskIO() {
+        avatarImage = loadAvatarImage()
+        diskUsage = readDiskUsage()
     }
 
     // MARK: - Root Dashboard View (Matches cc.png 1:1 and M3 Expressive)
@@ -240,7 +265,7 @@ public struct ControlCenterView: View {
                             .shadow(color: isDragging ? Color.black.opacity(0.25) : .clear, radius: isDragging ? 8 : 0, y: isDragging ? 4 : 0)
                             .offset(x: CGFloat(xPos), y: CGFloat(yPos))
                             .zIndex(isDragging ? 50 : 1)
-                            .animation(isDragging ? nil : .spring(response: 0.22, dampingFraction: 0.85), value: slot)
+                            .animation(isDragging ? nil : ccSpring(0.22, 0.85), value: slot)
                         }
                     }
                 }
@@ -254,7 +279,7 @@ public struct ControlCenterView: View {
                     canUndo: undoStack.canUndo,
                     canRedo: undoStack.canRedo,
                     onAddTile: {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        withAnimation(ccSpring(0.25, 0.8)) {
                             showTileLibrary = true
                         }
                     },
@@ -272,12 +297,12 @@ public struct ControlCenterView: View {
                         resetToDefaults()
                     },
                     onDone: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(ccSpring(0.3, 0.8)) {
                             isEditingLayout = false
                         }
                     }
                 )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(theme.motionTokens.reducedMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             } else {
                 bottomActionsRow
             }
@@ -299,7 +324,7 @@ public struct ControlCenterView: View {
                         .fill(theme.surfaceContainerHighest)
                         .frame(width: 36, height: 36)
 
-                    if let avatarImg = loadAvatarImage() {
+                    if let avatarImg = avatarImage {
                         Image(nsImage: avatarImg)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -333,7 +358,7 @@ public struct ControlCenterView: View {
                     .foregroundColor(theme.onSurface)
                     .lineLimit(1)
 
-                Text(uptimeText.isEmpty ? "up 7 hours, 47 minutes" : uptimeText)
+                Text(uptimeText.isEmpty ? "--" : uptimeText)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(theme.onSurfaceVariant)
                     .lineLimit(1)
@@ -343,22 +368,22 @@ public struct ControlCenterView: View {
 
             // Header Action Buttons: Lock, Power, Settings, Edit
             HStack(spacing: 8) {
-                HeaderActionButton(icon: "lock") {
-                    Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["displaysleepnow"])
+                HeaderActionButton(icon: "lock", label: "Lock Screen") {
+                    lockScreen()
                     ControlCenterController.shared.hide()
                 }
 
-                HeaderActionButton(icon: "power") {
+                HeaderActionButton(icon: "power", label: "Power Menu") {
                     PowerPopoutController.shared.toggle(anchorToControlCenter: true)
                 }
 
-                HeaderActionButton(icon: "gearshape") {
+                HeaderActionButton(icon: "gearshape", label: "Settings") {
                     ControlCenterController.shared.hide()
                     SettingsController.shared.show()
                 }
 
-                HeaderActionButton(icon: isEditingLayout ? "checkmark" : "pencil") {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                HeaderActionButton(icon: isEditingLayout ? "checkmark" : "pencil", label: isEditingLayout ? "Done Editing" : "Edit Layout") {
+                    withAnimation(ccSpring(0.3, 0.8)) {
                         isEditingLayout.toggle()
                     }
                 }
@@ -373,6 +398,7 @@ public struct ControlCenterView: View {
             ControlCenterPillSlider(
                 icon: audio.currentOutputIcon,
                 value: audio.isMuted ? 0.0 : audio.volume,
+                accessibilityLabel: "Volume",
                 onIconTap: { audio.toggleMute() },
                 onValueChanged: { audio.setVolume($0) }
             )
@@ -381,6 +407,7 @@ public struct ControlCenterView: View {
             ControlCenterPillSlider(
                 icon: "sun.max",
                 value: brightness.isAvailable ? brightness.value : 0.5,
+                accessibilityLabel: "Brightness",
                 onIconTap: {
                     if brightness.isAvailable {
                         brightness.set(brightness.value > 0.05 ? 0.0 : 0.8)
@@ -484,25 +511,25 @@ public struct ControlCenterView: View {
             userHeaderCard
 
         case "lock":
-            HeaderActionButton(icon: "lock") {
-                Process.launchedProcess(launchPath: "/usr/bin/pmset", arguments: ["displaysleepnow"])
+            HeaderActionButton(icon: "lock", label: "Lock Screen") {
+                lockScreen()
                 ControlCenterController.shared.hide()
             }
 
         case "power":
-            HeaderActionButton(icon: "power") {
+            HeaderActionButton(icon: "power", label: "Power Menu") {
                 PowerPopoutController.shared.toggle(anchorToControlCenter: true)
             }
 
         case "settings":
-            HeaderActionButton(icon: "gearshape") {
+            HeaderActionButton(icon: "gearshape", label: "Settings") {
                 ControlCenterController.shared.hide()
                 SettingsController.shared.show()
             }
 
         case "edit":
-            HeaderActionButton(icon: isEditingLayout ? "checkmark" : "pencil") {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            HeaderActionButton(icon: isEditingLayout ? "checkmark" : "pencil", label: isEditingLayout ? "Done Editing" : "Edit Layout") {
+                withAnimation(ccSpring(0.3, 0.8)) {
                     isEditingLayout.toggle()
                 }
             }
@@ -511,6 +538,7 @@ public struct ControlCenterView: View {
             ControlCenterPillSlider(
                 icon: audio.currentOutputIcon,
                 value: audio.isMuted ? 0.0 : audio.volume,
+                accessibilityLabel: "Volume",
                 onIconTap: { audio.toggleMute() },
                 onValueChanged: { audio.setVolume($0) }
             )
@@ -519,6 +547,7 @@ public struct ControlCenterView: View {
             ControlCenterPillSlider(
                 icon: "sun.max",
                 value: brightness.isAvailable ? brightness.value : 0.5,
+                accessibilityLabel: "Brightness",
                 onIconTap: {
                     if brightness.isAvailable {
                         brightness.set(brightness.value > 0.05 ? 0.0 : 0.8)
@@ -597,11 +626,10 @@ public struct ControlCenterView: View {
             )
 
         case "diskUsage":
-            let diskInfo = readDiskUsage()
             ControlCenterTile(
                 icon: "internaldrive",
                 title: "/",
-                subtitle: widget.w > 1 ? diskInfo.formatted : "",
+                subtitle: widget.w > 1 ? (diskUsage?.formatted ?? "--") : "",
                 isActive: true,
                 hasDetail: false,
                 isPillIcon: true,
@@ -622,7 +650,10 @@ public struct ControlCenterView: View {
                 hasDetail: false,
                 isPillIcon: true,
                 tileWidthCols: widget.w,
-                onTap: { ColorPickerController.shared.show() }
+                onTap: {
+                    ControlCenterController.shared.hide()
+                    ColorPickerService.shared.sampleColor()
+                }
             )
 
         case "idleInhibitor", "caffeine":
@@ -727,7 +758,7 @@ public struct ControlCenterView: View {
                         .fill(theme.surfaceContainerHighest)
                         .frame(width: 36, height: 36)
 
-                    if let avatarImg = loadAvatarImage() {
+                    if let avatarImg = avatarImage {
                         Image(nsImage: avatarImg)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -761,7 +792,7 @@ public struct ControlCenterView: View {
                     .foregroundColor(theme.onSurface)
                     .lineLimit(1)
 
-                Text(uptimeText.isEmpty ? "up 7 hours, 47 minutes" : uptimeText)
+                Text(uptimeText.isEmpty ? "--" : uptimeText)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(theme.onSurfaceVariant)
                     .lineLimit(1)
@@ -907,6 +938,11 @@ public struct ControlCenterView: View {
         dragStartSlot = nil
         dragStartWidgets = nil
         dragStartLayout = nil
+        // Drag ended: apply the height update that was deferred mid-drag.
+        if let pending = pendingSheetHeight {
+            pendingSheetHeight = nil
+            ControlCenterController.shared.updateHeight(to: pending)
+        }
     }
 
     // MARK: - Grid Modification Actions
@@ -1151,6 +1187,22 @@ public struct ControlCenterView: View {
         uptimeText = UptimeFormatter.format(seconds: seconds)
     }
 
+    /// Locks the screen via `SACLockScreenImmediate` from the private login.framework,
+    /// falling back to `pmset displaysleepnow` when the symbol cannot be resolved.
+    private func lockScreen() {
+        typealias LockScreenFn = @convention(c) () -> Void
+        if let handle = dlopen("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login", RTLD_LAZY),
+           let sym = dlsym(handle, "SACLockScreenImmediate") {
+            let lockFn = unsafeBitCast(sym, to: LockScreenFn.self)
+            lockFn()
+        } else {
+            let task = Process()
+            task.launchPath = "/usr/bin/pmset"
+            task.arguments = ["displaysleepnow"]
+            try? task.run()
+        }
+    }
+
     private func cycleTheme() {
         let themes = ["dynamic", "purple", "blue", "green", "orange", "red", "yellow", "neutral"]
         let current = theme.themeName.lowercased()
@@ -1161,7 +1213,7 @@ public struct ControlCenterView: View {
         ToastCenter.shared.show(icon: "paintpalette.fill", message: "Theme: \(next.capitalized)")
     }
 
-    private func readDiskUsage() -> (usedGB: Double, totalGB: Double, percent: Double, formatted: String) {
+    private func readDiskUsage() -> (usedGB: Double, totalGB: Double, percent: Double, formatted: String)? {
         let url = URL(fileURLWithPath: "/")
         if let values = try? url.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityKey]),
            let total = values.volumeTotalCapacity,
@@ -1172,7 +1224,7 @@ public struct ControlCenterView: View {
             let totalGB = Double(total) / (1024.0 * 1024.0 * 1024.0)
             return (usedGB, totalGB, res.rawPercent, res.summary)
         }
-        return (80.0, 186.7, 0.43, "80.0G / 186.7G (43%)")
+        return nil
     }
 
     private func loadAvatarImage() -> NSImage? {
@@ -1190,13 +1242,13 @@ public struct ControlCenterView: View {
     }
 
     private func pushPage(_ page: ControlCenterPage) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+        withAnimation(ccSpring(0.3, 0.85)) {
             navigationStack.append(page)
         }
     }
 
     private func popPage() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+        withAnimation(ccSpring(0.3, 0.85)) {
             if navigationStack.count > 1 {
                 navigationStack.removeLast()
             }
@@ -1211,12 +1263,14 @@ public struct ControlCenterView: View {
 // MARK: - Header Action Button
 public struct HeaderActionButton: View {
     public let icon: String
+    public let label: String
     public let action: () -> Void
 
     @ObservedObject private var theme = ThemeStore.shared
 
-    public init(icon: String, action: @escaping () -> Void) {
+    public init(icon: String, label: String? = nil, action: @escaping () -> Void) {
         self.icon = icon
+        self.label = label ?? icon
         self.action = action
     }
 
@@ -1229,6 +1283,7 @@ public struct HeaderActionButton: View {
                 .background(Color.clear)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
@@ -1236,6 +1291,7 @@ public struct HeaderActionButton: View {
 public struct ControlCenterPillSlider: View {
     public let icon: String
     public let value: Double
+    public let accessibilityLabel: String
     public let onIconTap: () -> Void
     public let onValueChanged: (Double) -> Void
 
@@ -1244,11 +1300,13 @@ public struct ControlCenterPillSlider: View {
     public init(
         icon: String,
         value: Double,
+        accessibilityLabel: String? = nil,
         onIconTap: @escaping () -> Void,
         onValueChanged: @escaping (Double) -> Void
     ) {
         self.icon = icon
         self.value = value
+        self.accessibilityLabel = accessibilityLabel ?? "Slider"
         self.onIconTap = onIconTap
         self.onValueChanged = onValueChanged
     }
@@ -1262,6 +1320,7 @@ public struct ControlCenterPillSlider: View {
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
 
             GeometryReader { geo in
                 let width = geo.size.width
@@ -1283,9 +1342,17 @@ public struct ControlCenterPillSlider: View {
                         .offset(x: max(0, min(width - 4, fillWidth - 2)))
                 }
                 .contentShape(Rectangle())
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityValue("\(Int(round(clampedVal * 100))) percent")
+                .accessibilityAdjustableAction { direction in
+                    let step = 0.05
+                    let next = max(0.0, min(1.0, value + (direction == .increment ? step : -step)))
+                    onValueChanged(next)
+                }
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { gesture in
+                            guard width > 0 else { return }
                             let fraction = max(0.0, min(1.0, Double(gesture.location.x / width)))
                             onValueChanged(fraction)
                         }
@@ -1352,6 +1419,7 @@ public struct ControlCenterTile: View {
             }
             .buttonStyle(.plain)
             .help(title)
+            .accessibilityLabel(title)
         } else if tileWidthCols == 2 {
             // 2-col: compact 28×28 icon pill + single-line title, split tap vs detail tap
             HStack(spacing: 8) {
@@ -1366,6 +1434,7 @@ public struct ControlCenterTile: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(title)
 
                 Button {
                     if hasDetail {
@@ -1382,6 +1451,7 @@ public struct ControlCenterTile: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(title)
             }
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
@@ -1422,6 +1492,7 @@ public struct ControlCenterTile: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(title)
 
             Button {
                 if hasDetail {
@@ -1446,6 +1517,7 @@ public struct ControlCenterTile: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(title)
         }
         .padding(.leading, 6)
         .padding(.trailing, 8)

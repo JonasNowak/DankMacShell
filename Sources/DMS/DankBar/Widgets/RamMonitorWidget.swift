@@ -40,9 +40,8 @@ public struct RamMonitorWidget: View {
                 }
             }
             .padding(.horizontal, isVertical ? 0 : 6)
-            .frame(width: isVertical ? 28 : nil, height: isVertical ? 28 : 26)
+            .frame(width: isVertical ? 28 : nil, height: 28)
             .background(theme.barWidgetBackground)
-            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
         .help("RAM Utilization: \(String(format: "%.1f", telemetry.telemetry.ramUsedGB)) GB / \(String(format: "%.1f", telemetry.telemetry.ramTotalGB)) GB")

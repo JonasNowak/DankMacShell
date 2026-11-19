@@ -10,17 +10,22 @@ public final class AppCatalogService {
 
     public private(set) var apps: [AppItem] = []
 
+    private var scanTask: Task<Void, Never>?
+
     private init() {
         refresh()
     }
 
     public func refresh() {
-        Task.detached(priority: .userInitiated) {
+        scanTask?.cancel()
+        let task = Task.detached(priority: .userInitiated) { [weak self] in
             let scanned = Self.scanApplications()
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self, !Task.isCancelled else { return }
                 self.apps = scanned
             }
         }
+        scanTask = task
     }
 
     /// Records an application launch, immediately updating frecency tracking and re-sorting results.
@@ -95,10 +100,11 @@ public final class AppCatalogService {
     }
 
     nonisolated private static func scanApplications() -> [AppItem] {
+        // /System/Applications is enumerated recursively, which already covers
+        // /System/Applications/Utilities — scanning it separately only duplicates work.
         let dirs = [
             "/Applications",
             "/System/Applications",
-            "/System/Applications/Utilities",
             NSHomeDirectory() + "/Applications",
             "/System/Cryptexes/App/System/Applications"
         ]

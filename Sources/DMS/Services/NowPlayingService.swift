@@ -26,9 +26,49 @@ public final class NowPlayingService: ObservableObject {
     private var positionRefs: [String: Int] = [:]
 
     private var cachedArtwork: [String: Data] = [:]
+    private var artworkCacheOrder: [String] = []
+    private static let artworkCacheCapacity = 32
     private var isFetchingArtwork: Bool = false
     private var itunesInFlight: Set<String> = []
     private var itunesMisses: Set<String> = []
+    private static let itunesMissesCapacity = 200
+
+    /// Private artwork cache directory (0700) — never the predictable /tmp paths.
+    nonisolated static let artworkDirectory: URL = {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Caches/DMS/artwork", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        return dir
+    }()
+    nonisolated static let nowPlayingArtworkURL = artworkDirectory.appendingPathComponent("nowplaying_art.jpg")
+    nonisolated static let musicArtworkURL = artworkDirectory.appendingPathComponent("music_art.jpg")
+
+    /// True when `bundleID` is present in the current NSWorkspace running applications.
+    private static func isAppRunning(_ bundleID: String) -> Bool {
+        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == bundleID }
+    }
+
+    private func cacheArtwork(_ data: Data, forKey key: String) {
+        cachedArtwork[key] = data
+        artworkCacheOrder.removeAll { $0 == key }
+        artworkCacheOrder.append(key)
+        while artworkCacheOrder.count > Self.artworkCacheCapacity {
+            let evicted = artworkCacheOrder.removeFirst()
+            cachedArtwork.removeValue(forKey: evicted)
+        }
+    }
+
+    private func noteITunesMiss(_ key: String) {
+        itunesMisses.insert(key)
+        while itunesMisses.count > Self.itunesMissesCapacity {
+            if let oldest = itunesMisses.first {
+                itunesMisses.remove(oldest)
+            } else {
+                break
+            }
+        }
+    }
 
     private var bridge: MediaRemoteBridge?
     private var bridgeTrack: NowPlayingTrack?
@@ -137,52 +177,77 @@ public final class NowPlayingService: ObservableObject {
         }
     }
 
+    private var isUpdatingPlayback = false
+
     public func updatePlaybackState() {
-        let music = checkAppleMusic()
-        let spotify = checkSpotify()
-        let vlc = checkVLC()
-        let browser = checkBrowserWindows()
-        let bridge = self.bridgeTrack
+        guard !isUpdatingPlayback else { return }
+        isUpdatingPlayback = true
+        // Skip AppleScript/browser fallback polling while the MediaRemote bridge is
+        // actively reporting — it already covers every MediaRemote-registered source.
+        let bridgeReporting = self.bridge?.isActivelyReporting ?? false
 
-        // Priority 1: Actively playing sources win
-        if let s = spotify, s.isPlaying {
-            self.applyTrack(s)
-            return
-        }
-        if let m = music, m.isPlaying {
-            self.applyTrack(m)
-            return
-        }
-        if let v = vlc, v.isPlaying {
-            self.applyTrack(v)
-            return
-        }
-        if let b = bridge, b.isPlaying {
-            self.applyTrack(b)
-            return
-        }
-        if let w = browser, w.isPlaying {
-            self.applyTrack(w)
-            return
-        }
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            defer { self.isUpdatingPlayback = false }
 
-        // Priority 2: When paused/idle, show newest recent metadata across sources
-        if let b = bridge, !b.title.isEmpty {
-            self.applyTrack(b)
-        } else if let s = spotify, !s.title.isEmpty {
-            self.applyTrack(s)
-        } else if let m = music, !m.title.isEmpty {
-            self.applyTrack(m)
-        } else if let v = vlc, !v.title.isEmpty {
-            self.applyTrack(v)
-        } else if let w = browser, !w.title.isEmpty {
-            self.applyTrack(w)
-        } else {
-            if self.currentTrack.isPlaying {
-                self.currentTrack.isPlaying = false
+            let music: NowPlayingTrack?
+            let spotify: NowPlayingTrack?
+            let vlc: NowPlayingTrack?
+            if bridgeReporting {
+                music = nil
+                spotify = nil
+                vlc = nil
+            } else {
+                async let m = self.checkAppleMusic()
+                async let s = self.checkSpotify()
+                async let v = self.checkVLC()
+                music = await m
+                spotify = await s
+                vlc = await v
             }
-            if self.positionRefs.isEmpty {
-                self.stopPositionPolling()
+            let browser = bridgeReporting ? nil : self.checkBrowserWindows()
+            let bridge = self.bridgeTrack
+
+            // Priority 1: Actively playing sources win
+            if let s = spotify, s.isPlaying {
+                self.applyTrack(s)
+                return
+            }
+            if let m = music, m.isPlaying {
+                self.applyTrack(m)
+                return
+            }
+            if let v = vlc, v.isPlaying {
+                self.applyTrack(v)
+                return
+            }
+            if let b = bridge, b.isPlaying {
+                self.applyTrack(b)
+                return
+            }
+            if let w = browser, w.isPlaying {
+                self.applyTrack(w)
+                return
+            }
+
+            // Priority 2: When paused/idle, show newest recent metadata across sources
+            if let b = bridge, !b.title.isEmpty {
+                self.applyTrack(b)
+            } else if let s = spotify, !s.title.isEmpty {
+                self.applyTrack(s)
+            } else if let m = music, !m.title.isEmpty {
+                self.applyTrack(m)
+            } else if let v = vlc, !v.title.isEmpty {
+                self.applyTrack(v)
+            } else if let w = browser, !w.title.isEmpty {
+                self.applyTrack(w)
+            } else {
+                if self.currentTrack.isPlaying {
+                    self.currentTrack.isPlaying = false
+                }
+                if self.positionRefs.isEmpty {
+                    self.stopPositionPolling()
+                }
             }
         }
     }
@@ -231,9 +296,8 @@ public final class NowPlayingService: ObservableObject {
 
     // MARK: - Apple Music
 
-    private func checkAppleMusic() -> NowPlayingTrack? {
-        let running = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music")
-        guard !running.isEmpty else { return nil }
+    private func checkAppleMusic() async -> NowPlayingTrack? {
+        guard Self.isAppRunning("com.apple.Music") else { return nil }
 
         let script = """
         tell application "Music"
@@ -254,7 +318,7 @@ public final class NowPlayingService: ObservableObject {
         end tell
         """
 
-        guard let output = runAppleScript(script), !output.isEmpty else { return nil }
+        guard let output = await Self.runAppleScriptAsync(script), !output.isEmpty else { return nil }
         let parts = output.components(separatedBy: "||")
         guard parts.count >= 6 else { return nil }
 
@@ -272,7 +336,7 @@ public final class NowPlayingService: ObservableObject {
         var artData = cachedArtwork[cacheKey]
 
         if artData == nil && hasArtwork && !isFetchingArtwork {
-            artData = fetchAppleMusicArtwork(cacheKey: cacheKey)
+            artData = await fetchAppleMusicArtwork(cacheKey: cacheKey)
         }
 
         return NowPlayingTrack(
@@ -289,42 +353,51 @@ public final class NowPlayingService: ObservableObject {
         )
     }
 
-    private func fetchAppleMusicArtwork(cacheKey: String) -> Data? {
+    private func fetchAppleMusicArtwork(cacheKey: String) async -> Data? {
         isFetchingArtwork = true
         defer { isFetchingArtwork = false }
+
+        // AppleScript writes a unique temp file inside the private artwork dir; we then
+        // atomically rename it to the final path so readers never see partial data.
+        let tmpPath = Self.artworkDirectory
+            .appendingPathComponent(".music_art.\(UUID().uuidString).tmp").path
+        let finalURL = Self.musicArtworkURL
 
         let script = """
         tell application "Music"
             try
                 if (count of artworks of current track) > 0 then
                     set artData to raw data of artwork 1 of current track
-                    set fp to (POSIX file "/tmp/dms_music_art.jpg")
+                    set fp to (POSIX file "\(tmpPath)")
                     set f to open for access fp with write permission
                     set eof f to 0
                     write artData to f
                     close access f
-                    return "/tmp/dms_music_art.jpg"
+                    return "\(tmpPath)"
                 end if
             on error
+                try
+                    close access f
+                end try
                 return ""
             end try
         end tell
         """
 
-        guard let path = runAppleScript(script), !path.isEmpty else { return nil }
-        let url = URL(fileURLWithPath: path.trimmingCharacters(in: .whitespacesAndNewlines))
-        if let data = try? Data(contentsOf: url), !data.isEmpty {
-            self.cachedArtwork[cacheKey] = data
-            return data
-        }
-        return nil
+        guard let path = await Self.runAppleScriptAsync(script), !path.isEmpty else { return nil }
+        let tmpURL = URL(fileURLWithPath: path.trimmingCharacters(in: .whitespacesAndNewlines))
+        try? FileManager.default.removeItem(at: finalURL)
+        try? FileManager.default.moveItem(at: tmpURL, to: finalURL)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: finalURL.path)
+        guard let data = try? Data(contentsOf: finalURL), !data.isEmpty else { return nil }
+        cacheArtwork(data, forKey: cacheKey)
+        return data
     }
 
     // MARK: - Spotify
 
-    private func checkSpotify() -> NowPlayingTrack? {
-        let running = NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client")
-        guard !running.isEmpty else { return nil }
+    private func checkSpotify() async -> NowPlayingTrack? {
+        guard Self.isAppRunning("com.spotify.client") else { return nil }
 
         let script = """
         tell application "Spotify"
@@ -345,7 +418,7 @@ public final class NowPlayingService: ObservableObject {
         end tell
         """
 
-        guard let output = runAppleScript(script), !output.isEmpty else { return nil }
+        guard let output = await Self.runAppleScriptAsync(script), !output.isEmpty else { return nil }
         let parts = output.components(separatedBy: "||")
         guard parts.count >= 6 else { return nil }
 
@@ -363,7 +436,7 @@ public final class NowPlayingService: ObservableObject {
         let artData = cachedArtwork[cacheKey]
 
         if artData == nil && !artUrl.isEmpty && !isFetchingArtwork {
-            fetchSpotifyArtwork(urlStr: artUrl, cacheKey: cacheKey)
+            fetchSpotifyArtwork(urlStr: artUrl, cacheKey: cacheKey, title: cleaned.title, artist: cleaned.artist)
         }
 
         return NowPlayingTrack(
@@ -381,7 +454,7 @@ public final class NowPlayingService: ObservableObject {
         )
     }
 
-    private func fetchSpotifyArtwork(urlStr: String, cacheKey: String) {
+    private func fetchSpotifyArtwork(urlStr: String, cacheKey: String, title: String, artist: String) {
         guard let url = URL(string: urlStr) else { return }
         isFetchingArtwork = true
         Task { @MainActor [weak self] in
@@ -390,9 +463,10 @@ public final class NowPlayingService: ObservableObject {
                 return
             }
             guard let self = self else { return }
-            self.cachedArtwork[cacheKey] = data
+            self.cacheArtwork(data, forKey: cacheKey)
             self.isFetchingArtwork = false
-            if !self.currentTrack.title.isEmpty {
+            // Only attach the artwork if the current track is still the one we fetched for.
+            if self.currentTrack.title == title, self.currentTrack.artist == artist {
                 self.currentTrack.artworkData = data
             }
         }
@@ -400,9 +474,8 @@ public final class NowPlayingService: ObservableObject {
 
     // MARK: - VLC Media Player
 
-    private func checkVLC() -> NowPlayingTrack? {
-        let running = NSRunningApplication.runningApplications(withBundleIdentifier: "org.videolan.vlc")
-        guard !running.isEmpty else { return nil }
+    private func checkVLC() async -> NowPlayingTrack? {
+        guard Self.isAppRunning("org.videolan.vlc") else { return nil }
 
         let script = """
         tell application "VLC"
@@ -418,7 +491,7 @@ public final class NowPlayingService: ObservableObject {
         end tell
         """
 
-        guard let output = runAppleScript(script), !output.isEmpty else { return nil }
+        guard let output = await Self.runAppleScriptAsync(script), !output.isEmpty else { return nil }
         let parts = output.components(separatedBy: "||")
         guard parts.count >= 4 else { return nil }
 
@@ -620,10 +693,10 @@ public final class NowPlayingService: ObservableObject {
             guard let self = self else { return }
             self.itunesInFlight.remove(key)
             guard let imageData = imageData else {
-                self.itunesMisses.insert(key)
+                self.noteITunesMiss(key)
                 return
             }
-            self.cachedArtwork[key] = imageData
+            self.cacheArtwork(imageData, forKey: key)
             if self.artworkKey(self.currentTrack) == key,
                self.currentTrack.artworkData == nil || self.currentTrack.artworkData?.isEmpty == true {
                 self.currentTrack.artworkData = imageData
@@ -655,16 +728,28 @@ public final class NowPlayingService: ObservableObject {
         }
         return nil
     }
+
+    /// Runs an AppleScript off the main actor so periodic polling never blocks the UI.
+    private nonisolated static func runAppleScriptAsync(_ script: String) async -> String? {
+        await Task.detached(priority: .utility) { () -> String? in
+            var error: NSDictionary?
+            guard let appleScript = NSAppleScript(source: script) else { return nil }
+            let result = appleScript.executeAndReturnError(&error)
+            return error == nil ? result.stringValue : nil
+        }.value
+    }
 }
 
 // MARK: - MediaRemoteBridge Process Manager
 
 final class MediaRemoteBridge: @unchecked Sendable {
+    private let lock = NSLock()
     private var process: Process?
     private var inPipe: Pipe?
     private var outPipe: Pipe?
     private var buffer = ""
     private var isTerminated = false
+    private var lastReport: Date?
     private let onTrack: @Sendable (NowPlayingTrack?) -> Void
 
     init(onTrack: @escaping @Sendable (NowPlayingTrack?) -> Void) {
@@ -672,8 +757,32 @@ final class MediaRemoteBridge: @unchecked Sendable {
         start()
     }
 
+    /// True while the bridge child has reported state within the last few seconds.
+    var isActivelyReporting: Bool {
+        lock.withLock {
+            guard let last = lastReport else { return false }
+            return Date().timeIntervalSince(last) < 3.0
+        }
+    }
+
     func start() {
-        guard !isTerminated else { return }
+        let shouldProceed = lock.withLock { () -> Bool in
+            guard !isTerminated else { return false }
+            // Tear down any previous instance cleanly before (re)starting: clear the
+            // readability handler, close both pipes and reap the old child process.
+            outPipe?.fileHandleForReading.readabilityHandler = nil
+            try? inPipe?.fileHandleForWriting.close()
+            try? outPipe?.fileHandleForReading.close()
+            if let old = process, old.isRunning {
+                old.terminate()
+                DispatchQueue.global(qos: .utility).async { old.waitUntilExit() }
+            }
+            process = nil
+            inPipe = nil
+            outPipe = nil
+            return true
+        }
+        guard shouldProceed else { return }
         guard let scriptPath = resolveScriptPath() else { return }
 
         let task = Process()
@@ -695,48 +804,73 @@ final class MediaRemoteBridge: @unchecked Sendable {
         }
 
         task.terminationHandler = { [weak self] _ in
-            guard let self = self, !self.isTerminated else { return }
-            DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                self?.start()
+            guard let self = self else { return }
+            let shouldRestart = self.lock.withLock { () -> Bool in
+                self.process = nil
+                return !self.isTerminated
+            }
+            if shouldRestart {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                    self?.start()
+                }
             }
         }
 
         do {
             try task.run()
-            self.process = task
-            self.inPipe = inP
-            self.outPipe = outP
+            lock.withLock {
+                self.process = task
+                self.inPipe = inP
+                self.outPipe = outP
+            }
         } catch {
             // Process start failed
         }
     }
 
     func send(_ cmd: String) {
-        guard let inPipe = inPipe else { return }
+        let pipe = lock.withLock { inPipe }
+        guard let pipe = pipe else { return }
         let line = "\(cmd)\n"
         if let data = line.data(using: .utf8) {
-            try? inPipe.fileHandleForWriting.write(contentsOf: data)
+            try? pipe.fileHandleForWriting.write(contentsOf: data)
         }
     }
 
     func terminate() {
-        isTerminated = true
-        outPipe?.fileHandleForReading.readabilityHandler = nil
-        try? inPipe?.fileHandleForWriting.close()
-        process?.terminate()
-        process = nil
-        inPipe = nil
-        outPipe = nil
+        var proc: Process?
+        lock.withLock {
+            isTerminated = true
+            outPipe?.fileHandleForReading.readabilityHandler = nil
+            try? inPipe?.fileHandleForWriting.close()
+            try? outPipe?.fileHandleForReading.close()
+            proc = process
+            process = nil
+            inPipe = nil
+            outPipe = nil
+        }
+        if let proc = proc, proc.isRunning {
+            proc.terminate()
+            // Reap the child so it never lingers as a zombie.
+            DispatchQueue.global(qos: .utility).async { proc.waitUntilExit() }
+        }
     }
 
     private func processIncoming(_ chunk: String) {
-        buffer += chunk
-        while let range = buffer.range(of: "\n") {
-            let line = String(buffer[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-            buffer.removeSubrange(..<range.upperBound)
-            if !line.isEmpty {
-                parseLine(line)
+        let lines = lock.withLock { () -> [String] in
+            buffer += chunk
+            var lines: [String] = []
+            while let range = buffer.range(of: "\n") {
+                let line = String(buffer[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                buffer.removeSubrange(..<range.upperBound)
+                if !line.isEmpty {
+                    lines.append(line)
+                }
             }
+            return lines
+        }
+        for line in lines {
+            parseLine(line)
         }
     }
 
@@ -745,6 +879,7 @@ final class MediaRemoteBridge: @unchecked Sendable {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return
         }
+        lock.withLock { lastReport = Date() }
         let title = json["title"] as? String ?? ""
         let isPlaying = json["isPlaying"] as? Bool ?? false
 
@@ -762,7 +897,7 @@ final class MediaRemoteBridge: @unchecked Sendable {
         let hasArt = json["hasArtwork"] as? Bool ?? false
 
         var artData: Data? = nil
-        if hasArt, let data = try? Data(contentsOf: URL(fileURLWithPath: "/tmp/dms_nowplaying_art.jpg")) {
+        if hasArt, let data = try? Data(contentsOf: NowPlayingService.nowPlayingArtworkURL) {
             artData = data
         }
 
@@ -796,9 +931,6 @@ final class MediaRemoteBridge: @unchecked Sendable {
         let installed = "\(home)/Applications/DankMacShell.app/Contents/Resources/media-bridge.swift"
         if FileManager.default.fileExists(atPath: installed) { return installed }
 
-        let repo = "/Users/jonasnowak/Documents/repos/DankMacShell/Support/media-bridge.swift"
-        if FileManager.default.fileExists(atPath: repo) { return repo }
-
         let support = "\(home)/Library/Application Support/DMS/media-bridge.swift"
         if FileManager.default.fileExists(atPath: support) { return support }
 
@@ -813,6 +945,7 @@ final class MediaRemoteBridge: @unchecked Sendable {
 
     private static let embeddedScript = #"""
 import Foundation
+
 
 let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW)
 guard let handle = handle else {
@@ -846,15 +979,21 @@ let mrGetIsPlaying = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlayi
 let mrSendCommand = dlsym(handle, "MRMediaRemoteSendCommand").map { unsafeBitCast($0, to: MRSendCommand.self) }
 let mrSetElapsed = dlsym(handle, "MRMediaRemoteSetElapsedTime").map { unsafeBitCast($0, to: MRSetElapsed.self) }
 
-let artURL = URL(fileURLWithPath: "/tmp/dms_nowplaying_art.jpg")
+let artDir = URL(fileURLWithPath: NSHomeDirectory())
+    .appendingPathComponent("Library/Caches/DMS/artwork", isDirectory: true)
+try? FileManager.default.createDirectory(at: artDir, withIntermediateDirectories: true)
+try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: artDir.path)
+let artURL = artDir.appendingPathComponent("nowplaying_art.jpg")
 var lastEmittedJSON = ""
 var lastIsPlaying = false
+let appNameLock = NSLock()
 
-func escape(_ s: String) -> String {
-    s.replacingOccurrences(of: "\\", with: "\\\\")
-     .replacingOccurrences(of: "\"", with: "\\\"")
-     .replacingOccurrences(of: "\n", with: "\\n")
-     .replacingOccurrences(of: "\r", with: "\\r")
+func finite(_ d: Double) -> Double { d.isFinite ? d : 0.0 }
+
+func emitJSON(_ payload: [String: Any]) -> String? {
+    guard let data = try? JSONSerialization.data(withJSONObject: payload),
+          let json = String(data: data, encoding: .utf8) else { return nil }
+    return json
 }
 
 func emitState(force: Bool = false) {
@@ -862,12 +1001,13 @@ func emitState(force: Bool = false) {
         guard let dict = info as? [String: Any],
               let title = dict["kMRMediaRemoteNowPlayingInfoTitle"] as? String,
               !title.isEmpty else {
-            let empty = "{\"title\":\"\",\"artist\":\"\",\"album\":\"\",\"isPlaying\":false,\"duration\":0,\"elapsed\":0,\"rate\":0,\"app\":\"\"}"
-            if force || empty != lastEmittedJSON {
-                lastEmittedJSON = empty
-                lastIsPlaying = false
-                print(empty)
-                fflush(stdout)
+            if let empty = emitJSON(["title": "", "artist": "", "album": "", "isPlaying": false, "duration": 0.0, "elapsed": 0.0, "rate": 0.0, "app": ""]) {
+                if force || empty != lastEmittedJSON {
+                    lastEmittedJSON = empty
+                    lastIsPlaying = false
+                    print(empty)
+                    fflush(stdout)
+                }
             }
             return
         }
@@ -880,7 +1020,11 @@ func emitState(force: Bool = false) {
 
         var hasArt = false
         if let artData = dict["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data, !artData.isEmpty {
-            try? artData.write(to: artURL)
+            let tmp = artDir.appendingPathComponent(".nowplaying_art.\(UUID().uuidString).tmp")
+            if (try? artData.write(to: tmp)) != nil {
+                try? FileManager.default.removeItem(at: artURL)
+                try? FileManager.default.moveItem(at: tmp, to: artURL)
+            }
             hasArt = true
         }
 
@@ -888,26 +1032,44 @@ func emitState(force: Bool = false) {
         if let getClient = mrGetClient {
             let sema = DispatchSemaphore(value: 0)
             getClient(DispatchQueue.global()) { client in
+                var resolved = "Media Player"
                 if let client = client {
                     if let getName = mrClientGetName, let n = getName(client) as String?, !n.isEmpty {
-                        appName = n
+                        resolved = n
                     } else if let getBundle = mrClientGetBundle, let b = getBundle(client) as String?, !b.isEmpty {
-                        appName = b
+                        resolved = b
                     }
                 }
+                appNameLock.lock()
+                appName = resolved
+                appNameLock.unlock()
                 sema.signal()
             }
             _ = sema.wait(timeout: .now() + 0.1)
         }
+        appNameLock.lock()
+        let resolvedAppName = appName
+        appNameLock.unlock()
 
         let isPlaying = rate > 0.0
         lastIsPlaying = isPlaying
 
-        let json = "{\"title\":\"\(escape(title))\",\"artist\":\"\(escape(artist))\",\"album\":\"\(escape(album))\",\"duration\":\(dur),\"elapsed\":\(elapsed),\"rate\":\(rate),\"isPlaying\":\(isPlaying),\"hasArtwork\":\(hasArt),\"app\":\"\(escape(appName))\"}"
-        if force || json != lastEmittedJSON {
-            lastEmittedJSON = json
-            print(json)
-            fflush(stdout)
+        if let json = emitJSON([
+            "title": title,
+            "artist": artist,
+            "album": album,
+            "duration": finite(dur),
+            "elapsed": finite(elapsed),
+            "rate": finite(rate),
+            "isPlaying": isPlaying,
+            "hasArtwork": hasArt,
+            "app": resolvedAppName
+        ]) {
+            if force || json != lastEmittedJSON {
+                lastEmittedJSON = json
+                print(json)
+                fflush(stdout)
+            }
         }
     }
 }
@@ -942,45 +1104,52 @@ timer.setEventHandler {
 }
 timer.resume()
 
+func handleCommand(_ trimmed: String) {
+    if trimmed == "poll" {
+        emitState(force: true)
+    } else if trimmed == "play" {
+        _ = mrSendCommand?(0, nil)
+    } else if trimmed == "pause" {
+        _ = mrSendCommand?(1, nil)
+    } else if trimmed == "toggle" {
+        _ = mrSendCommand?(2, nil)
+    } else if trimmed == "next" {
+        _ = mrSendCommand?(4, nil)
+    } else if trimmed == "prev" {
+        _ = mrSendCommand?(5, nil)
+    } else if trimmed.starts(with: "seek ") {
+        let secStr = String(trimmed.dropFirst(5))
+        if let sec = Double(secStr) {
+            mrSetElapsed?(sec)
+        }
+    } else if trimmed == "exit" || trimmed == "quit" {
+        exit(0)
+    }
+}
+
 DispatchQueue.global(qos: .userInitiated).async {
     let stdinHandle = FileHandle.standardInput
+    var stdinBuffer = ""
     while true {
         let data = stdinHandle.availableData
         if data.isEmpty {
             exit(0)
         }
-        guard let line = String(data: data, encoding: .utf8) else { continue }
-        for cmd in line.components(separatedBy: "\n") {
-            let trimmed = cmd.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { continue }
-
+        guard let chunk = String(data: data, encoding: .utf8) else { continue }
+        stdinBuffer += chunk
+        while let newlineIndex = stdinBuffer.firstIndex(of: "\n") {
+            let cmd = String(stdinBuffer[..<newlineIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+            stdinBuffer.removeSubrange(..<newlineIndex)
+            if cmd.isEmpty { continue }
             DispatchQueue.main.async {
-                if trimmed == "poll" {
-                    emitState(force: true)
-                } else if trimmed == "play" {
-                    _ = mrSendCommand?(0, nil)
-                } else if trimmed == "pause" {
-                    _ = mrSendCommand?(1, nil)
-                } else if trimmed == "toggle" {
-                    _ = mrSendCommand?(2, nil)
-                } else if trimmed == "next" {
-                    _ = mrSendCommand?(4, nil)
-                } else if trimmed == "prev" {
-                    _ = mrSendCommand?(5, nil)
-                } else if trimmed.starts(with: "seek ") {
-                    let secStr = String(trimmed.dropFirst(5))
-                    if let sec = Double(secStr) {
-                        mrSetElapsed?(sec)
-                    }
-                } else if trimmed == "exit" || trimmed == "quit" {
-                    exit(0)
-                }
+                handleCommand(cmd)
             }
         }
     }
 }
 
 emitState()
+
 dispatchMain()
 """#
 }

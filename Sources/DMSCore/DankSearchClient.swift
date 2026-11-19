@@ -132,6 +132,33 @@ public struct SafeProcessOutput: Sendable, Equatable {
     public let timedOut: Bool
 }
 
+/// NSLock-guarded bounded byte buffer filled in chunks by reader threads (4 MB cap per stream).
+final class BoundedPipeBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private let capacity: Int
+
+    init(capacity: Int = 4 * 1024 * 1024) {
+        self.capacity = max(0, capacity)
+    }
+
+    func append(_ chunk: Data) {
+        guard !chunk.isEmpty else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        let remaining = capacity - data.count
+        if remaining > 0 {
+            data.append(chunk.prefix(min(chunk.count, remaining)))
+        }
+    }
+
+    var snapshot: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
+    }
+}
+
 /// Crash-isolated subprocess executor that prevents pipe buffer deadlocks and enforces strict execution timeouts.
 public enum SafeProcessRunner: Sendable {
 
@@ -171,21 +198,32 @@ public enum SafeProcessRunner: Sendable {
             return .failure(.launchFailed(error.localizedDescription))
         }
 
+        // Close the parent's write ends immediately so the reader threads observe EOF
+        // as soon as the child exits. The read handles are owned by the reader threads
+        // from here on and are never closed from this thread while they are active.
+        try? stdoutPipe.fileHandleForWriting.close()
+        try? stderrPipe.fileHandleForWriting.close()
+
         let pid = process.processIdentifier
         let group = DispatchGroup()
-        nonisolated(unsafe) var stdoutData = Data()
-        nonisolated(unsafe) var stderrData = Data()
+        let stdoutBuffer = BoundedPipeBuffer()
+        let stderrBuffer = BoundedPipeBuffer()
 
         // Read stdout and stderr concurrently BEFORE waiting for exit to prevent 64KB kernel pipe buffer deadlocks.
+        // Chunks are appended into NSLock-guarded buffers capped at 4 MB each.
         group.enter()
         DispatchQueue.global(qos: .userInitiated).async {
-            stdoutData = (try? stdoutReadHandle.readToEnd()) ?? Data()
+            while let chunk = try? stdoutReadHandle.read(upToCount: 64 * 1024), !chunk.isEmpty {
+                stdoutBuffer.append(chunk)
+            }
             group.leave()
         }
 
         group.enter()
         DispatchQueue.global(qos: .utility).async {
-            stderrData = (try? stderrReadHandle.readToEnd()) ?? Data()
+            while let chunk = try? stderrReadHandle.read(upToCount: 64 * 1024), !chunk.isEmpty {
+                stderrBuffer.append(chunk)
+            }
             group.leave()
         }
 
@@ -203,19 +241,22 @@ public enum SafeProcessRunner: Sendable {
             if process.isRunning {
                 process.terminate()
             }
-            // Give process 30ms to handle SIGTERM, then force SIGKILL so pipes close cleanly
+            // Give process 30ms to handle SIGTERM, then force SIGKILL so pipes close cleanly.
+            // Terminating the child (plus the already-closed parent write ends) delivers EOF,
+            // so the reader threads finish on their own; the read handles are NOT closed here.
             if exitSemaphore.wait(timeout: .now() + 0.03) == .timedOut {
                 if pid > 0 {
                     kill(pid, SIGKILL)
                 }
                 _ = exitSemaphore.wait(timeout: .now() + 0.1)
             }
-            try? stdoutReadHandle.close()
-            try? stderrReadHandle.close()
         }
 
-        // Wait briefly for pipe readers to finish draining
-        _ = group.wait(timeout: .now() + 0.2)
+        // Wait for pipe readers to finish draining (they exit on EOF or read error).
+        _ = group.wait(timeout: .now() + 1.0)
+
+        let stdoutData = stdoutBuffer.snapshot
+        let stderrData = stderrBuffer.snapshot
 
         if didTimeout {
             return .failure(.timedOut(timeout))
@@ -310,7 +351,11 @@ public final class DankSearchClient: @unchecked Sendable {
         if let timeout {
             _timeout = max(0.02, timeout)
         }
-        _customExecutor = customExecutor
+        // Only overwrite the executor when one is explicitly passed, so that
+        // `configure(timeout:)` alone does not silently drop a configured backend.
+        if let customExecutor {
+            _customExecutor = customExecutor
+        }
         lock.unlock()
     }
 
@@ -365,6 +410,35 @@ public final class DankSearchClient: @unchecked Sendable {
         return nil
     }
 
+    /// Appends items parsed from a single JSON object (`results` array, `error`, or a direct `path`)
+    /// into `items`. Returns a `DankSearchError` on malformed content, nil when done.
+    private static func appendItems(from obj: [String: Any], into items: inout [FileItem], maxResults: Int) -> DankSearchError? {
+        if let errStr = obj["error"] as? String {
+            return .malformedOutput("danksearch reported error: \(errStr)")
+        }
+        if let resultsArr = obj["results"] as? [[String: Any]] {
+            for entry in resultsArr {
+                guard let path = (entry["path"] as? String) ?? (entry["file"] as? String),
+                      !path.isEmpty else {
+                    return .malformedOutput("Result item missing 'path' field")
+                }
+                let name = (entry["name"] as? String) ?? (path as NSString).lastPathComponent
+                let isDir = (entry["isDirectory"] as? Bool) ?? (entry["is_dir"] as? Bool) ?? false
+                items.append(FileItem(name: name, path: path, isDirectory: isDir))
+                if items.count >= maxResults { return nil }
+            }
+            return nil
+        }
+        guard let path = (obj["path"] as? String) ?? (obj["file"] as? String),
+              !path.isEmpty else {
+            return .malformedOutput("NDJSON item missing 'path' field")
+        }
+        let name = (obj["name"] as? String) ?? (path as NSString).lastPathComponent
+        let isDir = (obj["isDirectory"] as? Bool) ?? (obj["is_dir"] as? Bool) ?? false
+        items.append(FileItem(name: name, path: path, isDirectory: isDir))
+        return nil
+    }
+
     /// Parses raw output from `danksearch` (supports JSON array of objects, NDJSON, or newline-delimited file paths).
     /// Rejects corrupted/non-UTF8 or invalid JSON structures with `.malformedOutput`.
     public static func parseOutput(_ data: Data, maxResults: Int = 12, verifyFileExists: Bool = false) -> Result<[FileItem], DankSearchError> {
@@ -377,57 +451,54 @@ public final class DankSearchClient: @unchecked Sendable {
             return .success([])
         }
 
+        // A non-positive limit means "no results": return before appending anything.
+        if maxResults <= 0 {
+            return .success([])
+        }
+
         // 1. Check if output looks like JSON (starts with `[` or `{`)
         if trimmed.hasPrefix("[") || trimmed.hasPrefix("{") {
-            // Try JSON array first
-            if trimmed.hasPrefix("[") {
-                guard let jsonArray = try? JSONSerialization.jsonObject(with: Data(trimmed.utf8)) as? [[String: Any]] else {
-                    return .failure(.malformedOutput("Invalid JSON array from danksearch"))
-                }
-                var items: [FileItem] = []
-                for obj in jsonArray {
-                    guard let path = (obj["path"] as? String) ?? (obj["file"] as? String),
-                          !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                        return .failure(.malformedOutput("JSON entry missing required 'path' field"))
+            // Attempt whole-document JSON parsing first so pretty-printed payloads
+            // (e.g. a multi-line `{ "results": [...] }`) parse correctly.
+            if let wholeDoc = try? JSONSerialization.jsonObject(with: Data(trimmed.utf8)) {
+                if let jsonArray = wholeDoc as? [[String: Any]] {
+                    var items: [FileItem] = []
+                    for obj in jsonArray {
+                        guard let path = (obj["path"] as? String) ?? (obj["file"] as? String),
+                              !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                            return .failure(.malformedOutput("JSON entry missing required 'path' field"))
+                        }
+                        let name = (obj["name"] as? String) ?? (path as NSString).lastPathComponent
+                        let isDir = (obj["isDirectory"] as? Bool) ?? (obj["is_dir"] as? Bool) ?? false
+                        items.append(FileItem(name: name, path: path, isDirectory: isDir))
+                        if items.count >= maxResults { break }
                     }
-                    let name = (obj["name"] as? String) ?? (path as NSString).lastPathComponent
-                    let isDir = (obj["isDirectory"] as? Bool) ?? (obj["is_dir"] as? Bool) ?? false
-                    items.append(FileItem(name: name, path: path, isDirectory: isDir))
-                    if items.count >= maxResults { break }
+                    return .success(items)
                 }
-                return .success(items)
+                if let obj = wholeDoc as? [String: Any] {
+                    var items: [FileItem] = []
+                    if let err = appendItems(from: obj, into: &items, maxResults: maxResults) {
+                        return .failure(err)
+                    }
+                    return .success(items)
+                }
+                return .failure(.malformedOutput("JSON document is neither an array nor an object of results"))
             }
 
-            // Try single JSON object or NDJSON lines
+            // Whole-document parse failed: only NDJSON (one object per line) remains viable.
+            if trimmed.hasPrefix("[") {
+                return .failure(.malformedOutput("Invalid JSON array from danksearch"))
+            }
+
             let lines = trimmed.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             var items: [FileItem] = []
             for line in lines {
                 guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else {
                     return .failure(.malformedOutput("Malformed JSON object in danksearch output"))
                 }
-                if let errStr = obj["error"] as? String {
-                    return .failure(.malformedOutput("danksearch reported error: \(errStr)"))
+                if let err = appendItems(from: obj, into: &items, maxResults: maxResults) {
+                    return .failure(err)
                 }
-                if let resultsArr = obj["results"] as? [[String: Any]] {
-                    for entry in resultsArr {
-                        guard let path = (entry["path"] as? String) ?? (entry["file"] as? String),
-                              !path.isEmpty else {
-                            return .failure(.malformedOutput("Result item missing 'path' field"))
-                        }
-                        let name = (entry["name"] as? String) ?? (path as NSString).lastPathComponent
-                        let isDir = (entry["isDirectory"] as? Bool) ?? (entry["is_dir"] as? Bool) ?? false
-                        items.append(FileItem(name: name, path: path, isDirectory: isDir))
-                        if items.count >= maxResults { break }
-                    }
-                    continue
-                }
-                guard let path = (obj["path"] as? String) ?? (obj["file"] as? String),
-                      !path.isEmpty else {
-                    return .failure(.malformedOutput("NDJSON item missing 'path' field"))
-                }
-                let name = (obj["name"] as? String) ?? (path as NSString).lastPathComponent
-                let isDir = (obj["isDirectory"] as? Bool) ?? (obj["is_dir"] as? Bool) ?? false
-                items.append(FileItem(name: name, path: path, isDirectory: isDir))
                 if items.count >= maxResults { break }
             }
             return .success(items)
@@ -507,9 +578,15 @@ public final class DankSearchClient: @unchecked Sendable {
         }
 
         if let binPath = customPath ?? resolveExecutablePath() {
+            // Guard against queries that look like flags being parsed as options.
+            var arguments = ["--json", "--limit", "\(maxResults)"]
+            if clean.hasPrefix("-") {
+                arguments.append("--")
+            }
+            arguments.append(clean)
             let runResult = SafeProcessRunner.run(
                 executablePath: binPath,
-                arguments: ["--json", "--limit", "\(maxResults)", clean],
+                arguments: arguments,
                 timeout: currentTimeout
             ).map { $0.stdout }
 

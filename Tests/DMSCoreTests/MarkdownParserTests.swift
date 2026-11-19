@@ -114,4 +114,27 @@ struct MarkdownParserTests {
         #expect(MarkdownParser.parse("").blocks.isEmpty)
         #expect(MarkdownParser.parse("\n\n  \n").blocks.isEmpty)
     }
+
+    @Test("Trailing Closing Bracket Does Not Crash (v0.9 Regression)")
+    func testTrailingClosingBracket() {
+        let runs1 = MarkdownParser.parseInline("[TODO]")
+        #expect(runs1 == [.text("[TODO]")])
+        let runs2 = MarkdownParser.parseInline("Task - [x]")
+        #expect(runs2 == [.text("Task - [x]")])
+        let doc = MarkdownParser.parse("- [x]\n- [ ] done [1]")
+        #expect(doc.blocks.count == 1)
+    }
+
+    @Test("Separate Blockquotes Split by Blank Line and Plain HR Not Table")
+    func testSeparateQuotesAndPlainRule() {
+        let quotes = MarkdownParser.parse("> first quote\n\n> second quote")
+        #expect(quotes.blocks.count == 2)
+
+        let notTable = MarkdownParser.parse("a | b\n---")
+        #expect(notTable.blocks.count == 2)
+        guard case .paragraph = notTable.blocks[0], case .divider = notTable.blocks[1] else {
+            Issue.record("Expected paragraph followed by divider, not table")
+            return
+        }
+    }
 }

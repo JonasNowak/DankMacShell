@@ -200,7 +200,14 @@ if [ "$LAUNCH" -eq 1 ]; then
     pkill -x DankMaterialShell 2>/dev/null || true
     pkill -x DankMacShell 2>/dev/null || true
     killall -CONT OSDUIHelper 2>/dev/null || true
+    wait_i=0
     while pgrep -x DankMaterialShell >/dev/null 2>&1 || pgrep -x DankMacShell >/dev/null 2>&1; do
+        wait_i=$((wait_i + 1))
+        if [ "$wait_i" -ge 20 ]; then
+            pkill -9 -x DankMaterialShell 2>/dev/null || true
+            pkill -9 -x DankMacShell 2>/dev/null || true
+            break
+        fi
         sleep 0.1
     done
     sleep 0.2

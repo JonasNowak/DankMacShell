@@ -8,7 +8,7 @@
   <a href="https://github.com/JonasNowak/DankMacShell/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/JonasNowak/DankMacShell/build.yml?branch=main&style=for-the-badge&label=build" alt="CI build status"></a>
   <a href="https://github.com/JonasNowak/DankMacShell/releases"><img src="https://img.shields.io/github/v/release/JonasNowak/DankMacShell?style=for-the-badge&label=release" alt="Latest release"></a>
   <a href="https://github.com/JonasNowak/DankMacShell/blob/main/LICENSE"><img src="https://img.shields.io/github/license/JonasNowak/DankMacShell?style=for-the-badge&color=2ea44f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/macOS-26%2B-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 26+">
+  <img src="https://img.shields.io/badge/macOS-14%2B-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-6-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6">
   <a href="https://github.com/OmniNull/OmniWM"><img src="https://img.shields.io/badge/OmniWM-optional-7A5AF8?style=for-the-badge" alt="Optional OmniWM integration"></a>
 </p>
@@ -36,7 +36,7 @@ DankMacShell (DMS) is a native macOS shell written in Swift. It is highly inspir
 
 It runs on **stock macOS** on its own. If you use the tiling window manager [OmniWM](https://github.com/OmniNull/OmniWM), DMS integrates with it for tiling, workspaces, and border sync, but OmniWM is optional, never required (without it, DMS falls back to native SkyLight spaces).
 
-> Early **v0.8.x**: features are landing fast and the config format may change between minor versions. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
+> **v0.9.0**: hardened pre-1.0 release with macOS 14+ support, locked-down IPC/URL scheme security, and full native widget/service wiring. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
 
 <p align="center">
   <img src="assets/demo.gif" width="1100" alt="DankMacShell demo — launcher, DankDash and dynamic wallpaper theming">
@@ -51,7 +51,7 @@ It runs on **stock macOS** on its own. If you use the tiling window manager [Omn
 ```bash
 brew tap jonasnowak/dankmac https://github.com/JonasNowak/DankMacShell.git
 brew install --cask jonasnowak/dankmac/dankmacshell
-brew services start dms-gop   # optional: companion REST API on :63484
+brew services start dms-gop   # optional: companion REST API on 127.0.0.1:63484
 ```
 
 The tap also ships the `dms-gop` and `dank-theme-engine` formulae the cask depends on. It is the best experience.
@@ -75,7 +75,7 @@ One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`d
           programs.dankmacshell = {
             enable = true;
             launchd.enable = true;              # auto-start DankMacShell.app in the Aqua session
-            dmsGop.server.enable = true;        # auto-start dms-gop REST API (:63484)
+            dmsGop.server.enable = true;        # auto-start dms-gop REST API (127.0.0.1:63484)
             themeEngine.launchd.enable = false; # optional background `dte watch` agent
           };
         }
@@ -105,7 +105,7 @@ One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`d
 
 ### ⬇️ 3. Download the DMG (reduced experience)
 
-- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.8.2.dmg`)
+- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.9.0.dmg`)
 - [ ] Open the DMG and drag **DankMacShell** into `/Applications`
 - [ ] First launch: the DMG is not signed/notarized — right-click the app and choose **Open**, or run `xattr -cr /Applications/DankMacShell.app`, then grant Accessibility & Input Monitoring when prompted
 
@@ -119,7 +119,7 @@ cd DankMacShell
 ./build.sh        # or: make build
 ```
 
-You need macOS 26+ with Xcode or the Command Line Tools (Swift 6 toolchain); plain `swift build` works too — it's a Swift Package. Run the tests with `./test.sh`.
+You need macOS 14+ with Xcode or the Command Line Tools (Swift 6 toolchain); plain `swift build` works too — it's a Swift Package. Run the tests with `./test.sh`.
 
 <a id="features"></a>
 
@@ -231,28 +231,24 @@ The configuration file is automatically created with defaults (`version: 2`) on 
 
 ## 🔗 URL Scheme (`dms://`)
 
-DMS registers the `dms://` URL scheme for system integration:
+DMS registers the `dms://` URL scheme for **safe UI toggle & navigation** actions:
 - `open -g dms://toggleLauncher` (supports `?action=open&q=...`)
 - `open -g dms://dash` (supports `?tab=overview|media|wallpapers|weather|wellbeing|settings`)
 - `open -g dms://toggleControlCenter`
-- `open -g dms://powerMenu` (supports `?action=lock|sleep|restart|shutdown|logout`)
-- `open -g dms://notepad` (`open`, `close`, `get`, `set`, `append`)
-- `open -g dms://clipboard` (`open`, `list`, `clear`, `copy`)
-- `open -g dms://processlist` (`open`, `list`, `kill`)
-- `open -g dms://colorpicker` (`pick`)
-- `open -g dms://qr` (supports `?text=...`)
-- `open -g dms://keybinds`
-- `open -g dms://settings` (supports `?tab=...`, `?key=...`, `?value=...`, `dump`)
-- `open -g dms://bar/toggle` (`reveal`, `hide`, `setposition`)
-- `open -g dms://island/toggle` (`expand?activity=home|media|notification|osd|dash|clipboard|weather`, `collapse`, `media`, `weather`)
-- `open -g "dms://setTheme?name=dynamic"` (`dms://theme/list`, `dms://toggleThemeMode`)
-- `open -g dms://wallpaper/picker` (`get`, `set`, `list`, `next`, `prev`, `random`)
-- `open -g dms://omniwm/sync` (`get`, `mode`, `direction`, `toggle`)
-- `open -g dms://mpris/play` / `open -g dms://lyrics/current`
-- `open -g dms://wellbeing/status` / `open -g dms://symbian/open`
-- `open -g dms://plugins/list` / `open -g dms://weather/status`
-- `open -g dms://screenshot` (`region`, `full`, `window`)
-- `open -g dms://reloadConfig`
+- `open -g dms://powerMenu` (`open` / `toggle` UI only)
+- `open -g dms://notepad` (`open`, `close`, `toggle` UI only)
+- `open -g dms://clipboard` (`open`, `close`, `toggle` UI only)
+- `open -g dms://processlist` (`open`, `close`, `toggle` UI only)
+- `open -g dms://colorpicker` (`open` / `toggle` UI only)
+- `open -g dms://qr` (`open` / `toggle` UI only)
+- `open -g dms://keybinds` (`open`, `close`, `toggle` UI only)
+- `open -g dms://settings` (`open`, `close`, `toggle`, optional `?tab=...`)
+- `open -g dms://bar/toggle` (`reveal`, `hide`)
+- `open -g dms://island/toggle` (`expand?activity=home|media|notification|osd|dash|clipboard|weather`, `collapse`, `open`, `close`)
+- `open -g dms://wallpaper/picker` (opens the wallpaper picker)
+
+> [!NOTE]
+> **Security boundary (v0.9.0+):** Destructive, state-mutating, and privileged actions (`processlist/kill`, `powermenu` Lock/Sleep/Restart/Shut Down/Log Out, `settings` writes, `clipboard`/`notepad` writes, `screenshot`, `plugins`, `symbian`, `dmenu`, and hardware controls) are rejected over `dms://`. Use the `dms` CLI (`0600` local socket) for automation.
 
 <a id="advanced-topics"></a>
 
@@ -290,6 +286,7 @@ dms restart                      # Restart DankMacShell
 dms status                       # Show running status of DMS daemon and socket
 dms doctor                       # Run diagnostics check on permissions and subsystems
 dms permission                   # Open Accessibility / Device Control settings to grant event swallowing
+dms setup-cert                   # Create/trust persistent 'dms-cert' and re-sign DankMacShell.app for TCC persistence
 dms reload                       # Reload configuration from disk
 dms version                      # Show version info
 
@@ -421,7 +418,7 @@ programs.kitty.extraConfig = "include dms-theme.conf";
 programs.ghostty.settings.config-file = "themes/dms"; # DMS writes ~/.config/ghostty/themes/dms
 
 # alacritty
-programs.alacritty.settings.import = [ "dms-theme.toml" ]; # DMS writes ~/.config/alacritty/dms-theme.toml
+programs.alacritty.settings.general.import = [ "dms-theme.toml" ]; # DMS writes ~/.config/alacritty/dms-theme.toml
 ```
 
 Note on kitty: kitty's auto-reload watcher only watches its *top-level* config file, never
@@ -440,7 +437,7 @@ and is always writable, regardless of which emulator targets are managed.
 
 ## 🗺️ Roadmap
 
-Status: **v0.8.x**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: M3 Expressive theming via `MaterialMacLibrary` + the Rust theme engine (v0.8), OmniWM margin auto-adjust when the bar changes edge (v0.8.1), customizable Control Center tile grid + Homebrew/Nix packaging (v0.8.2), terminal theme exporters & CLI pipelines (v0.7). 
+Status: **v0.9.0**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: security & IPC hardening, idle-CPU/leak fixes, macOS 14+ alignment, Privacy/VPN/Sounds/DesktopWidgets/UpdateCheck wiring, and Swift 6 `DMSCore` readiness (v0.9.0); customizable Control Center tile grid + Homebrew/Nix packaging (v0.8.2); OmniWM margin auto-adjust (v0.8.1); M3 Expressive theming via `MaterialMacLibrary` + Rust theme engine (v0.8).
 
 - Next up: To be announced soon.
 - Originally I wanted to ship basic DMS parity, but the original plan was completed with v0.7. 

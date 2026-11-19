@@ -16,25 +16,28 @@ public final class WellbeingService: ObservableObject {
     @Published public private(set) var isTrackingActive: Bool = true
 
     private let storageURL: URL
+    private let writeQueue = DispatchQueue(label: "com.dank.macshell.wellbeing.write")
     private var activeFocusSession: (bundleID: String, appName: String, startTime: Date)?
     nonisolated(unsafe) private var flushTimer: Timer?
     nonisolated(unsafe) private var statusCheckTimer: Timer?
     private var alertedLimits: Set<String> = []
+    private var lastDateKey: String
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dmsDir = appSupport.appendingPathComponent("DMS", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dmsDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dmsDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dmsDir.path)
         self.storageURL = dmsDir.appendingPathComponent("wellbeing.json")
         self.store = WellbeingStoreData()
+        self.lastDateKey = WellbeingFormatter.dateKey(for: Date())
 
         loadStore()
         updateMacOSScreenTimeStatus()
         recomputeTrackingState()
         setupObservers()
-        startPeriodicFlush()
-        startPeriodicStatusCheck()
+        updateTimersForConfig()
 
         // Capture initial frontmost app
         if isTrackingActive,
@@ -50,15 +53,34 @@ public final class WellbeingService: ObservableObject {
     }
 
     public func updateMacOSScreenTimeStatus() {
+        let found = Self.scanScreenTimeAgentRunning()
+        if self.isMacOSScreenTimeActive != found {
+            self.isMacOSScreenTimeActive = found
+        }
+    }
+
+    /// Re-scans the process list off the main actor, then updates state on the main actor.
+    private func refreshScreenTimeStatusAsync() {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let found = await Task.detached(priority: .utility) {
+                Self.scanScreenTimeAgentRunning()
+            }.value
+            if self.isMacOSScreenTimeActive != found {
+                self.isMacOSScreenTimeActive = found
+            }
+            self.recomputeTrackingState()
+        }
+    }
+
+    /// Scans the process list for `ScreenTimeAgent`. Fail-open (returns true) when
+    /// the scan itself fails, matching the previous behavior. Never call on the main actor.
+    nonisolated private static func scanScreenTimeAgentRunning() -> Bool {
         var pids = [pid_t](repeating: 0, count: 4096)
         let bytes = proc_listpids(UInt32(PROC_ALL_PIDS), 0, &pids, Int32(MemoryLayout<pid_t>.size * pids.count))
-        guard bytes > 0 else {
-            self.isMacOSScreenTimeActive = true
-            return
-        }
+        guard bytes > 0 else { return true }
 
         let count = min(Int(bytes) / MemoryLayout<pid_t>.size, pids.count)
-        var found = false
         for i in 0..<count {
             let pid = pids[i]
             if pid <= 0 { continue }
@@ -66,18 +88,14 @@ public final class WellbeingService: ObservableObject {
             let len = proc_name(pid, &nameBuffer, UInt32(nameBuffer.count))
             if len > 0 {
                 let name = nameBuffer.withUnsafeBufferPointer { ptr in
-                    ptr.baseAddress != nil ? String(cString: ptr.baseAddress!) : ""
+                    ptr.baseAddress.map { String(cString: $0) } ?? ""
                 }
                 if name == "ScreenTimeAgent" {
-                    found = true
-                    break
+                    return true
                 }
             }
         }
-
-        if self.isMacOSScreenTimeActive != found {
-            self.isMacOSScreenTimeActive = found
-        }
+        return false
     }
 
     public func recomputeTrackingState() {
@@ -161,13 +179,33 @@ public final class WellbeingService: ObservableObject {
             }
         }
 
+        // Only react when the wellbeing-relevant settings actually change; the raw
+        // $config sink must not trigger a 4096-PID process scan on every edit.
         ConfigStore.shared.$config
+            .map { "\($0.enableWellbeing)_\($0.syncWellbeingWithMacOS)" }
+            .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.updateMacOSScreenTimeStatus()
-                self?.recomputeTrackingState()
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    self.updateTimersForConfig()
+                    self.refreshScreenTimeStatusAsync()
+                }
             }
             .store(in: &cancellables)
+    }
+
+    /// Pauses the periodic timers entirely while wellbeing tracking is disabled.
+    private func updateTimersForConfig() {
+        if ConfigStore.shared.config.enableWellbeing {
+            startPeriodicFlush()
+            startPeriodicStatusCheck()
+        } else {
+            flushTimer?.invalidate()
+            flushTimer = nil
+            statusCheckTimer?.invalidate()
+            statusCheckTimer = nil
+        }
     }
 
     private func startPeriodicFlush() {
@@ -184,8 +222,7 @@ public final class WellbeingService: ObservableObject {
         statusCheckTimer?.invalidate()
         statusCheckTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.updateMacOSScreenTimeStatus()
-                self?.recomputeTrackingState()
+                self?.refreshScreenTimeStatusAsync()
             }
         }
     }
@@ -227,6 +264,7 @@ public final class WellbeingService: ObservableObject {
         guard elapsed >= 0.5 else { return }
 
         let dateKey = WellbeingFormatter.dateKey(for: now)
+        pruneAlertedLimitsIfNewDay(dateKey: dateKey)
         store.addUsage(
             bundleID: session.bundleID,
             appName: session.appName,
@@ -243,6 +281,14 @@ public final class WellbeingService: ObservableObject {
     private func updateTodayTotal() {
         let todayKey = WellbeingFormatter.dateKey(for: Date())
         todayTotalSeconds = store.totalDuration(for: todayKey)
+    }
+
+    /// Drops alerted-limit markers from previous days on day rollover.
+    private func pruneAlertedLimitsIfNewDay(dateKey: String) {
+        if dateKey != lastDateKey {
+            lastDateKey = dateKey
+            alertedLimits = alertedLimits.filter { $0.hasPrefix("\(dateKey)_") }
+        }
     }
 
     private func checkLimit(bundleID: String, appName: String, dateKey: String) {
@@ -297,10 +343,21 @@ public final class WellbeingService: ObservableObject {
         var snapshot = store
         snapshot.prune(currentDate: Date(), retentionDays: snapshot.retentionDays)
         let target = storageURL
+        let dir = target.deletingLastPathComponent()
 
-        Task.detached(priority: .utility) {
+        // Serialize writes on a dedicated queue; write to a unique temp file with
+        // 0600 permissions, then atomically rename over wellbeing.json.
+        writeQueue.async {
             guard let data = try? JSONEncoder().encode(snapshot) else { return }
-            try? data.write(to: target, options: .atomic)
+            let tmp = dir.appendingPathComponent(".\(target.lastPathComponent).tmp-\(UUID().uuidString)")
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                try data.write(to: tmp)
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tmp.path)
+                _ = try FileManager.default.replaceItemAt(target, withItemAt: tmp)
+            } catch {
+                try? FileManager.default.removeItem(at: tmp)
+            }
         }
     }
 

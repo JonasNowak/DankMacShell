@@ -103,7 +103,7 @@ public final class WorkspaceService: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var skyLightHandle: UnsafeMutableRawPointer?
     private var cgsMainConnectionID: (@convention(c) () -> Int32)?
-    private var cgsCopyManagedDisplaySpaces: (@convention(c) (Int32) -> CFArray?)?
+    private var cgsCopyManagedDisplaySpaces: (@convention(c) (Int32) -> Unmanaged<CFArray>?)?
 
     // OmniWM background process management
     private var omniWMProcess: Process?
@@ -130,7 +130,7 @@ public final class WorkspaceService: ObservableObject {
     // MARK: - OmniWM Integration
 
     private func setupOmniWM() {
-        Self.ensureOmniWMIPCEnabled()
+        ensureOmniWMIPCEnabled()
         omniWMCtlPath = Self.findOmniWMCtl()
         checkAndStartOmniWM()
     }
@@ -150,17 +150,34 @@ public final class WorkspaceService: ObservableObject {
         return nil
     }
 
-    private static func ensureOmniWMIPCEnabled() {
+    private func ensureOmniWMIPCEnabled() {
+        // Only touch OmniWM's settings when DMS is allowed to theme it.
+        guard ConfigStore.shared.config.autoThemeOmniWM else { return }
         let home = FileManager.default.homeDirectoryForCurrentUser
         let settingsURL = home.appendingPathComponent(".config/omniwm/settings.toml")
+        // Never rewrite a nix/home-manager managed symlink into the read-only store.
+        if TerminalThemeSecurity.isManagedSymlink(path: settingsURL.path) {
+            return
+        }
         guard FileManager.default.fileExists(atPath: settingsURL.path),
               let content = try? String(contentsOf: settingsURL, encoding: .utf8) else {
             return
         }
-        if content.contains("ipcEnabled = false") {
-            let updated = content.replacingOccurrences(of: "ipcEnabled = false", with: "ipcEnabled = true")
-            try? updated.write(to: settingsURL, atomically: true, encoding: .utf8)
+        // Only rewrite an active (uncommented) `ipcEnabled = false` line.
+        let lines = content.components(separatedBy: .newlines)
+        var updated = lines
+        var changed = false
+        for (index, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("#") { continue }
+            let code = trimmed.split(separator: "#").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+            if code == "ipcEnabled = false" {
+                updated[index] = "ipcEnabled = true"
+                changed = true
+            }
         }
+        guard changed else { return }
+        try? updated.joined(separator: "\n").write(to: settingsURL, atomically: true, encoding: .utf8)
     }
 
     public static func isOmniWMRunningProcess() -> Bool {
@@ -181,6 +198,11 @@ public final class WorkspaceService: ObservableObject {
     }
 
     public func checkAndStartOmniWM() {
+        // The live NDJSON streaming subscription is already active: don't spawn
+        // additional omniwmctl query subprocesses on top of it.
+        if omniWMProcess?.isRunning == true {
+            return
+        }
         if omniWMCtlPath == nil {
             omniWMCtlPath = Self.findOmniWMCtl()
         }
@@ -218,12 +240,12 @@ public final class WorkspaceService: ObservableObject {
 
         do {
             try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            task.waitUntilExit()
-            return data
         } catch {
             return nil
         }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        task.waitUntilExit()
+        return data
     }
 
     /// Fetches initial OmniWM state asynchronously off the main thread.
@@ -297,7 +319,9 @@ public final class WorkspaceService: ObservableObject {
                 return
             }
             guard let chunk = String(data: data, encoding: .utf8) else { return }
-            Task { @MainActor [weak self] in
+            // Dispatch on the main queue (FIFO) instead of unstructured tasks so
+            // NDJSON messages are processed strictly in stream order.
+            DispatchQueue.main.async { [weak self] in
                 self?.processOmniWMStreamChunk(chunk)
             }
         }
@@ -315,7 +339,11 @@ public final class WorkspaceService: ObservableObject {
     }
 
     private func handleOmniWMProcessTerminated() {
-        self.omniWMPipe?.fileHandleForReading.readabilityHandler = nil
+        if let pipe = self.omniWMPipe {
+            pipe.fileHandleForReading.readabilityHandler = nil
+            try? pipe.fileHandleForReading.close()
+            try? pipe.fileHandleForWriting.close()
+        }
         self.omniWMProcess = nil
         self.omniWMPipe = nil
         self.omniWMBuffer = ""
@@ -534,15 +562,25 @@ public final class WorkspaceService: ObservableObject {
             task.arguments = args
             task.standardOutput = FileHandle.nullDevice
             task.standardError = FileHandle.nullDevice
-            try? task.run()
+            do {
+                try task.run()
+            } catch {
+                return
+            }
             task.waitUntilExit()
         }
     }
 
-    private func stopOmniWMSubscription() {
-        omniWMPipe?.fileHandleForReading.readabilityHandler = nil
+    public func stopOmniWMSubscription() {
+        if let pipe = omniWMPipe {
+            pipe.fileHandleForReading.readabilityHandler = nil
+            try? pipe.fileHandleForReading.close()
+            try? pipe.fileHandleForWriting.close()
+        }
         if let proc = omniWMProcess, proc.isRunning {
             proc.terminate()
+            // Reap the child so it never lingers as a zombie.
+            DispatchQueue.global(qos: .utility).async { proc.waitUntilExit() }
         }
         omniWMProcess = nil
         omniWMPipe = nil
@@ -559,7 +597,7 @@ public final class WorkspaceService: ObservableObject {
                 cgsMainConnectionID = unsafeBitCast(connSym, to: (@convention(c) () -> Int32).self)
             }
             if let spacesSym = dlsym(handle, "CGSCopyManagedDisplaySpaces") {
-                cgsCopyManagedDisplaySpaces = unsafeBitCast(spacesSym, to: (@convention(c) (Int32) -> CFArray?).self)
+                cgsCopyManagedDisplaySpaces = unsafeBitCast(spacesSym, to: (@convention(c) (Int32) -> Unmanaged<CFArray>?).self)
             }
         }
     }
@@ -633,13 +671,10 @@ public final class WorkspaceService: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Periodic polling timer to monitor OmniWM lifecycle (since LSUIElement apps don't reliably trigger NSWorkspace notifications)
-        let timer = Timer(timeInterval: 2.5, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.checkAndStartOmniWM()
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
+        // No periodic polling: OmniWM launches are observed via
+        // didLaunchApplicationNotification above (LSUIElement apps don't reliably
+        // trigger the other notifications), and the live NDJSON subscription covers
+        // everything while it is running.
     }
 
     // MARK: - Native Spaces & Windows Updating
@@ -654,7 +689,13 @@ public final class WorkspaceService: ObservableObject {
         }
 
         let conn = getConn()
-        guard let displays = getSpaces(conn) as? [[String: Any]] else {
+        // CGSCopyManagedDisplaySpaces returns a +1 retained CFArray: take it so the
+        // reference is released instead of leaking on every call.
+        guard let unmanagedSpaces = getSpaces(conn) else {
+            return
+        }
+        let displays = unmanagedSpaces.takeRetainedValue() as? [[String: Any]]
+        guard let displays = displays else {
             return
         }
 
@@ -688,7 +729,7 @@ public final class WorkspaceService: ObservableObject {
         if isOmniWMRunning { return }
 
         let runningApps = NSWorkspace.shared.runningApplications
-        let runningDict = Dictionary(uniqueKeysWithValues: runningApps.map { ($0.processIdentifier, $0) })
+        let runningDict = Dictionary(runningApps.map { ($0.processIdentifier, $0) }, uniquingKeysWith: { first, _ in first })
         let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let dmsPID = ProcessInfo.processInfo.processIdentifier
 

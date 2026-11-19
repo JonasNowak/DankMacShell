@@ -144,6 +144,56 @@ struct ControlCenterTests {
         #expect(formatted.rawPercent >= 0.42 && formatted.rawPercent <= 0.44)
     }
 
+    @Test("Storage Formatting Guards Zero and Negative Totals")
+    func testStorageFormattingDegenerate() {
+        let zero = ControlCenterUtils.formatStorage(usedBytes: 0, totalBytes: 0)
+        #expect(zero.rawPercent == 0.0)
+        #expect(zero.summary.contains("(0%)"))
+
+        let negative = ControlCenterUtils.formatStorage(usedBytes: 1024, totalBytes: -1)
+        #expect(negative.rawPercent == 0.0)
+        #expect(negative.summary.contains("(0%)"))
+
+        // Over-100% usage clamps the displayed percentage to 100
+        let over = ControlCenterUtils.formatStorage(usedBytes: 200 * 1024 * 1024 * 1024, totalBytes: 100 * 1024 * 1024 * 1024)
+        #expect(over.summary.contains("(100%)"))
+    }
+
+    @Test("Default Widgets Have No Overlapping Positions")
+    func testDefaultWidgetsNoCollisions() {
+        let defaults = ControlCenterWidgetConfig.defaultWidgets
+        for i in defaults.indices {
+            for j in defaults.indices where j > i {
+                let a = defaults[i]
+                let b = defaults[j]
+                let overlaps = a.col < b.col + b.w && b.col < a.col + a.w && a.row < b.row + b.h && b.row < a.row + a.h
+                #expect(!overlaps, "'\(a.id)' at (\(a.col),\(a.row)) overlaps '\(b.id)' at (\(b.col),\(b.row))")
+            }
+        }
+        // settings and edit must not share (col: 7, row: 0) anymore
+        let settings = defaults.first { $0.id == "settings" }
+        let edit = defaults.first { $0.id == "edit" }
+        #expect(settings != nil && edit != nil)
+        #expect(settings!.col != edit!.col || settings!.row != edit!.row)
+    }
+
+    @Test("Slider Size Clamp Never Exceeds the Column Count")
+    func testSliderClampNarrowColumns() {
+        // columns = 1: slider minimum width clamps to min(2, 1) = 1
+        let slider1 = ControlCenterWidgetConfig(id: "volumeSlider", w: 4, h: 1)
+        #expect(ControlCenterUtils.clampSize(widget: slider1, columns: 1).w == 1)
+
+        // columns = 2: minimum is 2
+        let slider2 = ControlCenterWidgetConfig(id: "brightnessSlider", w: 1, h: 1)
+        #expect(ControlCenterUtils.clampSize(widget: slider2, columns: 2).w == 2)
+
+        // columns = 8: unchanged behavior (min 2, max columns)
+        let slider8 = ControlCenterWidgetConfig(id: "volumeSlider", w: 1, h: 1)
+        #expect(ControlCenterUtils.clampSize(widget: slider8, columns: 8).w == 2)
+        let wideSlider = ControlCenterWidgetConfig(id: "volumeSlider", w: 99, h: 1)
+        #expect(ControlCenterUtils.clampSize(widget: wideSlider, columns: 8).w == 8)
+    }
+
     @Test("Default Widgets Match DMS Reference and cc.png Structure")
     func testDefaultWidgetsContent() {
         let defaults = ControlCenterWidgetConfig.defaultWidgets

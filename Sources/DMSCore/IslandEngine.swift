@@ -103,9 +103,15 @@ public enum IslandAnimationCurve: String, Sendable, Codable, CaseIterable {
 
 /// 8-DOF Runge-Kutta 4th-order (RK4) physical spring simulation engine (`VectorSpringMotion.qml`).
 public struct VectorSpringEngine: Sendable, Equatable {
-    public var stiffness: Double
-    public var damping: Double
-    public var mass: Double
+    public var stiffness: Double {
+        didSet { stiffness = max(1.0, min(1200.0, stiffness)) }
+    }
+    public var damping: Double {
+        didSet { damping = max(1.0, min(120.0, damping)) }
+    }
+    public var mass: Double {
+        didSet { mass = max(0.1, min(10.0, mass)) }
+    }
     public let positionEpsilon: Double = 0.035
     public let velocityEpsilon: Double = 0.035
     public let integrationStep: Double = 1.0 / 240.0
@@ -120,17 +126,30 @@ public struct VectorSpringEngine: Sendable, Equatable {
         damping: Double = 37.0,
         mass: Double = 1.0
     ) {
-        self.stiffness = max(10.0, stiffness)
-        self.damping = max(1.0, damping)
-        self.mass = max(0.1, mass)
+        // didSet does not run during initialization, so clamp explicitly here too
+        self.stiffness = max(1.0, min(1200.0, stiffness))
+        self.damping = max(1.0, min(120.0, damping))
+        self.mass = max(0.1, min(10.0, mass))
         self.current = initial
         self.target = initial
         self.velocity = Array(repeating: 0.0, count: 8)
     }
 
+    /// Target vector with the same minimum floors applied to `current` after integration,
+    /// so convergence checks never compare against unreachable sub-floor components.
+    private static func clampedTarget(_ vector: IslandGeometryVector) -> [Double] {
+        var tgt = vector.asArray
+        tgt[0] = max(24.0, tgt[0])
+        tgt[1] = max(16.0, tgt[1])
+        for rIdx in 4..<8 {
+            tgt[rIdx] = max(0.0, tgt[rIdx])
+        }
+        return tgt
+    }
+
     public var isAtRest: Bool {
         let pos = current.asArray
-        let tgt = target.asArray
+        let tgt = VectorSpringEngine.clampedTarget(target)
         for i in 0..<8 {
             if abs(pos[i] - tgt[i]) > positionEpsilon || abs(velocity[i]) > velocityEpsilon {
                 return false
@@ -141,9 +160,11 @@ public struct VectorSpringEngine: Sendable, Equatable {
 
     /// Advances the 8-DOF spring simulation by `dt` seconds using 240Hz RK4 substeps.
     public mutating func step(dt: Double) -> IslandGeometryVector {
+        let tgt = VectorSpringEngine.clampedTarget(target)
+
         guard dt > 0, !isAtRest else {
             if isAtRest {
-                current = target
+                current = IslandGeometryVector(array: tgt)
                 velocity = Array(repeating: 0.0, count: 8)
             }
             return current
@@ -151,10 +172,10 @@ public struct VectorSpringEngine: Sendable, Equatable {
 
         var remaining = min(dt, 0.25) // Clamp large frame spikes
         var pos = current.asArray
-        let tgt = target.asArray
-        let k = stiffness
-        let c = damping
-        let invM = 1.0 / mass
+        // Clamp spring parameters again so extreme values can never NaN or blow up RK4 stability
+        let k = max(1.0, min(1200.0, stiffness))
+        let c = max(1.0, min(120.0, damping))
+        let invM = 1.0 / max(0.1, min(10.0, mass))
 
         while remaining > 1e-6 {
             let h = min(remaining, integrationStep)

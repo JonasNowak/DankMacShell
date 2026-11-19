@@ -486,10 +486,7 @@ public enum IPCCommandExecutor {
                 guard let p = path, !p.isEmpty else {
                     return "Error: wallpaper set requires valid path"
                 }
-                let expanded = (p as NSString).expandingTildeInPath
-                let item = WallpaperItem(id: expanded, name: (expanded as NSString).lastPathComponent, path: expanded)
-                WallpaperService.shared.applyWallpaper(item)
-                return "Desktop wallpaper set to \(expanded)"
+                return applyWallpaperPath(p)
             case "list":
                 let paths = WallpaperService.shared.wallpapers.compactMap(\.path)
                 return paths.joined(separator: "\n")
@@ -519,10 +516,7 @@ public enum IPCCommandExecutor {
                 return current.isEmpty ? "No custom desktop wallpaper configured" : current
             default:
                 if let p = path, !p.isEmpty {
-                    let expanded = (p as NSString).expandingTildeInPath
-                    let item = WallpaperItem(id: expanded, name: (expanded as NSString).lastPathComponent, path: expanded)
-                    WallpaperService.shared.applyWallpaper(item)
-                    return "Desktop wallpaper set to \(expanded)"
+                    return applyWallpaperPath(p)
                 }
                 let current = WallpaperService.shared.currentDesktopPath
                 return current.isEmpty ? "No custom desktop wallpaper configured" : current
@@ -698,28 +692,23 @@ public enum IPCCommandExecutor {
         case .island(let act, let val):
             switch act.lowercased() {
             case "expand", "open", "show", "reveal":
-                if let val = val, let activity = IslandActivity(rawValue: val.lowercased()) {
-                    DIslandController.shared.expand(activity: activity)
-                } else {
-                    DIslandController.shared.expand()
-                }
-                return "Dynamic Island expanded"
+                let activity = IslandActivity.parse(val ?? act)
+                DIslandController.shared.expand(activity: activity)
+                return "Dynamic Island expanded (\(activity.rawValue))"
             case "collapse", "close", "hide":
                 DIslandController.shared.collapse()
                 return "Dynamic Island collapsed"
             case "toggle":
                 DIslandController.shared.toggleExpanded()
                 return "Dynamic Island toggled"
-            case "media", "weather", "battery", "audio", "timers", "notifications":
-                if let activity = IslandActivity(rawValue: act.lowercased()) {
-                    DIslandController.shared.expand(activity: activity)
-                    return "Dynamic Island expanded (\(activity.rawValue))"
-                }
-                return "Unknown island activity \(act)"
             case "status":
                 return "state: \(DIslandController.shared.presentationState.rawValue), activity: \(DIslandController.shared.activeActivity.rawValue)"
             default:
-                return "Unknown island action \(act)"
+                // Activity names (media, controlCenter, powerMenu, weather, ...) expand the island
+                // with that activity; IslandActivity.parse handles aliases and defaults to .home.
+                let activity = IslandActivity.parse(val ?? act)
+                DIslandController.shared.expand(activity: activity)
+                return "Dynamic Island expanded (\(activity.rawValue))"
             }
 
         case .danksearch(let act, let query):
@@ -890,5 +879,23 @@ public enum IPCCommandExecutor {
     private static func lyricsCurrent() -> String {
         let text = LyricsService.shared.activeLineText
         return text.isEmpty ? "(no active lyric line)" : text
+    }
+
+    /// Validates that `path` is an existing regular file with a supported image extension,
+    /// then applies it as the desktop wallpaper.
+    private static func applyWallpaperPath(_ path: String) -> String {
+        let expanded = (path as NSString).expandingTildeInPath
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory),
+              !isDirectory.boolValue else {
+            return "Error: wallpaper path is not an existing file: \(expanded)"
+        }
+        let ext = (expanded as NSString).pathExtension.lowercased()
+        guard WallpaperItem.supportedExtensions.contains(ext) else {
+            return "Error: unsupported wallpaper extension '.\(ext)'. Supported: \(WallpaperItem.supportedExtensions.sorted().joined(separator: ", "))"
+        }
+        let item = WallpaperItem(id: expanded, name: (expanded as NSString).lastPathComponent, path: expanded)
+        WallpaperService.shared.applyWallpaper(item)
+        return "Desktop wallpaper set to \(expanded)"
     }
 }

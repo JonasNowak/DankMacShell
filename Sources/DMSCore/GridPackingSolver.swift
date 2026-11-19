@@ -119,6 +119,23 @@ public enum GridPackingSolver: Sendable {
         }
     }
 
+    /// Upper bound (in step units) for card rows/heights so `compact()`/`firstFit()` loops stay bounded.
+    private static let maxCellSteps = 10_000
+    /// Upper bound for the number of horizontal steps so a tiny `step` cannot explode the search space.
+    private static let maxTotalSteps = 2_048
+
+    /// Converts a card dimension/position (in grid units) to a bounded cell span (in step units).
+    /// Non-finite or overflowing values clamp to `maxSteps` instead of trapping in `Int(Double)`.
+    /// `minimum` is 1 for spans (a card must cover at least one step) and 0 for positions.
+    private static func cellSpan(_ value: Double, step: Double, maxSteps: Int, minimum: Double = 1.0) -> Int {
+        let fallback = minimum >= 1.0 ? maxSteps : 0
+        guard value.isFinite, step > 0 else { return fallback }
+        let ratio = value / step
+        guard ratio.isFinite else { return fallback }
+        let clamped = min(max(ratio.rounded(), minimum), Double(maxSteps))
+        return Int(clamped)
+    }
+
     private static func overlaps(_ taken: [CellRect], x: Int, y: Int, w: Int, h: Int) -> Bool {
         for cell in taken {
             if x < cell.x + cell.w && cell.x < x + w && y < cell.y + cell.h && cell.y < y + h {
@@ -179,7 +196,11 @@ public enum GridPackingSolver: Sendable {
         gravity: Bool = true
     ) -> LayoutResult {
         let safeColumns = max(1, columns)
-        let steps = max(1, Int((Double(safeColumns) / step).rounded()))
+        let safeStep = (step.isFinite && step > 0) ? step : 0.5
+        let steps = max(1, min(maxTotalSteps, cellSpan(Double(safeColumns), step: safeStep, maxSteps: maxTotalSteps)))
+        let safeWidth = width.isFinite ? width : 0.0
+        let safeGap = gap.isFinite ? gap : 8.0
+        let safeRowUnit = (rowUnit.isFinite && rowUnit > 0) ? rowUnit : 64.0
         let effectiveOrder = order ?? Array(0..<cards.count)
 
         var taken: [CellRect] = []
@@ -190,16 +211,19 @@ public enum GridPackingSolver: Sendable {
             let card = cards[sourceIndex]
             if !card.isAvailable { continue }
 
-            let w = max(1, min(steps, Int((card.w / step).rounded())))
-            let h = max(1, Int((card.h / step).rounded()))
+            let w = cellSpan(card.w, step: safeStep, maxSteps: steps)
+            let h = cellSpan(card.h, step: safeStep, maxSteps: maxCellSteps)
 
             let cellPlacement: (x: Int, y: Int, w: Int, h: Int)
-            if let col = card.col, let row = card.row {
-                let initialX = max(0, min(steps - w, Int((col / step).rounded())))
-                let initialY = max(0, Int((row / step).rounded()))
-                cellPlacement = settle(taken, x: initialX, startY: initialY, w: w, h: h)
+            if let col = card.col, let row = card.row, col.isFinite, row.isFinite {
+                let initialX = max(0, min(steps - w, cellSpan(col, step: safeStep, maxSteps: steps, minimum: 0.0)))
+                // Clamp huge rows so settle()/firstFit()/compact() loops stay bounded.
+                let initialY = max(0, cellSpan(row, step: safeStep, maxSteps: maxCellSteps, minimum: 0.0))
+                let settled = settle(taken, x: initialX, startY: initialY, w: w, h: h)
+                cellPlacement = (settled.x, min(settled.y, maxCellSteps), settled.w, settled.h)
             } else {
-                cellPlacement = firstFit(taken, steps: steps, w: w, h: h)
+                let fit = firstFit(taken, steps: steps, w: w, h: h)
+                cellPlacement = (fit.x, min(fit.y, maxCellSteps), fit.w, fit.h)
             }
 
             let cellRect = CellRect(id: card.id, x: cellPlacement.x, y: cellPlacement.y, w: cellPlacement.w, h: cellPlacement.h)
@@ -213,25 +237,25 @@ public enum GridPackingSolver: Sendable {
 
         var maxRows = 0.0
         let colW = safeColumns > 1
-            ? (width - gap * Double(safeColumns - 1)) / Double(safeColumns)
-            : width
+            ? (safeWidth - safeGap * Double(safeColumns - 1)) / Double(safeColumns)
+            : safeWidth
 
         var slots: [GridSlot] = []
 
         for i in 0..<cards.count {
             guard let cell = placedCells[i] else { continue }
-            let col = Double(cell.x) * step
-            let row = Double(cell.y) * step
-            let cols = Double(cell.w) * step
-            let rows = Double(cell.h) * step
+            let col = Double(cell.x) * safeStep
+            let row = Double(cell.y) * safeStep
+            let cols = Double(cell.w) * safeStep
+            let rows = Double(cell.h) * safeStep
 
             maxRows = max(maxRows, row + rows)
 
-            let px = col * (colW + gap)
-            let pw = cols * colW + max(0.0, cols - 1.0) * gap
-            let x = mirror ? (width - px - pw) : px
-            let y = row * (rowUnit + gap)
-            let h = rows * rowUnit + max(0.0, rows - 1.0) * gap
+            let px = col * (colW + safeGap)
+            let pw = cols * colW + max(0.0, cols - 1.0) * safeGap
+            let x = mirror ? (safeWidth - px - pw) : px
+            let y = row * (safeRowUnit + safeGap)
+            let h = rows * safeRowUnit + max(0.0, rows - 1.0) * safeGap
 
             slots.append(GridSlot(
                 id: cell.id,
@@ -246,18 +270,18 @@ public enum GridPackingSolver: Sendable {
             ))
         }
 
-        let totalHeight = maxRows > 0 ? maxRows * rowUnit + max(0.0, maxRows - 1.0) * gap : 0.0
+        let totalHeight = maxRows > 0 ? maxRows * safeRowUnit + max(0.0, maxRows - 1.0) * safeGap : 0.0
 
         return LayoutResult(
             slots: slots,
             rows: maxRows,
             totalHeight: totalHeight,
             columns: safeColumns,
-            width: width,
+            width: safeWidth,
             colW: colW,
-            rowUnit: rowUnit,
-            gap: gap,
-            step: step,
+            rowUnit: safeRowUnit,
+            gap: safeGap,
+            step: safeStep,
             mirror: mirror
         )
     }
@@ -270,19 +294,33 @@ public enum GridPackingSolver: Sendable {
         cols: Double,
         rows: Double
     ) -> (col: Double, row: Double) {
-        let step = layout.step
-        let pw = cols * layout.colW + max(0.0, cols - 1.0) * layout.gap
-        let px = layout.mirror ? layout.width - x - pw : x
+        let step = (layout.step.isFinite && layout.step > 0) ? layout.step : 0.5
+        let safeCols = cols.isFinite ? cols : 1.0
+        let pw = safeCols * layout.colW + max(0.0, safeCols - 1.0) * layout.gap
+        let rawX = x.isFinite ? x : 0.0
+        let px = layout.mirror ? layout.width - rawX - pw : rawX
 
+        // Guard against zero/non-finite pitches (division by zero would produce NaN).
         let colPitch = (layout.colW + layout.gap) * step
-        let rawCol = (px / colPitch).rounded() * step
+        let rawCol: Double
+        if colPitch.isFinite && colPitch > 0 {
+            rawCol = (px / colPitch).rounded() * step
+        } else {
+            rawCol = 0.0
+        }
 
         let rowPitch = (layout.rowUnit + layout.gap) * step
-        let rawRow = (y / rowPitch).rounded() * step
+        let rawRow: Double
+        if rowPitch.isFinite && rowPitch > 0 {
+            let safeY = y.isFinite ? y : 0.0
+            rawRow = (safeY / rowPitch).rounded() * step
+        } else {
+            rawRow = 0.0
+        }
 
-        let maxCol = max(0.0, Double(layout.columns) - cols)
-        let clampedCol = max(0.0, min(maxCol, rawCol))
-        let clampedRow = max(0.0, rawRow)
+        let maxCol = max(0.0, Double(layout.columns) - safeCols)
+        let clampedCol = max(0.0, min(maxCol, rawCol.isFinite ? rawCol : 0.0))
+        let clampedRow = max(0.0, rawRow.isFinite ? rawRow : 0.0)
 
         return (clampedCol, clampedRow)
     }

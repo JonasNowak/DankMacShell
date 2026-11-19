@@ -473,4 +473,154 @@ struct ConfigAndIncludeTests {
         #expect(decoded.controlCenterGridTiles == custom.controlCenterGridTiles)
         #expect(decoded.controlCenterGridTiles.map { $0.id } == ["nightMode", "doNotDisturb"])
     }
+
+    @Test("$include ../ traversal outside the base directory is rejected")
+    func testIncludeTraversalRejected() throws {
+        let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dms_trav_\(UUID().uuidString)")
+        let configDir = tmpDir.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        // Fragment one level above the config dir; if included it would set barMarginX = 99.
+        let evil = "{ \"theme\": \"evil\", \"barMarginX\": 99.0 }"
+        let evilURL = tmpDir.appendingPathComponent("evil.json")
+        try evil.write(to: evilURL, atomically: true, encoding: .utf8)
+
+        let main = """
+        {
+            "$include": ["../evil.json", "\(evilURL.path)"],
+            "theme": "safe"
+        }
+        """
+        let mainURL = configDir.appendingPathComponent("settings.json")
+        try main.write(to: mainURL, atomically: true, encoding: .utf8)
+
+        let config = try DMSConfig.loadThrowing(from: mainURL)
+        #expect(config.theme == "safe")
+        #expect(config.barMarginX == 8.0) // default — the ../ and absolute-path fragments were rejected
+
+        // The non-throwing data-based API agrees.
+        let data = try Data(contentsOf: mainURL)
+        let relaxed = DMSConfig.load(from: data, baseDirectory: configDir)
+        #expect(relaxed.theme == "safe")
+        #expect(relaxed.barMarginX == 8.0)
+    }
+
+    @Test("Symlinked fragment resolving outside the base directory is rejected")
+    func testSymlinkEscapeRejected() throws {
+        let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dms_symesc_\(UUID().uuidString)")
+        let configDir = tmpDir.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let outside = "{ \"barMarginX\": 77.0 }"
+        let outsideURL = tmpDir.appendingPathComponent("outside.json")
+        try outside.write(to: outsideURL, atomically: true, encoding: .utf8)
+
+        // config/link.json -> ../outside.json : resolves outside configDir after symlink resolution.
+        try FileManager.default.createSymbolicLink(
+            at: configDir.appendingPathComponent("link.json"),
+            withDestinationURL: outsideURL
+        )
+
+        let main = """
+        {
+            "$include": "link.json",
+            "theme": "safe"
+        }
+        """
+        let mainURL = configDir.appendingPathComponent("settings.json")
+        try main.write(to: mainURL, atomically: true, encoding: .utf8)
+
+        let config = try DMSConfig.loadThrowing(from: mainURL)
+        #expect(config.theme == "safe")
+        #expect(config.barMarginX == 8.0)
+    }
+
+    @Test("Symlink include cycle back to the root config file is rejected")
+    func testSymlinkCycleRejected() throws {
+        let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dms_symcyc_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let main = """
+        {
+            "$include": "loop.json",
+            "theme": "red"
+        }
+        """
+        let mainURL = tmpDir.appendingPathComponent("settings.json")
+        try main.write(to: mainURL, atomically: true, encoding: .utf8)
+        // loop.json is a symlink pointing back at the root config itself.
+        try FileManager.default.createSymbolicLink(
+            at: tmpDir.appendingPathComponent("loop.json"),
+            withDestinationURL: mainURL
+        )
+
+        // Must terminate (visited is seeded with the root file's resolved path) and keep root values.
+        let config = try DMSConfig.loadThrowing(from: mainURL)
+        #expect(config.theme == "red")
+    }
+
+    @Test("$include recursion is capped at depth 8")
+    func testMaxIncludeDepth() throws {
+        let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dms_depth_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        // Chain a1 -> a2 -> ... -> a12; each fragment sets "depth<i>": i.
+        for i in 1...12 {
+            let next = i < 12 ? ", \"$include\": \"a\(i + 1).json\"" : ""
+            try "{ \"depth\(i)\": \(i)\(next) }".write(
+                to: tmpDir.appendingPathComponent("a\(i).json"),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+        let mainURL = tmpDir.appendingPathComponent("settings.json")
+        try "{ \"$include\": \"a1.json\", \"theme\": \"chain\" }".write(to: mainURL, atomically: true, encoding: .utf8)
+
+        let config = try DMSConfig.loadThrowing(from: mainURL)
+        #expect(config.theme == "chain")
+        // Fragments up to depth 8 are merged; deeper ones are cut off by the depth cap.
+        #expect(config.rawSettings["depth8"]?.intValue == 8)
+        #expect(config.rawSettings["depth9"] == nil)
+        #expect(config.rawSettings["depth12"] == nil)
+    }
+
+    @Test("loadThrowing throws on invalid JSON / wrong shape; load(from:) still returns .default")
+    func testLoadThrowingErrors() throws {
+        let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dms_throw_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        // Invalid JSON syntax
+        let badURL = tmpDir.appendingPathComponent("bad.json")
+        try "{ this is not json".write(to: badURL, atomically: true, encoding: .utf8)
+        #expect(throws: DMSConfig.ConfigLoadError.self) {
+            try DMSConfig.loadThrowing(from: badURL)
+        }
+        // Non-throwing wrappers preserve the old .default fallback behavior.
+        #expect(DMSConfig.load(from: badURL) == .default)
+        #expect(DMSConfig.load(from: try Data(contentsOf: badURL)) == .default)
+
+        // Valid JSON but wrong shape (version must be an Int)
+        let wrongShapeURL = tmpDir.appendingPathComponent("wrong.json")
+        try "{ \"version\": \"oops\" }".write(to: wrongShapeURL, atomically: true, encoding: .utf8)
+        #expect(throws: DMSConfig.ConfigLoadError.self) {
+            try DMSConfig.loadThrowing(from: wrongShapeURL)
+        }
+        #expect(DMSConfig.load(from: wrongShapeURL) == .default)
+
+        // Missing file throws from the URL-based API
+        #expect(throws: (any Error).self) {
+            try DMSConfig.loadThrowing(from: tmpDir.appendingPathComponent("missing.json"))
+        }
+
+        // Valid file loads through both APIs
+        let goodURL = tmpDir.appendingPathComponent("good.json")
+        try "{ \"theme\": \"green\" }".write(to: goodURL, atomically: true, encoding: .utf8)
+        #expect(try DMSConfig.loadThrowing(from: goodURL).theme == "green")
+        #expect(DMSConfig.load(from: goodURL).theme == "green")
+    }
 }

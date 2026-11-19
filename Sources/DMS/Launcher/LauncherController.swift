@@ -13,6 +13,9 @@ public final class LauncherController {
 
     private var hostingView: NSHostingView<LauncherView>?
 
+    /// v0.7 CLI: the in-flight `dms dmenu` request whose result must be delivered on dismiss.
+    private var activeDMenuRequestID: String?
+
     private init() {
         panel = ShellPanel(
             contentRect: .zero,
@@ -21,6 +24,9 @@ public final class LauncherController {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in
+            self?.hide()
+        }
 
         let rootView = LauncherView(initialQuery: "") { [weak self] in
             self?.hide()
@@ -39,8 +45,11 @@ public final class LauncherController {
     }
 
     public func show(query initialQuery: String = "") {
+        // Fresh session ID per presentation so SwiftUI recreates `@State` and re-runs `.onAppear`
+        // (search field focus, initial query) instead of reusing stale state on the hosting view.
+        let sessionID = UUID()
         present {
-            LauncherView(initialQuery: initialQuery) { [weak self] in
+            LauncherView(initialQuery: initialQuery, sessionID: sessionID) { [weak self] in
                 self?.hide()
             }
         }
@@ -49,15 +58,37 @@ public final class LauncherController {
     /// v0.7 CLI: shows the launcher in dmenu filter mode listing plain string candidates
     /// staged by `dms dmenu`. The selection is streamed back over the requesting socket connection.
     public func showDMenu(prompt: String, candidatesFile: String, requestID: String) {
+        let sessionID = UUID()
+        activeDMenuRequestID = requestID
         present {
-            LauncherView(dmenuPrompt: prompt, candidatesFile: candidatesFile, requestID: requestID) { [weak self] in
+            LauncherView(
+                dmenuPrompt: prompt,
+                candidatesFile: candidatesFile,
+                requestID: requestID,
+                sessionID: sessionID,
+                onDMenuResolved: { [weak self] in
+                    self?.activeDMenuRequestID = nil
+                }
+            ) { [weak self] in
                 self?.hide()
             }
         }
     }
 
+    /// Resizes the panel between the plain launcher width and the wider width that fits the
+    /// per-app action sidebar without clipping it.
+    public func resizeForActionPanel(_ show: Bool) {
+        let frame = panel.frame
+        let newWidth: CGFloat = show ? 900 : 680
+        guard frame.width != newWidth else { return }
+        panel.setFrame(
+            NSRect(x: frame.midX - newWidth / 2, y: frame.minY, width: newWidth, height: frame.height),
+            display: true
+        )
+    }
+
     private func present(_ makeView: () -> LauncherView) {
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         ControlCenterController.shared.hide()
         PowerMenuController.shared.hide()
         DashController.shared.hide()
@@ -91,10 +122,14 @@ public final class LauncherController {
             self.hostingView = host
         }
 
+        let wasVisible = isVisible
         AppCatalogService.shared.refresh()
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         isVisible = true
+        if !wasVisible {
+            SoundEffectService.shared.playLauncherOpen()
+        }
 
         installClickMonitor()
     }
@@ -104,6 +139,12 @@ public final class LauncherController {
         panel.orderOut(nil)
         isVisible = false
         removeClickMonitor()
+        // Never leave a `dms dmenu` request hanging: clicking outside or pressing Escape
+        // delivers a cancelled result so the CLI exits instead of blocking forever.
+        if let reqID = activeDMenuRequestID {
+            activeDMenuRequestID = nil
+            IPCSocketServer.shared.deliverDMenuResult(requestID: reqID, line: nil, cancelled: true)
+        }
     }
 
     private func installClickMonitor() {

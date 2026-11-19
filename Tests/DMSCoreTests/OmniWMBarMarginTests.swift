@@ -230,4 +230,32 @@ struct OmniWMBarMarginTests {
         #expect(afterTheme.contains("top = 60.0"))
         #expect(afterTheme.contains("[borders.color]"))
     }
+
+    @Test("Trailing inline comments on updated [gaps.outer] lines are preserved")
+    func testInlineCommentPreservationOnUpdatedLines() {
+        let toml = """
+        [gaps.outer]
+        bottom = 60.0 # bar space
+        left = 10.0
+        right = 10.0
+        top = 12.0 # top margin
+        """
+        let updated = OmniWMMarginUpdater.updateOuterGaps(in: toml, from: "bottom", to: "top")
+        let lines = updated.components(separatedBy: "\n")
+        // bottom takes top's old value but keeps its own comment; top gets 60.0 with its comment.
+        #expect(lines.contains("bottom = 12.0 # bar space"))
+        #expect(lines.contains("top = 60.0 # top margin"))
+        // Untouched lines stay byte-identical (no comment invented).
+        #expect(lines.contains("left = 10.0"))
+        #expect(lines.contains("right = 10.0"))
+        #expect(!updated.contains("bottom = 60.0"))
+    }
+
+    @Test("Inline comments survive with tab indentation and CRLF line endings")
+    func testInlineCommentPreservationCRLF() {
+        let toml = "[gaps.outer]\r\n\ttop = 60.0 # bar\r\nbottom = 12.0\r\nleft = 10.0\r\nright = 10.0\r\n"
+        let updated = OmniWMMarginUpdater.updateOuterGaps(in: toml, from: "top", to: "bottom")
+        #expect(updated.contains("\ttop = 12.0 # bar\r\n"))
+        #expect(updated.contains("bottom = 60.0\r\n"))
+    }
 }

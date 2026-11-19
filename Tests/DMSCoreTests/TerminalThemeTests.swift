@@ -3,7 +3,9 @@ import Foundation
 @testable import DMSCore
 import DankThemeEngine
 
-@Suite("Terminal Theme Format Tests (v0.7)")
+// .serialized: testConfigHomeProcessEnvironment mutates the process-wide XDG_CONFIG_HOME
+// via setenv/unsetenv, which races with parallel tests reading the environment.
+@Suite("Terminal Theme Format Tests (v0.7)", .serialized)
 struct TerminalThemeTests {
 
     private var palette: ThemePalette { StockThemes.purpleDark }
@@ -331,13 +333,13 @@ struct TerminalThemeTests {
         #expect(pids == [45968, 46657, 46703])
 
         let hmPS = """
-          76985 /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty
+          76985 /Users/testuser/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty
           76986 /Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty --listen-on unix:/tmp/k.sock
-          76987 /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty +open /tmp/dir
-          76988 /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty @ get-colors
-          76989 /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty +runpy "print(1)"
+          76987 /Users/testuser/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty +open /tmp/dir
+          76988 /Users/testuser/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty @ get-colors
+          76989 /Users/testuser/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty +runpy "print(1)"
           76990 /nix/store/abc-kitty/Applications/kitty.app/Contents/MacOS/kitten __watch_conf__ 76985 /Users/foo/kitty
-          76991 /bin/zsh -c /Users/jonasnowak/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty
+          76991 /bin/zsh -c /Users/testuser/Applications/Home Manager Apps/kitty.app/Contents/MacOS/kitty
           76992 zsh subdir/kitty
         """
         #expect(EmulatorReload.kittyGUIPids(fromPSOutput: hmPS) == [76985, 76986, 76987])

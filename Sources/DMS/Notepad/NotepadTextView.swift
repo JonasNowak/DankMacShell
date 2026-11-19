@@ -10,19 +10,24 @@ public struct NotepadTextView: NSViewRepresentable {
     var textColor: NSColor
     var backgroundColor: NSColor
     var focusRange: Binding<NSRange?>?
+    /// ID of the note currently being edited; when it changes the undo stack is cleared
+    /// so ⌘Z in note B cannot undo note A's edits into note B.
+    var noteID: String?
 
     public init(
         text: Binding<String>,
         font: NSFont,
         textColor: NSColor,
         backgroundColor: NSColor,
-        focusRange: Binding<NSRange?>? = nil
+        focusRange: Binding<NSRange?>? = nil,
+        noteID: String? = nil
     ) {
         self._text = text
         self.font = font
         self.textColor = textColor
         self.backgroundColor = backgroundColor
         self.focusRange = focusRange
+        self.noteID = noteID
     }
 
     public func makeNSView(context: Context) -> NSScrollView {
@@ -34,6 +39,7 @@ public struct NotepadTextView: NSViewRepresentable {
         textView.allowsUndo = true
         textView.font = font
         textView.textColor = textColor
+        textView.insertionPointColor = textColor
         textView.backgroundColor = backgroundColor
         textView.drawsBackground = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -52,6 +58,12 @@ public struct NotepadTextView: NSViewRepresentable {
     public func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
 
+        // Switching notes must not carry over the previous note's undo history.
+        if let noteID = noteID, context.coordinator.lastNoteID != noteID {
+            context.coordinator.lastNoteID = noteID
+            textView.undoManager?.removeAllActions()
+        }
+
         if textView.string != text {
             // Preserve the caret/selection across external content updates (e.g. replace-all).
             let selected = textView.selectedRange()
@@ -61,13 +73,30 @@ public struct NotepadTextView: NSViewRepresentable {
             textView.setSelectedRange(clamped)
         }
 
+        // Re-apply theme-driven appearance whenever it actually changed.
+        if textView.font != font {
+            textView.font = font
+        }
+        if textView.textColor != textColor {
+            textView.textColor = textColor
+            textView.insertionPointColor = textColor
+        }
+        if textView.backgroundColor != backgroundColor {
+            textView.backgroundColor = backgroundColor
+        }
+
         if let range = focusRange?.wrappedValue {
             let length = (textView.string as NSString).length
             let location = min(range.location, length)
             let clamped = NSRange(location: location, length: min(range.length, max(0, length - location)))
             textView.setSelectedRange(clamped)
             textView.scrollRangeToVisible(clamped)
-            focusRange?.wrappedValue = nil
+            // Defer clearing the SwiftUI `@State` binding — mutating it synchronously
+            // inside `updateNSView` is not allowed.
+            let focusRange = focusRange
+            DispatchQueue.main.async {
+                focusRange?.wrappedValue = nil
+            }
         }
     }
 
@@ -77,9 +106,11 @@ public struct NotepadTextView: NSViewRepresentable {
 
     public final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: NotepadTextView
+        var lastNoteID: String?
 
         init(_ parent: NotepadTextView) {
             self.parent = parent
+            self.lastNoteID = parent.noteID
         }
 
         public func textDidChange(_ notification: Notification) {

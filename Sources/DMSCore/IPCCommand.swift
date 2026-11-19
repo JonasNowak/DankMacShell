@@ -141,6 +141,69 @@ public enum IPCCommand: Sendable, Equatable {
 
     case unknown(String)
 
+    // MARK: - dms:// URL Scheme Security Allowlist
+
+    /// Whether this command may be triggered from an external `dms://` URL.
+    /// Only safe, non-destructive UI navigation/toggle actions are allowed.
+    /// Anything that mutates state, kills processes, changes system settings,
+    /// or exposes data (settings dump, clipboard/process listing, screenshots,
+    /// power actions, wallpaper changes, ...) is rejected.
+    public var isAllowedFromURLScheme: Bool {
+        switch self {
+        // Launcher: open/close/toggle only
+        case .openLauncher, .closeLauncher, .toggleLauncher, .openLauncherQuery:
+            return true
+        // Dash: open/close/toggle only
+        case .openDash, .closeDash, .toggleDash, .openDashTab:
+            return true
+        // Control Center: open/close/toggle only
+        case .openControlCenter, .closeControlCenter, .toggleControlCenter:
+            return true
+        // Keybinds cheatsheet: open/close/toggle only
+        case .openKeybinds, .closeKeybinds, .toggleKeybinds:
+            return true
+        // Settings: open/close/toggle only — never set/get/dump
+        case .openSettings, .closeSettings, .toggleSettings, .openSettingsTab:
+            return true
+        // DankBar: toggle/reveal/hide only
+        case .bar(let action, _):
+            return ["toggle", "reveal", "hide"].contains(action.lowercased())
+        // Dynamic Island: toggle/open/close/expand/collapse only
+        case .island(let action, _):
+            return ["toggle", "open", "close", "expand", "collapse"].contains(action.lowercased())
+        // Power Menu: open/toggle only — never lock/sleep/restart/shutdown/logout
+        case .powerMenu:
+            return true
+        case .powerMenuAction(let action):
+            return ["open", "toggle"].contains(action.lowercased())
+        // Notepad: open/close/toggle only — never get/set/append
+        case .openNotepad, .closeNotepad, .toggleNotepad:
+            return true
+        // Clipboard: open/close/toggle only — never list/clear/copy
+        case .openClipboard, .closeClipboard, .toggleClipboard:
+            return true
+        // Process list: open/close/toggle only — never list/kill
+        case .openProcessList, .closeProcessList, .toggleProcessList:
+            return true
+        // Color picker: open/toggle only (no pick)
+        case .openColorPicker:
+            return true
+        // QR generator: open only, without mutating state
+        case .openQR:
+            return true
+        // Wallpaper: picker only — never set/next/prev/random
+        case .wallpaper(let action, _):
+            return action.lowercased() == "picker"
+        default:
+            // Explicitly denied: processList kill/list, powerMenu lock/sleep/restart/shutdown/logout,
+            // settings set/get/dump, clipboard copy/clear/list, notepad set/append/get, screenshot,
+            // plugins, applets, symbian, wallpaper set/next/prev/random, mic, audio, brightness,
+            // inhibit, omniwm, theme set/toggle-mode, dmenu, reloadConfig, toast,
+            // hide/unhide/activate/unhide-all, mpris, lyrics, weather, wellbeing, danksearch, ...
+            return false
+        }
+    }
+
     // MARK: - URL Parser (dms:// scheme)
     public static func parse(url: URL) -> IPCCommand? {
         guard url.scheme?.lowercased() == "dms" else { return nil }
@@ -518,7 +581,8 @@ public enum IPCCommand: Sendable, Equatable {
             return .openColorPicker
 
         case "qr":
-            if !action.isEmpty { return .generateQR(text: ([action] + extra).joined(separator: " ")) }
+            // rawAction preserves case — QR text (URLs, tokens) is case-sensitive.
+            if !rawAction.isEmpty { return .generateQR(text: ([rawAction] + extra).joined(separator: " ")) }
             return .openQR
 
         case "keybinds":
@@ -533,7 +597,8 @@ public enum IPCCommand: Sendable, Equatable {
             case "dump": return .dumpSettings
             case "get": return .getSetting(key: extra.first ?? "")
             case "set":
-                if extra.count >= 2 { return .setSetting(key: extra[0], value: extra[1]) }
+                // Join multi-word values: `settings set <key> <value...>`
+                if extra.count >= 2 { return .setSetting(key: extra[0], value: extra.dropFirst().joined(separator: " ")) }
                 return .unknown("settings set requires key and value")
             case "open":
                 if let tab = extra.first { return .openSettingsTab(tab) }
@@ -549,7 +614,12 @@ public enum IPCCommand: Sendable, Equatable {
             return .workspace(action: action.isEmpty ? "status" : action, value: extra.first)
 
         case "audio":
-            return .audio(action: action.isEmpty ? "status" : action, value: extra.first)
+            let act = action.isEmpty ? "status" : action
+            // Join multi-word device names: `audio set-device <name...>`
+            if ["set-device", "switch-device", "select-device"].contains(act), !extra.isEmpty {
+                return .audio(action: act, value: extra.joined(separator: " "))
+            }
+            return .audio(action: act, value: extra.first)
 
         case "mic":
             return .mic(action: action.isEmpty ? "status" : action, value: extra.first)
@@ -579,7 +649,7 @@ public enum IPCCommand: Sendable, Equatable {
                 if let name = extra.first { return .setTheme(name: name) }
                 return .unknown("theme set missing name")
             case "list": return .listThemes
-            case "toggle", "togglemode": return .toggleThemeMode
+            case "toggle", "togglemode", "toggle-mode": return .toggleThemeMode
             default: return .getTheme
             }
 
@@ -603,8 +673,9 @@ public enum IPCCommand: Sendable, Equatable {
             case "random", "shuffle":
                 return .wallpaper(action: "random")
             default:
-                if !action.isEmpty {
-                    let pathArgs = ([action] + extra).joined(separator: " ")
+                // rawAction preserves case — file paths are case-sensitive.
+                if !rawAction.isEmpty {
+                    let pathArgs = ([rawAction] + extra).joined(separator: " ")
                     return .wallpaper(action: "set", path: pathArgs)
                 }
                 return .wallpaper(action: "get")
@@ -691,8 +762,9 @@ public enum IPCCommand: Sendable, Equatable {
             case "status":
                 return .weatherStatus
             default:
-                if !action.isEmpty {
-                    let locArgs = ([action] + extra).joined(separator: " ")
+                // rawAction preserves case — city names are case-sensitive.
+                if !rawAction.isEmpty {
+                    let locArgs = ([rawAction] + extra).joined(separator: " ")
                     return .weatherSetLocation(location: locArgs)
                 }
                 return .weatherStatus

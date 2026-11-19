@@ -7,6 +7,7 @@ public struct DiskGaugeWidget: View {
     public var isVertical: Bool
     @ObservedObject private var theme = ThemeStore.shared
     @State private var usedPercent: Double = 0.0
+    @State private var refreshTimer: Timer? = nil
 
     public init(isVertical: Bool = false) {
         self.isVertical = isVertical
@@ -38,14 +39,21 @@ public struct DiskGaugeWidget: View {
                 }
             }
             .padding(.horizontal, isVertical ? 0 : 6)
-            .frame(width: isVertical ? 28 : nil, height: isVertical ? 28 : 26)
+            .frame(width: isVertical ? 28 : nil, height: 28)
             .background(theme.barWidgetBackground)
-            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
         .help("Storage used: \(Int(round(usedPercent)))%")
         .onAppear {
             refreshDiskUsage()
+            refreshTimer?.invalidate()
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
+                Task { @MainActor in refreshDiskUsage() }
+            }
+        }
+        .onDisappear {
+            refreshTimer?.invalidate()
+            refreshTimer = nil
         }
     }
 

@@ -52,7 +52,7 @@ public final class IdleInhibitService: ObservableObject {
         }
     }
 
-    public func disable() {
+    public func disable(silently: Bool = false) {
         guard isInhibited || assertionID != 0 else { return }
 
         stopExpirationTimer()
@@ -68,7 +68,9 @@ public final class IdleInhibitService: ObservableObject {
         remainingSeconds = nil
 
         ConfigStore.shared.update { $0.setSetting("sleepInhibitEnabled", value: AnyCodable(false)) }
-        ToastCenter.shared.show(icon: "cup.and.saucer", message: "Sleep Inhibit: Disabled")
+        if !silently {
+            ToastCenter.shared.show(icon: "cup.and.saucer", message: "Sleep Inhibit: Disabled")
+        }
     }
 
     private func armPreset(_ preset: IdleInhibitPreset) {
@@ -84,8 +86,10 @@ public final class IdleInhibitService: ObservableObject {
                 Task { @MainActor [weak self] in
                     guard let self = self, let cd = self.countdown else { return }
                     if cd.isExpired() {
-                        self.disable()
-                        ToastCenter.shared.show(icon: "cup.and.saucer", message: "Sleep Inhibit: Expired (\(preset.rawValue))")
+                        // Disable silently first so the "Disabled" toast doesn't overwrite
+                        // the "expired" toast.
+                        self.disable(silently: true)
+                        ToastCenter.shared.show(icon: "cup.and.saucer", message: "Sleep Inhibit: Expired (\(preset.rawValue))", bypassDND: true)
                     } else {
                         self.remainingSeconds = cd.remainingSeconds()
                     }

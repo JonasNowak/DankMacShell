@@ -14,26 +14,61 @@ final class SymbianBarStatus: ObservableObject {
     private var timer: Timer?
     private var mountObserver: Any?
     private var unmountObserver: Any?
+    private var consumerCount: Int = 0
 
-    private init() {
-        start()
-    }
+    private init() {}
 
     deinit {
         timer?.invalidate()
+        if let mountObserver = mountObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(mountObserver)
+        }
+        if let unmountObserver = unmountObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(unmountObserver)
+        }
     }
 
-    func start() {
+    /// Registers a widget consumer; the 5s scan timer only runs while at least one is mounted.
+    func addConsumer() {
+        consumerCount += 1
+        if consumerCount == 1 {
+            start()
+        }
+    }
+
+    func removeConsumer() {
+        consumerCount = max(0, consumerCount - 1)
+        if consumerCount == 0 {
+            stop()
+        }
+    }
+
+    private func start() {
         scan()
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.scan() }
         }
+        guard mountObserver == nil else { return }
         let center = NSWorkspace.shared.notificationCenter
         mountObserver = center.addObserver(forName: NSWorkspace.didMountNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.scan() }
         }
         unmountObserver = center.addObserver(forName: NSWorkspace.didUnmountNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.scan() }
+        }
+    }
+
+    private func stop() {
+        timer?.invalidate()
+        timer = nil
+        if let mountObserver = mountObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(mountObserver)
+            self.mountObserver = nil
+        }
+        if let unmountObserver = unmountObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(unmountObserver)
+            self.unmountObserver = nil
         }
     }
 
@@ -80,13 +115,14 @@ public struct SymbianBarWidget: View {
     /// Bundled product photo of the Nokia C7 (CC BY-SA 3.0, see Resources/NokiaC7-Photo-Attribution.txt).
     /// Resolved defensively via `SafeResourceBundle` so a missing `DMS_DMS.bundle` falls back
     /// to the SF Symbol instead of crashing like the generated `Bundle.module` accessor.
-    static var nokiaImage: NSImage? {
+    /// Decoded once and cached — never loaded from disk on every render.
+    static let cachedNokiaImage: NSImage? = {
         guard let bundle = SafeResourceBundle.bundle(named: "DMS_DMS"),
               let url = bundle.url(forResource: "nokia-c7", withExtension: "jpg") else {
             return nil
         }
         return NSImage(contentsOf: url)
-    }
+    }()
 
     private var tintColor: Color {
         if let hex = style.customTintHex, !hex.isEmpty {
@@ -122,9 +158,8 @@ public struct SymbianBarWidget: View {
                         .foregroundColor(tintColor)
                         .lineLimit(1)
                 }
-                .frame(width: 28, height: 32)
+                .frame(width: 28, height: 28)
                 .background(backgroundColor)
-                .clipShape(Capsule())
             } else {
                 HStack(spacing: 5) {
                     deviceImage(size: 16)
@@ -145,11 +180,13 @@ public struct SymbianBarWidget: View {
         .help(status.device != nil
               ? "Nokia Belle Sync: \(status.device!.name) — \(status.device!.formattedFreeSpace) of \(status.device!.formattedTotalSpace) free. Click for status & plugin link."
               : "Nokia Belle Sync: no Nokia C7 / Symbian device connected. Click for status & plugin link.")
+        .onAppear { status.addConsumer() }
+        .onDisappear { status.removeConsumer() }
     }
 
     @ViewBuilder
     private func deviceImage(size: CGFloat) -> some View {
-        if let img = Self.nokiaImage {
+        if let img = Self.cachedNokiaImage {
             Image(nsImage: img)
                 .resizable()
                 .aspectRatio(contentMode: .fill)

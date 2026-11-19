@@ -147,9 +147,10 @@ let
     name = "dankmacshell-suite-${sources.dankmacshell.version}";
     paths = [
       dankmacshell
-      dms-gop
       dank-theme-engine
-    ];
+    ]
+    # dms-gop is aarch64-darwin only; including it on x86_64-darwin breaks evaluation.
+    ++ lib.optional stdenvNoCC.hostPlatform.isAarch64 dms-gop;
   };
 in
 {

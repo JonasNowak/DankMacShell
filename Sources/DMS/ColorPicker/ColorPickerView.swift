@@ -15,7 +15,7 @@ public struct ColorPickerView: View {
     public var body: some View {
         let p = themeStore.palette
 
-        VStack(spacing: 20) {
+        VStack(spacing: 12) {
             // Header
             HStack {
                 Label("Color Picker", systemImage: "eyedropper.halffull")
@@ -37,7 +37,7 @@ public struct ColorPickerView: View {
             HStack(spacing: 16) {
                 RoundedRectangle(cornerRadius: 18)
                     .fill(Color(nsColor: colorPicker.selectedColor))
-                    .frame(width: 80, height: 80)
+                    .frame(width: 64, height: 64)
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
                             .stroke(Color.white.opacity(0.2), lineWidth: 1)
@@ -63,12 +63,12 @@ public struct ColorPickerView: View {
 
                 Spacer()
             }
-            .padding(16)
+            .padding(12)
             .background(Color(hex: p.surfaceContainerHigh.hex))
             .cornerRadius(20)
 
             // Format Rows (Hex, RGB, HSL)
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 ColorFormatRow(label: "HEX", value: colorPicker.hexCode, palette: p)
                 ColorFormatRow(label: "RGB", value: colorPicker.rgbString, palette: p)
                 ColorFormatRow(label: "HSL", value: colorPicker.hslString, palette: p)
@@ -81,29 +81,33 @@ public struct ColorPickerView: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(Color(hex: p.outline.hex))
 
-                    HStack(spacing: 8) {
-                        ForEach(colorPicker.recentColors, id: \.self) { hex in
-                            Button(action: {
-                                if let c = NSColor(hex: hex) {
-                                    colorPicker.applyColor(c)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(colorPicker.recentColors, id: \.self) { hex in
+                                Button(action: {
+                                    if let c = NSColor(hex: hex) {
+                                        colorPicker.applyColor(c)
+                                    }
+                                }) {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color(hex: hex))
+                                        .frame(width: 26, height: 26)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                        )
                                 }
-                            }) {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color(hex: hex))
-                                    .frame(width: 30, height: 30)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                                    )
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .padding(.vertical, 2)
                     }
+                    .frame(height: 30)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(24)
+        .padding(16)
         .frame(width: 420)
         .background(GlassSurfaceBackground())
         .cornerRadius(26)
@@ -149,7 +153,7 @@ private struct ColorFormatRow: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .background(Color(hex: palette.surfaceContainerHigh.hex))
         .cornerRadius(12)
     }

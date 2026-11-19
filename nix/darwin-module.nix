@@ -87,7 +87,8 @@ in
     dmsGop = {
       enable = lib.mkOption {
         type = lib.types.bool;
-        default = true;
+        # dms-gop is aarch64-darwin only; default off on x86_64-darwin.
+        default = pkgs.stdenv.hostPlatform.isAarch64;
         description = "Install the dms-gop (dgop) companion CLI and optional REST API LaunchAgent.";
       };
 
@@ -106,7 +107,7 @@ in
 
         port = lib.mkOption {
           type = lib.types.str;
-          default = ":63484";
+          default = "127.0.0.1:63484";
           description = "Listen address passed via API_PORT to `dms-gop server`.";
         };
       };
@@ -136,6 +137,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = primaryUser != "" || !(cfg.launchd.enable || cfg.dmsGop.server.enable || cfg.themeEngine.launchd.enable);
+        message = "programs.dankmacshell: system.primaryUser must be set when any launchd agent is enabled (launchd.enable, dmsGop.server.enable, or themeEngine.launchd.enable); an empty primaryUser would produce broken /Users//Library/... paths.";
+      }
+    ];
+
     environment.systemPackages =
       [ package ]
       ++ lib.optional (cfg.dmsGop.enable && gopPackage != null) gopPackage
@@ -143,6 +151,20 @@ in
 
     system.activationScripts.postActivation.text = lib.mkIf cfg.installAppToApplications ''
       echo "==> Installing DankMacShell.app to /Applications/DankMacShell.app..."
+      # Stop any running instance first (bounded wait, then force) so macOS never
+      # SIGKILLs a running binary whose bundle files are about to be replaced.
+      pkill -x DankMacShell 2>/dev/null || true
+      pkill -x DankMaterialShell 2>/dev/null || true
+      dms_stop_i=0
+      while pgrep -x DankMacShell >/dev/null 2>&1 || pgrep -x DankMaterialShell >/dev/null 2>&1; do
+        dms_stop_i=$((dms_stop_i + 1))
+        if [ "$dms_stop_i" -ge 20 ]; then
+          pkill -9 -x DankMacShell 2>/dev/null || true
+          pkill -9 -x DankMaterialShell 2>/dev/null || true
+          break
+        fi
+        sleep 0.1
+      done
       rm -rf "/Applications/DankMacShell.app" "/Applications/DankMaterialShell.app"
       /usr/bin/ditto "${package}/Applications/DankMacShell.app" "/Applications/DankMacShell.app"
       chmod -R u+w "/Applications/DankMacShell.app"
@@ -200,12 +222,11 @@ in
         EnvironmentVariables = {
           PATH = agentPath;
         };
-        WatchPaths = [ themeJsonPath ];
         RunAtLoad = true;
         KeepAlive = true;
         ProcessType = "Background";
-        StandardOutPath = "${dmsAppSupport}/dte-watch.log";
-        StandardErrorPath = "${dmsAppSupport}/dte-watch.err.log";
+        StandardOutPath = "${homeDir}/Library/Logs/dank-theme-engine.log";
+        StandardErrorPath = "${homeDir}/Library/Logs/dank-theme-engine.err.log";
       };
     };
   };

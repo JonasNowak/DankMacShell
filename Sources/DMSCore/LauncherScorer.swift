@@ -106,15 +106,16 @@ public enum LauncherScorer {
     /// Fast, bounded Levenshtein distance calculation.
     /// If the edit distance is strictly greater than 2, returns 3 immediately without computing the full matrix.
     public static func levenshteinDistance(_ s1: String, _ s2: String) -> Int {
-        let count1 = s1.count
-        let count2 = s2.count
+        // Index by Character (grapheme cluster) so emoji / non-BMP scalars stay consistent
+        // between the length pre-check and the edit-distance matrix
+        let arr1 = Array(s1)
+        let arr2 = Array(s2)
+        let count1 = arr1.count
+        let count2 = arr2.count
         if abs(count1 - count2) > 2 { return 3 }
         if s1 == s2 { return 0 }
         if count1 == 0 { return min(3, count2) }
         if count2 == 0 { return min(3, count1) }
-
-        let arr1 = Array(s1.utf16)
-        let arr2 = Array(s2.utf16)
 
         var prevRow = Array(0...arr2.count)
         var currRow = [Int](repeating: 0, count: arr2.count + 1)

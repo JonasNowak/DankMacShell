@@ -319,6 +319,12 @@ public struct SettingsWidgetCatalog {
             icon: "square.grid.3x3.topleft.filled"
         ),
         BarWidgetMeta(
+            id: "gpuMonitor",
+            name: "GPU Monitor",
+            description: "Real-time GPU load percentage",
+            icon: "gauge.with.dots.needle.67percent"
+        ),
+        BarWidgetMeta(
             id: "systemTray",
             name: "System Tray",
             description: "System notification area icons",
@@ -756,7 +762,7 @@ public struct IslandSettings: Sendable, Codable, Equatable {
     }
 
     public static let defaultActivities: [String] = [
-        "home", "media", "notification", "osd", "controlCenter", "launcher", "clipboard", "powerMenu", "weather"
+        "home", "media", "notification", "osd", "controlCenter", "dash", "launcher", "clipboard", "powerMenu", "weather"
     ]
 
     public init(

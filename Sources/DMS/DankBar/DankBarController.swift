@@ -23,6 +23,8 @@ public final class DankBarController {
     public private(set) var fullscreenScreens: Set<Int> = []
     public private(set) var obstructedBarKeys: Set<String> = []
     private var fullscreenTimer: Timer?
+    private var fullscreenCheckTasks: [Task<Void, Never>] = []
+    private var localMouseMonitor: Any?
 
     public static let barHeight: CGFloat = 48
     public static let verticalBarWidth: CGFloat = 54
@@ -50,6 +52,29 @@ public final class DankBarController {
         scheduleFullscreenChecks()
     }
 
+    /// Exact bar-config lookup for a panel key of the form "<screenIndex>_<barConfig.id>_<position>".
+    /// Avoids substring collisions where one config id is a prefix of another.
+    private func barConfig(forKey key: String, configs: [BarConfig]) -> BarConfig? {
+        guard let firstUnderscore = key.firstIndex(of: "_") else { return nil }
+        let rest = key[key.index(after: firstUnderscore)...]
+        guard let lastUnderscore = rest.lastIndex(of: "_") else { return nil }
+        let id = String(rest[..<lastUnderscore])
+        return configs.first(where: { $0.id == id })
+    }
+
+    /// Active bar configs for a screen. When the user pinned bars to specific screens
+    /// (explicit screenPreferences without "all"), screens matching no config get NO bar.
+    private func activeBarConfigs(for screenIndex: Int, screenName: String, configs: [BarConfig]) -> [BarConfig] {
+        let matching = configs.filter { config in
+            config.screenPreferences.contains("all") ||
+            config.screenPreferences.contains(screenName) ||
+            (config.screenPreferences.isEmpty && screenIndex == 0)
+        }
+        if !matching.isEmpty { return matching }
+        let anyExplicit = configs.contains { !$0.screenPreferences.isEmpty && !$0.screenPreferences.contains("all") }
+        return anyExplicit ? [] : [configs.first ?? .default]
+    }
+
     public func show() {
         isVisible = true
         let configs = ConfigStore.shared.config.barConfigs
@@ -57,7 +82,7 @@ public final class DankBarController {
             let screenIndex = Int(key.split(separator: "_").first ?? "") ?? 0
             let isScreenFS = fullscreenScreens.contains(screenIndex)
             let isObstructed = obstructedBarKeys.contains(key) || isScreenFS
-            let barConfig = configs.first(where: { key.contains($0.id) }) ?? .default
+            let barConfig = barConfig(forKey: key, configs: configs) ?? .default
             if (barConfig.smartAutoHide && isObstructed) || isScreenFS {
                 continue
             }
@@ -86,12 +111,7 @@ public final class DankBarController {
 
         for (screenIndex, screen) in screens.enumerated() {
             let screenName = screen.localizedName
-            let matchingConfigs = configs.filter { config in
-                config.screenPreferences.contains("all") ||
-                config.screenPreferences.contains(screenName) ||
-                (config.screenPreferences.isEmpty && screenIndex == 0)
-            }
-            let activeConfigs = matchingConfigs.isEmpty ? [configs.first ?? .default] : matchingConfigs
+            let activeConfigs = activeBarConfigs(for: screenIndex, screenName: screenName, configs: configs)
 
             for barConfig in activeConfigs {
                 let key = "\(screenIndex)_\(barConfig.id)_\(barConfig.position)"
@@ -197,6 +217,11 @@ public final class DankBarController {
                     continue
                 }
 
+                // When auto-hide is enabled and the bar is hidden, the 2pt peek strip must not
+                // swallow clicks meant for the screen edge underneath it.
+                if barConfig.autoHide {
+                    panel.ignoresMouseEvents = !isRevealed
+                }
                 panel.alphaValue = isRevealed ? 1.0 : 0.02
                 panel.setFrame(frame, display: true)
                 if isVisible {
@@ -260,10 +285,15 @@ public final class DankBarController {
             }
         }
 
-        // Periodic heartbeat check to guarantee bar reappears when exiting fullscreen or windows move
+        // Periodic heartbeat check to guarantee bar reappears when exiting fullscreen or windows move.
+        // Throttled: skipped entirely when no bar uses smartAutoHide and no fullscreen Space is active.
         let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.checkFullscreenState()
+                guard let self = self else { return }
+                let configs = ConfigStore.shared.config.barConfigs
+                let anySmartAutoHide = configs.contains { $0.smartAutoHide }
+                if !anySmartAutoHide && self.fullscreenScreens.isEmpty { return }
+                self.checkFullscreenState()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -271,12 +301,18 @@ public final class DankBarController {
     }
 
     private func scheduleFullscreenChecks() {
+        // Cancel the previous burst before spawning a new one so stale delayed checks
+        // can never fire after a newer state was already computed.
+        for task in fullscreenCheckTasks { task.cancel() }
+        fullscreenCheckTasks.removeAll()
         checkFullscreenState()
         for delay in [0.2, 0.4, 0.7, 1.0, 1.5] {
-            Task { @MainActor [weak self] in
+            let task = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled else { return }
                 self?.checkFullscreenState()
             }
+            fullscreenCheckTasks.append(task)
         }
     }
 
@@ -333,7 +369,9 @@ public final class DankBarController {
             let screenH = Double(screen.frame.height)
             let screenVisH = Double(screen.visibleFrame.height)
 
-            var isFS = NSApp.currentSystemPresentationOptions.contains(.fullScreen)
+            // Native fullscreen presentation options only apply to the screen that actually
+            // hosts the fullscreen window (the main screen) — never to every other monitor.
+            var isFS = (screen === NSScreen.main) && NSApp.currentSystemPresentationOptions.contains(.fullScreen)
             if !isFS {
                 for win in windowList {
                     guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
@@ -358,29 +396,17 @@ public final class DankBarController {
                         break
                     }
 
-                    // Active application covering the display (native or maximized under menu bar)
+                    // Active application covering the display — strict fullscreen only: the window
+                    // must span the FULL PHYSICAL height (screenH), not just the visible height, so
+                    // normal maximized or OmniWM-tiled windows never hide the bar when
+                    // smartAutoHide == false. The X-axis bounds check ensures a fullscreen window
+                    // on Monitor 1 never marks Monitor 2 as fullscreen.
                     if activePIDs.contains(winPID) {
-                        if SmartAutoHideSolver.isWindowFullscreen(
-                            windowX: Double(winX),
-                            windowY: Double(winY),
-                            windowWidth: Double(w),
-                            windowHeight: Double(h),
-                            screenWidth: screenW,
-                            screenHeight: screenH,
-                            screenVisibleHeight: screenVisH,
-                            screenCGX: screenCGX,
-                            screenCGY: screenCGY,
-                            tolerance: 10.0
-                        ) {
-                            isFS = true
-                            break
-                        }
-
-                        // Tralphium-compatible bottom/screen coverage check
+                        let matchesX = abs(Double(winX) - screenCGX) <= 15.0
                         let touchesBottom = (Double(winY) + Double(h)) >= (screenCGY + screenH - 10.0)
                         let isFullWidth = Double(w) >= (screenW - 10.0)
-                        let isFullHeight = Double(h) >= (screenVisH - 10.0) || Double(h) >= (screenH - 10.0)
-                        if isFullWidth && isFullHeight && touchesBottom {
+                        let isStrictFullHeight = Double(h) >= (screenH - 10.0)
+                        if matchesX && isFullWidth && isStrictFullHeight && touchesBottom {
                             isFS = true
                             break
                         }
@@ -394,12 +420,7 @@ public final class DankBarController {
 
             // Per-bar obstruction evaluation for active configs on this screen
             let screenName = screen.localizedName
-            let matchingConfigs = configs.filter { config in
-                config.screenPreferences.contains("all") ||
-                config.screenPreferences.contains(screenName) ||
-                (config.screenPreferences.isEmpty && screenIndex == 0)
-            }
-            let activeConfigs = matchingConfigs.isEmpty ? [configs.first ?? .default] : matchingConfigs
+            let activeConfigs = activeBarConfigs(for: screenIndex, screenName: screenName, configs: configs)
 
             for barConfig in activeConfigs {
                 let key = "\(screenIndex)_\(barConfig.id)_\(barConfig.position)"
@@ -481,7 +502,7 @@ public final class DankBarController {
             var needsReposition = false
             for (key, panel) in panels {
                 let shouldBeHidden = obstructedBarKeys.contains(key)
-                let barConfig = configs.first(where: { key.contains($0.id) }) ?? .default
+                let barConfig = barConfig(forKey: key, configs: configs) ?? .default
                 if barConfig.smartAutoHide {
                     if shouldBeHidden && panel.isVisible {
                         needsReposition = true
@@ -572,25 +593,14 @@ public final class DankBarController {
             }
 
             if activePIDs.contains(winPID) {
-                if SmartAutoHideSolver.isWindowFullscreen(
-                    windowX: Double(winX),
-                    windowY: Double(winY),
-                    windowWidth: Double(w),
-                    windowHeight: Double(h),
-                    screenWidth: Double(screen.frame.width),
-                    screenHeight: Double(screen.frame.height),
-                    screenVisibleHeight: Double(screen.visibleFrame.height),
-                    screenCGX: Double(screenCGX),
-                    screenCGY: Double(screenCGY),
-                    tolerance: 10.0
-                ) {
-                    return true
-                }
-
+                // Strict fullscreen only (full physical height + X-axis bounds match), so a
+                // fullscreen window on one monitor never reports another monitor as fullscreen
+                // and maximized/tiled windows don't count.
+                let matchesX = abs(Double(winX) - Double(screenCGX)) <= 15.0
                 let touchesBottom = (Double(winY) + Double(h)) >= (Double(screenCGY) + Double(screen.frame.height) - 10.0)
                 let isFullWidth = Double(w) >= (Double(screen.frame.width) - 10.0)
-                let isFullHeight = Double(h) >= (Double(screen.visibleFrame.height) - 10.0) || Double(h) >= (Double(screen.frame.height) - 10.0)
-                if isFullWidth && isFullHeight && touchesBottom {
+                let isStrictFullHeight = Double(h) >= (Double(screen.frame.height) - 10.0)
+                if matchesX && isFullWidth && isStrictFullHeight && touchesBottom {
                     return true
                 }
             }
@@ -602,14 +612,29 @@ public final class DankBarController {
 
     private func updateAutoHideMonitor(enabled: Bool) {
         if enabled && mouseMonitor == nil {
+            let handler: (NSEvent) -> NSEvent? = { [weak self] event in
+                Task { @MainActor [weak self] in
+                    self?.evaluateAutoHideHover()
+                }
+                return event
+            }
+            // Local monitor catches mouse movement over our own non-activating panels;
+            // the global monitor catches movement everywhere else.
+            localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved], handler: handler)
             mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.evaluateAutoHideHover()
                 }
             }
-        } else if !enabled, let monitor = mouseMonitor {
-            NSEvent.removeMonitor(monitor)
-            mouseMonitor = nil
+        } else if !enabled {
+            if let monitor = mouseMonitor {
+                NSEvent.removeMonitor(monitor)
+                mouseMonitor = nil
+            }
+            if let monitor = localMouseMonitor {
+                NSEvent.removeMonitor(monitor)
+                localMouseMonitor = nil
+            }
         }
     }
 
@@ -618,15 +643,18 @@ public final class DankBarController {
         let screens = NSScreen.screens
         let configs = ConfigStore.shared.config.barConfigs
 
+        // Pause collapse while any DMS popout / Control Center / Dash is open, so the bar
+        // never slides away underneath an open panel.
+        let overlayOpen = PopoutCoordinator.shared.anyPopoutVisible()
+            || ControlCenterController.shared.isVisible
+            || DashController.shared.isVisible
+
+        // Evaluate EVERY auto-hide bar on EVERY monitor — not just the screen under the
+        // cursor — so moving the mouse from Monitor 1 to Monitor 2 collapses Monitor 1's
+        // revealed bar instead of leaving it stuck open forever.
         for (screenIndex, screen) in screens.enumerated() {
-            guard screen.frame.insetBy(dx: -4, dy: -4).contains(mouseLoc) else { continue }
             let screenName = screen.localizedName
-            let matchingConfigs = configs.filter { config in
-                config.screenPreferences.contains("all") ||
-                config.screenPreferences.contains(screenName) ||
-                (config.screenPreferences.isEmpty && screenIndex == 0)
-            }
-            let activeConfigs = matchingConfigs.isEmpty ? [configs.first ?? .default] : matchingConfigs
+            let activeConfigs = activeBarConfigs(for: screenIndex, screenName: screenName, configs: configs)
 
             for barConfig in activeConfigs where barConfig.autoHide {
                 let isScreenFS = fullscreenScreens.contains(screenIndex)
@@ -638,23 +666,28 @@ public final class DankBarController {
                 let thickness = CGFloat(barConfig.thickness > 0 ? barConfig.thickness : (barConfig.isVertical ? 54 : 48))
                 let triggerBand: CGFloat = (autoHideRevealed[key] ?? false) ? (thickness + 20) : 6.0
                 let sf = screen.frame
+                let mouseOnThisScreen = sf.insetBy(dx: -4, dy: -4).contains(mouseLoc)
 
                 let inZone: Bool
-                switch barConfig.position.lowercased() {
-                case "top":
-                    inZone = mouseLoc.y >= (sf.maxY - triggerBand)
-                case "left":
-                    inZone = mouseLoc.x <= (sf.minX + triggerBand)
-                case "right":
-                    inZone = mouseLoc.x >= (sf.maxX - triggerBand)
-                default:
-                    inZone = mouseLoc.y <= (sf.minY + triggerBand)
+                if !mouseOnThisScreen {
+                    inZone = false
+                } else {
+                    switch barConfig.position.lowercased() {
+                    case "top":
+                        inZone = mouseLoc.y >= (sf.maxY - triggerBand)
+                    case "left":
+                        inZone = mouseLoc.x <= (sf.minX + triggerBand)
+                    case "right":
+                        inZone = mouseLoc.x >= (sf.maxX - triggerBand)
+                    default:
+                        inZone = mouseLoc.y <= (sf.minY + triggerBand)
+                    }
                 }
 
                 let currentlyRevealed = autoHideRevealed[key] ?? false
                 if inZone && !currentlyRevealed {
                     scheduleAutoHideTransition(key: key, reveal: true, delayMs: barConfig.hoverOpenDelayMs)
-                } else if !inZone && currentlyRevealed {
+                } else if !inZone && currentlyRevealed && !overlayOpen {
                     scheduleAutoHideTransition(key: key, reveal: false, delayMs: barConfig.hoverCloseDelayMs)
                 }
             }
@@ -679,6 +712,32 @@ public final class DankBarController {
     private func setupScreenChangeObserver() {
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                // Prune notch geometries for disconnected monitors.
+                let screenCount = NSScreen.screens.count
+                self.screenNotchGeometries = self.screenNotchGeometries.filter { $0.key < screenCount }
+                self.scheduleFullscreenChecks()
+                self.reposition()
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.scheduleFullscreenChecks()
+                self?.reposition()
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in

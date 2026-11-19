@@ -41,6 +41,8 @@ public struct BluetoothDetailPage: View {
                     set: { _ in bluetooth.toggle(); refreshDevices() }
                 ))
                 .toggleStyle(.switch)
+                .labelsHidden()
+                .accessibilityLabel("Bluetooth power")
             }
             .padding(12)
             .background(theme.surfaceContainerHigh)

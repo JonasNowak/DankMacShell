@@ -10,16 +10,22 @@ import os
 public final class SystemOSDManager: @unchecked Sendable {
     public static let shared = SystemOSDManager()
 
+    /// True while OSDUIHelper is actively frozen (SIGSTOP) by DMS.
+    public private(set) var isSuppressed: Bool = false
+
     private struct SuppressionState {
-        var task: Task<Void, Never>?
         var active = false
         var systemSleeping = false
         var transitionGeneration: UInt64 = 0
+        /// OSDUIHelper PIDs currently frozen and monitored for exit.
+        var trackedPIDs: Set<pid_t> = []
+        var exitSources: [pid_t: DispatchSourceProcess] = [:]
     }
 
     private static let suppressionState = OSAllocatedUnfairLock(initialState: SuppressionState())
+    private static let log = Logger(subsystem: "com.dank.macshell", category: "SystemOSDManager")
 
-    /// Register sleep and wake lifecycle observers once.
+    /// Register sleep, wake and launch lifecycle observers once.
     private static let lifecycleSetupOnce: Void = {
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(
@@ -36,6 +42,22 @@ public final class SystemOSDManager: @unchecked Sendable {
         ) { _ in
             handleSystemWake()
         }
+        // A fresh OSDUIHelper instance may launch while suppression is active: re-scan
+        // once per launch instead of polling the full PID table on a timer.
+        nc.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            let path = app.bundleURL?.path ?? ""
+            let name = app.localizedName ?? ""
+            guard path.contains("OSDUIHelper") || name.contains("OSDUIHelper") else { return }
+            let shouldSuppress = suppressionState.withLock { $0.active && !$0.systemSleeping && $0.trackedPIDs.isEmpty }
+            if shouldSuppress {
+                suspendOSDUIHelper()
+            }
+        }
     }()
 
     private init() {}
@@ -51,6 +73,7 @@ public final class SystemOSDManager: @unchecked Sendable {
         suppressionState.withLock { $0.systemSleeping = false }
         let active = suppressionState.withLock { $0.active }
         if active {
+            // PIDs may have changed across sleep: re-scan once instead of polling.
             suspendOSDUIHelper()
         }
     }
@@ -65,7 +88,6 @@ public final class SystemOSDManager: @unchecked Sendable {
             state.transitionGeneration &+= 1
         }
         suspendOSDUIHelper()
-        startSuppressionWatcher()
     }
 
     /// Re-enables the system HUD by sending SIGCONT to resume OSDUIHelper.
@@ -74,15 +96,23 @@ public final class SystemOSDManager: @unchecked Sendable {
             state.active = false
             state.transitionGeneration &+= 1
         }
-        stopSuppressionWatcher()
         resumeOSDUIHelperProcess()
     }
 
-    /// Fast-path suspension triggered on media key adjustments.
+    /// Fast-path suspension triggered on media key adjustments. Re-scans only when no
+    /// OSDUIHelper PID is currently tracked; otherwise just re-sends SIGSTOP.
     public static func suppressNativeOSDNow() {
-        let active = suppressionState.withLock { $0.active && !$0.systemSleeping }
-        if active {
+        let needsScan = suppressionState.withLock { state -> Bool in
+            guard state.active && !state.systemSleeping else { return false }
+            return state.trackedPIDs.isEmpty
+        }
+        if needsScan {
             suspendOSDUIHelper()
+        } else {
+            let pids = suppressionState.withLock { Array($0.trackedPIDs) }
+            for pid in pids {
+                kill(pid, SIGSTOP)
+            }
         }
     }
 
@@ -92,7 +122,6 @@ public final class SystemOSDManager: @unchecked Sendable {
             state.active = false
             state.transitionGeneration &+= 1
         }
-        stopSuppressionWatcher()
         resumeOSDUIHelperProcess()
     }
 
@@ -102,7 +131,7 @@ public final class SystemOSDManager: @unchecked Sendable {
         var pids = [pid_t](repeating: 0, count: 2048)
         let bytes = proc_listpids(UInt32(PROC_ALL_PIDS), 0, &pids, Int32(MemoryLayout<pid_t>.stride * pids.count))
         guard bytes > 0 else { return [] }
-        let count = Int(bytes) / MemoryLayout<pid_t>.stride
+        let count = min(Int(bytes) / MemoryLayout<pid_t>.stride, pids.count)
         var result: [pid_t] = []
         for i in 0..<count {
             let pid = pids[i]
@@ -137,14 +166,62 @@ public final class SystemOSDManager: @unchecked Sendable {
         }
         for pid in pids {
             kill(pid, SIGSTOP)
+            trackOSDUIHelperPID(pid)
+        }
+        shared.isSuppressed = true
+    }
+
+    /// Attaches a process-exit dispatch source so we only re-scan when OSDUIHelper
+    /// actually exits or relaunches — no periodic PID-table polling.
+    private static func trackOSDUIHelperPID(_ pid: pid_t) {
+        suppressionState.withLock { state in
+            guard !state.trackedPIDs.contains(pid) else { return }
+            state.trackedPIDs.insert(pid)
+            let source = DispatchSource.makeProcessSource(
+                identifier: pid,
+                eventMask: .exit,
+                queue: DispatchQueue.global(qos: .background)
+            )
+            source.setEventHandler {
+                handleTrackedOSDUIHelperExit(pid)
+            }
+            source.resume()
+            state.exitSources[pid] = source
+        }
+    }
+
+    private static func handleTrackedOSDUIHelperExit(_ pid: pid_t) {
+        let shouldSuppress = suppressionState.withLock { state -> Bool in
+            state.trackedPIDs.remove(pid)
+            if let source = state.exitSources.removeValue(forKey: pid) {
+                source.cancel()
+            }
+            return state.active && !state.systemSleeping
+        }
+        if suppressionState.withLock({ $0.trackedPIDs.isEmpty }) {
+            shared.isSuppressed = false
+        }
+        if shouldSuppress {
+            // OSDUIHelper exited (or was relaunched): re-scan once and freeze any new instance.
+            suspendOSDUIHelper()
         }
     }
 
     private static func resumeOSDUIHelperProcess() {
-        let pids = osduiHelperPIDs()
+        let tracked = suppressionState.withLock { state -> [pid_t] in
+            let pids = Array(state.trackedPIDs)
+            state.trackedPIDs.removeAll()
+            for (_, source) in state.exitSources {
+                source.cancel()
+            }
+            state.exitSources.removeAll()
+            return pids
+        }
+        let pids = tracked.isEmpty ? osduiHelperPIDs() : tracked
         for pid in pids {
             kill(pid, SIGCONT)
         }
+        shared.isSuppressed = false
     }
 
     private static func warmUpAndFreezeOSDUIHelper() {
@@ -154,42 +231,20 @@ public final class SystemOSDManager: @unchecked Sendable {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         task.arguments = ["-g", "-j", "-a", helperPath]
-        try? task.run()
+        do {
+            try task.run()
+            // Reap the short-lived `open` child so it never lingers as a zombie.
+            DispatchQueue.global(qos: .utility).async {
+                task.waitUntilExit()
+            }
+        } catch {
+            log.error("Failed to launch OSDUIHelper warm-up: \(error.localizedDescription, privacy: .public)")
+            return
+        }
 
         // Wait briefly for launchd to spin up the process, then immediately freeze it
         DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.08) {
-            let spawnedPids = osduiHelperPIDs()
-            for pid in spawnedPids {
-                kill(pid, SIGSTOP)
-            }
+            suspendOSDUIHelper()
         }
-    }
-
-    private static func startSuppressionWatcher() {
-        stopSuppressionWatcher()
-        let newTask = Task.detached(priority: .background) {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 200_000_000) // 200ms periodic libproc kernel scan
-                let shouldSuppress = suppressionState.withLock { $0.active && !$0.systemSleeping }
-                if shouldSuppress {
-                    let pids = osduiHelperPIDs()
-                    for pid in pids {
-                        kill(pid, SIGSTOP)
-                    }
-                }
-            }
-        }
-        suppressionState.withLock { state in
-            state.task = newTask
-        }
-    }
-
-    private static func stopSuppressionWatcher() {
-        let task = suppressionState.withLock { state -> Task<Void, Never>? in
-            let existing = state.task
-            state.task = nil
-            return existing
-        }
-        task?.cancel()
     }
 }

@@ -137,7 +137,7 @@ if [ -n "$GOP_BIN" ]; then
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>API_PORT</key>
-		<string>:63484</string>
+		<string>127.0.0.1:63484</string>
 		<key>PATH</key>
 		<string>$AGENT_PATH</string>
 	</dict>
@@ -187,10 +187,6 @@ if [ -n "$DTE_BIN" ]; then
 		<key>PATH</key>
 		<string>$AGENT_PATH</string>
 	</dict>
-	<key>WatchPaths</key>
-	<array>
-		<string>$DMS_SUPPORT/theme.json</string>
-	</array>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
@@ -198,9 +194,9 @@ if [ -n "$DTE_BIN" ]; then
 	<key>ProcessType</key>
 	<string>Background</string>
 	<key>StandardOutPath</key>
-	<string>$DMS_SUPPORT/dte-watch.log</string>
+	<string>$LOG_DIR/dank-theme-engine.log</string>
 	<key>StandardErrorPath</key>
-	<string>$DMS_SUPPORT/dte-watch.err.log</string>
+	<string>$LOG_DIR/dank-theme-engine.err.log</string>
 </dict>
 </plist>
 EOF

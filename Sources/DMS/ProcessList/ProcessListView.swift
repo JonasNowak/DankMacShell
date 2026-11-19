@@ -5,9 +5,11 @@ import DMSCore
 public struct ProcessListView: View {
     @ObservedObject var themeStore = ThemeStore.shared
     @ObservedObject var processService = ProcessService.shared
+    private let telemetry = TelemetryService.shared
     @State private var searchText: String = ""
     @State private var sortByMemory: Bool
     @State private var selectedPID: Int32? = nil
+    @State private var confirmKillPID: Int32? = nil
 
     let onClose: () -> Void
 
@@ -50,7 +52,7 @@ public struct ProcessListView: View {
                 // Refresh button
                 Button(action: {
                     processService.refresh()
-                    TelemetryService.shared.refresh()
+                    telemetry.refresh()
                 }) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 13, weight: .semibold))
@@ -174,15 +176,23 @@ public struct ProcessListView: View {
                                 .frame(width: 60, alignment: .trailing)
 
                             Button(action: {
-                                _ = processService.killProcess(pid: proc.pid)
-                                ToastCenter.shared.show(icon: "xmark.circle.fill", message: "Terminated \(proc.name) (\(proc.pid))")
+                                if confirmKillPID == proc.pid {
+                                    confirmKillPID = nil
+                                    if processService.killProcess(pid: proc.pid) {
+                                        ToastCenter.shared.show(icon: "xmark.circle.fill", message: "Terminated \(proc.name) (\(proc.pid))")
+                                    } else {
+                                        ToastCenter.shared.show(icon: "exclamationmark.triangle.fill", message: "Failed to terminate \(proc.name) (\(proc.pid))")
+                                    }
+                                } else {
+                                    confirmKillPID = proc.pid
+                                }
                             }) {
-                                Text("End")
+                                Text(confirmKillPID == proc.pid ? "Sure?" : "End")
                                     .font(.system(size: 9, weight: .bold))
                                     .foregroundColor(Color(hex: p.error.hex))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
-                                    .background(Color(hex: p.errorContainer.hex).opacity(0.4))
+                                    .background(Color(hex: p.errorContainer.hex).opacity(confirmKillPID == proc.pid ? 0.9 : 0.4))
                                     .cornerRadius(5)
                             }
                             .buttonStyle(.plain)
@@ -202,7 +212,7 @@ public struct ProcessListView: View {
 
             // Footer
             HStack {
-                Text("\(displayedProcesses.count) processes listed")
+                Text("Showing \(min(80, displayedProcesses.count)) of \(displayedProcesses.count) processes")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: p.outline.hex))
                 Spacer()
@@ -219,7 +229,7 @@ public struct ProcessListView: View {
 
     @ViewBuilder
     private func telemetryOverviewCard(p: ThemePalette) -> some View {
-        let t = TelemetryService.shared.telemetry
+        let t = telemetry.telemetry
         VStack(spacing: 8) {
             if sortByMemory {
                 // Memory Overview Card

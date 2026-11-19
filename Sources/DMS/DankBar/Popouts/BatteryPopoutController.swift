@@ -5,12 +5,18 @@ import DMSCore
 /// Dedicated Bar Popout for Battery diagnostics, power draw, health, and 24h discharge history.
 /// Reuses `BatteryDetailPage` as requested.
 @MainActor
-public final class BatteryPopoutController: ObservableObject {
+public final class BatteryPopoutController: ObservableObject, PopoutController {
     public static let shared = BatteryPopoutController()
 
     private var panel: ShellPanel?
     @Published public private(set) var isVisible: Bool = false
+    private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
+
+    public var popoutID: String { "battery" }
+    public var popoutPanel: ShellPanel? { panel }
+    public var isPopoutVisible: Bool { isVisible }
+    public func hidePopout() { hide() }
 
     private init() {}
 
@@ -26,15 +32,17 @@ public final class BatteryPopoutController: ObservableObject {
         let mouseLoc = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first else { return }
 
-        // Close peer popouts
+        // Close peer popouts and non-popout DMS panels
+        PopoutCoordinator.shared.dismissAll(except: popoutID)
         DashController.shared.hide()
-        AudioPopoutController.shared.hide()
-        DurationPopoutController.shared.hide()
-        ColorPickerPopoutController.shared.hide()
-        SymbianPopoutController.shared.hide()
-        PowerPopoutController.shared.hide()
         ProcessListController.shared.hide()
         ControlCenterController.shared.hide()
+
+        // Close any existing panel BEFORE creating a new one (fixes leaked ghost panels on double-show)
+        if let existing = panel {
+            existing.orderOut(nil)
+            panel = nil
+        }
 
         let bodyWidth: CGFloat = 255
         let bodyHeight: CGFloat = 355
@@ -53,8 +61,11 @@ public final class BatteryPopoutController: ObservableObject {
             defer: false
         )
         panel.level = .floating
+        panel.onEscape = { [weak self] in
+            self?.hide()
+        }
 
-        let rootView = BatteryPopoutView { [weak self] in
+        let rootView = BatteryPopoutView(ownerPanel: panel) { [weak self] in
             self?.hide()
         }
         panel.contentView = NSHostingView(rootView: rootView)
@@ -62,13 +73,15 @@ public final class BatteryPopoutController: ObservableObject {
         self.panel = panel
         self.isVisible = true
 
+        PopoutCoordinator.shared.register(self)
         PopoutAnimationHelper.animateIn(panel: panel, targetFrame: rect, screen: screen)
-        installClickMonitor()
+        installClickMonitors()
     }
 
     public func hide() {
         guard isVisible else { return }
-        removeClickMonitor()
+        removeClickMonitors()
+        PopoutCoordinator.shared.unregister(popoutID)
         isVisible = false
 
         let panelToClose = self.panel
@@ -78,18 +91,27 @@ public final class BatteryPopoutController: ObservableObject {
         PopoutAnimationHelper.animateOut(panel: panelToClose, screen: screen)
     }
 
-    private func installClickMonitor() {
-        removeClickMonitor()
-        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown]
-        ) { [weak self] _ in
+    private func installClickMonitors() {
+        removeClickMonitors()
+        let handler: (NSEvent) -> NSEvent? = { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.hide()
+                guard let self = self, self.isVisible else { return }
+                let clickLoc = NSEvent.mouseLocation
+                if let p = self.panel, NSMouseInRect(clickLoc, p.frame, false) { return }
+                if PopoutCoordinator.shared.isPointInsideAnyBar(clickLoc) { return }
+                self.hide()
             }
+            return event
         }
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: handler)
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { event in _ = handler(event) })
     }
 
-    private func removeClickMonitor() {
+    private func removeClickMonitors() {
+        if let monitor = localClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            localClickMonitor = nil
+        }
         if let monitor = globalClickMonitor {
             NSEvent.removeMonitor(monitor)
             globalClickMonitor = nil
@@ -100,14 +122,16 @@ public final class BatteryPopoutController: ObservableObject {
 /// Popout sheet view wrapping BatteryDetailPage with M3 styling.
 public struct BatteryPopoutView: View {
     @ObservedObject private var theme = ThemeStore.shared
+    let ownerPanel: NSPanel?
     let onClose: () -> Void
 
-    public init(onClose: @escaping () -> Void) {
+    public init(ownerPanel: NSPanel? = nil, onClose: @escaping () -> Void) {
+        self.ownerPanel = ownerPanel
         self.onClose = onClose
     }
 
     public var body: some View {
-        PopoutSurfaceContainer(bodyWidth: 255, bodyHeight: 355) {
+        PopoutSurfaceContainer(bodyWidth: 255, bodyHeight: 355, ownerPanel: ownerPanel) {
             VStack(spacing: 0) {
                 // Header
                 HStack(spacing: 8) {

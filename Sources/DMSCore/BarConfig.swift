@@ -324,7 +324,8 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
         self.borderColor = borderColor
         self.cornerRadius = cornerRadius
         self.gothCorners = gothCorners
-        self.gothFilletRadius = gothFilletRadius
+        // didSet does not run during initialization, so clamp explicitly here too
+        self.gothFilletRadius = max(4.0, min(32.0, gothFilletRadius))
         self.autoSquareAttachedCorners = autoSquareAttachedCorners
         self.hoverOpenDelayMs = hoverOpenDelayMs
         self.hoverCloseDelayMs = hoverCloseDelayMs
@@ -361,7 +362,8 @@ public struct BarConfig: Sendable, Codable, Equatable, Identifiable {
         self.borderColor = try container.decodeIfPresent(String.self, forKey: .borderColor)
         self.cornerRadius = try container.decodeIfPresent(Double.self, forKey: .cornerRadius) ?? -1.0
         self.gothCorners = try container.decodeIfPresent(Bool.self, forKey: .gothCorners) ?? true
-        self.gothFilletRadius = try container.decodeIfPresent(Double.self, forKey: .gothFilletRadius) ?? 14.0
+        // didSet does not run during initialization, so clamp explicitly here too
+        self.gothFilletRadius = max(4.0, min(32.0, try container.decodeIfPresent(Double.self, forKey: .gothFilletRadius) ?? 14.0))
         self.autoSquareAttachedCorners = try container.decodeIfPresent(Bool.self, forKey: .autoSquareAttachedCorners) ?? true
         self.hoverOpenDelayMs = try container.decodeIfPresent(Int.self, forKey: .hoverOpenDelayMs) ?? 80
         self.hoverCloseDelayMs = try container.decodeIfPresent(Int.self, forKey: .hoverCloseDelayMs) ?? 350

@@ -268,4 +268,219 @@ struct IPCCommandTests {
         #expect(IPCCommand.cliCompletions(forPrefix: "") == IPCCommand.cliVocabulary)
         #expect(IPCCommand.cliVocabulary.contains("shell"))
     }
+
+    // MARK: - dms:// URL scheme security allowlist
+
+    @Test("dms:// allowlist permits only safe UI navigation/toggle commands")
+    func testURLSchemeAllowlistAllows() {
+        // Launcher / dash / control center / keybinds
+        #expect(IPCCommand.openLauncher.isAllowedFromURLScheme)
+        #expect(IPCCommand.closeLauncher.isAllowedFromURLScheme)
+        #expect(IPCCommand.toggleLauncher.isAllowedFromURLScheme)
+        #expect(IPCCommand.openLauncherQuery(query: "safari").isAllowedFromURLScheme)
+        #expect(IPCCommand.openDash.isAllowedFromURLScheme)
+        #expect(IPCCommand.closeDash.isAllowedFromURLScheme)
+        #expect(IPCCommand.toggleDash.isAllowedFromURLScheme)
+        #expect(IPCCommand.openDashTab(tab: "overview").isAllowedFromURLScheme)
+        #expect(IPCCommand.openControlCenter.isAllowedFromURLScheme)
+        #expect(IPCCommand.closeControlCenter.isAllowedFromURLScheme)
+        #expect(IPCCommand.toggleControlCenter.isAllowedFromURLScheme)
+        #expect(IPCCommand.openKeybinds.isAllowedFromURLScheme)
+        #expect(IPCCommand.closeKeybinds.isAllowedFromURLScheme)
+        #expect(IPCCommand.toggleKeybinds.isAllowedFromURLScheme)
+        // Settings open/close/toggle (never set/get/dump)
+        #expect(IPCCommand.openSettings.isAllowedFromURLScheme)
+        #expect(IPCCommand.closeSettings.isAllowedFromURLScheme)
+        #expect(IPCCommand.toggleSettings.isAllowedFromURLScheme)
+        #expect(IPCCommand.openSettingsTab("theme").isAllowedFromURLScheme)
+        // DankBar toggle/reveal/hide
+        #expect(IPCCommand.bar(action: "toggle").isAllowedFromURLScheme)
+        #expect(IPCCommand.bar(action: "reveal").isAllowedFromURLScheme)
+        #expect(IPCCommand.bar(action: "hide").isAllowedFromURLScheme)
+        // Dynamic Island toggle/open/close/expand/collapse
+        #expect(IPCCommand.island(action: "toggle").isAllowedFromURLScheme)
+        #expect(IPCCommand.island(action: "open").isAllowedFromURLScheme)
+        #expect(IPCCommand.island(action: "close").isAllowedFromURLScheme)
+        #expect(IPCCommand.island(action: "expand").isAllowedFromURLScheme)
+        #expect(IPCCommand.island(action: "collapse").isAllowedFromURLScheme)
+        // Power menu open/toggle only
+        #expect(IPCCommand.powerMenu.isAllowedFromURLScheme)
+        #expect(IPCCommand.powerMenuAction("open").isAllowedFromURLScheme)
+        #expect(IPCCommand.powerMenuAction("toggle").isAllowedFromURLScheme)
+        // Notepad / clipboard / process list open/close/toggle only
+        #expect(IPCCommand.openNotepad.isAllowedFromURLScheme)
+        #expect(IPCCommand.closeNotepad.isAllowedFromURLScheme)
+        #expect(IPCCommand.toggleNotepad.isAllowedFromURLScheme)
+        #expect(IPCCommand.openClipboard.isAllowedFromURLScheme)
+        #expect(IPCCommand.closeClipboard.isAllowedFromURLScheme)
+        #expect(IPCCommand.toggleClipboard.isAllowedFromURLScheme)
+        #expect(IPCCommand.openProcessList.isAllowedFromURLScheme)
+        #expect(IPCCommand.closeProcessList.isAllowedFromURLScheme)
+        #expect(IPCCommand.toggleProcessList.isAllowedFromURLScheme)
+        // Color picker open, QR open, wallpaper picker
+        #expect(IPCCommand.openColorPicker.isAllowedFromURLScheme)
+        #expect(IPCCommand.openQR.isAllowedFromURLScheme)
+        #expect(IPCCommand.wallpaper(action: "picker").isAllowedFromURLScheme)
+    }
+
+    @Test("dms:// allowlist denies destructive, mutating, or data-exposing commands")
+    func testURLSchemeAllowlistDenies() {
+        // powerMenu lock/sleep/restart/shutdown/logout
+        for act in ["lock", "sleep", "restart", "shutdown", "logout"] {
+            #expect(!IPCCommand.powerMenuAction(act).isAllowedFromURLScheme, "powerMenuAction(\(act)) must be denied")
+        }
+        // settings set/get/dump
+        #expect(!IPCCommand.setSetting(key: "theme", value: "blue").isAllowedFromURLScheme)
+        #expect(!IPCCommand.getSetting(key: "theme").isAllowedFromURLScheme)
+        #expect(!IPCCommand.dumpSettings.isAllowedFromURLScheme)
+        // clipboard copy/clear/list
+        #expect(!IPCCommand.copyClipboard(text: "x").isAllowedFromURLScheme)
+        #expect(!IPCCommand.clearClipboard.isAllowedFromURLScheme)
+        #expect(!IPCCommand.listClipboard.isAllowedFromURLScheme)
+        // notepad set/append/get
+        #expect(!IPCCommand.setNotepad(text: "x").isAllowedFromURLScheme)
+        #expect(!IPCCommand.appendNotepad(text: "x").isAllowedFromURLScheme)
+        #expect(!IPCCommand.getNotepad.isAllowedFromURLScheme)
+        // processList kill/list
+        #expect(!IPCCommand.killProcess(pid: 1).isAllowedFromURLScheme)
+        #expect(!IPCCommand.listProcesses.isAllowedFromURLScheme)
+        // colorPicker pick, QR generate
+        #expect(!IPCCommand.pickColor.isAllowedFromURLScheme)
+        #expect(!IPCCommand.generateQR(text: "x").isAllowedFromURLScheme)
+        // wallpaper set/next/prev/random
+        #expect(!IPCCommand.wallpaper(action: "set", path: "/tmp/x.png").isAllowedFromURLScheme)
+        #expect(!IPCCommand.wallpaper(action: "next").isAllowedFromURLScheme)
+        #expect(!IPCCommand.wallpaper(action: "prev").isAllowedFromURLScheme)
+        #expect(!IPCCommand.wallpaper(action: "random").isAllowedFromURLScheme)
+        // bar / island actions outside the allowlist
+        #expect(!IPCCommand.bar(action: "setposition", value: "top").isAllowedFromURLScheme)
+        #expect(!IPCCommand.island(action: "status").isAllowedFromURLScheme)
+        // screenshot, plugins, applets, symbian
+        #expect(!IPCCommand.screenshot.isAllowedFromURLScheme)
+        #expect(!IPCCommand.screenshotMode("full").isAllowedFromURLScheme)
+        #expect(!IPCCommand.listPlugins.isAllowedFromURLScheme)
+        #expect(!IPCCommand.installPlugin(id: "x").isAllowedFromURLScheme)
+        #expect(!IPCCommand.listApplets.isAllowedFromURLScheme)
+        #expect(!IPCCommand.symbian(action: "status").isAllowedFromURLScheme)
+        // mic, audio, brightness, inhibit, omniwm
+        #expect(!IPCCommand.mic(action: "mute").isAllowedFromURLScheme)
+        #expect(!IPCCommand.audio(action: "mute").isAllowedFromURLScheme)
+        #expect(!IPCCommand.brightness(action: "set", value: "50").isAllowedFromURLScheme)
+        #expect(!IPCCommand.inhibit(action: "toggle").isAllowedFromURLScheme)
+        #expect(!IPCCommand.omniwmTheme(action: "sync").isAllowedFromURLScheme)
+        // theme set / toggle-mode
+        #expect(!IPCCommand.setTheme(name: "blue").isAllowedFromURLScheme)
+        #expect(!IPCCommand.toggleThemeMode.isAllowedFromURLScheme)
+        // dmenu, reloadConfig, toast
+        #expect(!IPCCommand.dmenu(requestID: DMenuStaging.newRequestID(), prompt: "", candidatesFile: "").isAllowedFromURLScheme)
+        #expect(!IPCCommand.reloadConfig.isAllowedFromURLScheme)
+        #expect(!IPCCommand.toast(level: "info", message: "hi").isAllowedFromURLScheme)
+        // hide / unhide / activate / unhide-all
+        #expect(!IPCCommand.hideApp(bundleID: "com.apple.Safari").isAllowedFromURLScheme)
+        #expect(!IPCCommand.unhideApp(bundleID: "com.apple.Safari", inBackground: false).isAllowedFromURLScheme)
+        #expect(!IPCCommand.unhideAllApps(inBackground: false).isAllowedFromURLScheme)
+        #expect(!IPCCommand.activateApp(bundleID: "com.apple.Safari").isAllowedFromURLScheme)
+        // mpris, lyrics, weather, wellbeing, danksearch
+        #expect(!IPCCommand.mpris(action: "play").isAllowedFromURLScheme)
+        #expect(!IPCCommand.lyrics(action: "status").isAllowedFromURLScheme)
+        #expect(!IPCCommand.weatherStatus.isAllowedFromURLScheme)
+        #expect(!IPCCommand.weatherSetLocation(location: "Berlin").isAllowedFromURLScheme)
+        #expect(!IPCCommand.wellbeing(action: "status").isAllowedFromURLScheme)
+        #expect(!IPCCommand.danksearch(action: "status").isAllowedFromURLScheme)
+        // read-only but not on the allowlist
+        #expect(!IPCCommand.status.isAllowedFromURLScheme)
+        #expect(!IPCCommand.doctor.isAllowedFromURLScheme)
+        #expect(!IPCCommand.unknown("x").isAllowedFromURLScheme)
+    }
+
+    // MARK: - CLI parsing regressions (v0.9.0)
+
+    @Test("CLI parsing: theme toggle-mode, case preservation, multi-word values")
+    func testCLIParsingRegressions() {
+        // theme toggle-mode (all spellings)
+        #expect(IPCCommand.parseCLI(args: ["theme", "toggle-mode"]) == .toggleThemeMode)
+        #expect(IPCCommand.parseCLI(args: ["theme", "toggleMode"]) == .toggleThemeMode)
+        #expect(IPCCommand.parseCLI(args: ["theme", "toggle"]) == .toggleThemeMode)
+
+        // Case preservation for qr / wallpaper / weather (rawAction, not lowercased action)
+        #expect(IPCCommand.parseCLI(args: ["qr", "HTTPS://Example.COM/Path?X=1"]) == .generateQR(text: "HTTPS://Example.COM/Path?X=1"))
+        #expect(IPCCommand.parseCLI(args: ["wallpaper", "/Users/Me/My Photo.PNG"]) == .wallpaper(action: "set", path: "/Users/Me/My Photo.PNG"))
+        #expect(IPCCommand.parseCLI(args: ["wallpaper", "set", "/Users/Me/My Photo.PNG"]) == .wallpaper(action: "set", path: "/Users/Me/My Photo.PNG"))
+        #expect(IPCCommand.parseCLI(args: ["weather", "San", "Francisco"]) == .weatherSetLocation(location: "San Francisco"))
+        #expect(IPCCommand.parseCLI(args: ["weather", "New", "York", "City"]) == .weatherSetLocation(location: "New York City"))
+
+        // Multi-word settings set value: `settings set <key> <value...>`
+        #expect(IPCCommand.parseCLI(args: ["settings", "set", "greeting", "Hello", "World"]) == .setSetting(key: "greeting", value: "Hello World"))
+        #expect(IPCCommand.parseCLI(args: ["settings", "set", "theme", "blue"]) == .setSetting(key: "theme", value: "blue"))
+
+        // Multi-word audio set-device name: `audio set-device <name...>`
+        #expect(IPCCommand.parseCLI(args: ["audio", "set-device", "MacBook", "Pro", "Speakers"]) == .audio(action: "set-device", value: "MacBook Pro Speakers"))
+        #expect(IPCCommand.parseCLI(args: ["audio", "setvolume", "80"]) == .audio(action: "setvolume", value: "80"))
+    }
+
+    // MARK: - DMenuStaging request ID validation & result whitespace
+
+    @Test("DMenuStaging.isValidRequestID accepts only 32 uppercase hex chars")
+    func testDMenuRequestIDValidation() {
+        #expect(DMenuStaging.isValidRequestID(DMenuStaging.newRequestID()))
+        #expect(DMenuStaging.isValidRequestID("ABCDEF0123456789ABCDEF0123456789"))
+        #expect(DMenuStaging.isValidRequestID("0123456789ABCDEF0123456789ABCDEF"))
+        // lowercase hex is rejected (IDs are uppercase-only)
+        #expect(!DMenuStaging.isValidRequestID("abcdef0123456789abcdef0123456789"))
+        // wrong lengths
+        #expect(!DMenuStaging.isValidRequestID(""))
+        #expect(!DMenuStaging.isValidRequestID("ABCDEF0123456789ABCDEF012345678"))    // 31
+        #expect(!DMenuStaging.isValidRequestID("ABCDEF0123456789ABCDEF01234567890"))  // 33
+        // non-hex characters
+        #expect(!DMenuStaging.isValidRequestID("GABCDEF0123456789ABCDEF012345678"))
+        #expect(!DMenuStaging.isValidRequestID("ABCDEF0123456789ABCDEF01234567-"))
+        // path traversal attempts
+        #expect(!DMenuStaging.isValidRequestID("../../etc/passwd"))
+        #expect(!DMenuStaging.isValidRequestID("..%2F..%2Fetc%2Fpasswd0000000000"))
+        #expect(!DMenuStaging.isValidRequestID("/tmp/evil"))
+    }
+
+    @Test("DMenuStaging readResult strips only trailing CR/LF and preserves whitespace")
+    func testDMenuReadResultWhitespace() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("dms_dmenu_ws_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let requestID = DMenuStaging.newRequestID()
+        let resultURL = DMenuStaging.resultPath(for: requestID, in: dir)
+
+        // Trailing newline stripped; leading/trailing spaces preserved.
+        try "  padded selection  \n".write(to: resultURL, atomically: true, encoding: .utf8)
+        #expect(DMenuStaging.readResult(for: requestID, in: dir) == "  padded selection  ")
+
+        // CRLF stripped.
+        try "line\r\n".write(to: resultURL, atomically: true, encoding: .utf8)
+        #expect(DMenuStaging.readResult(for: requestID, in: dir) == "line")
+
+        // Multiple trailing newlines stripped; inner whitespace kept.
+        try "a b\tc\n\n".write(to: resultURL, atomically: true, encoding: .utf8)
+        #expect(DMenuStaging.readResult(for: requestID, in: dir) == "a b\tc")
+
+        // No trailing newline: content returned verbatim.
+        try "verbatim".write(to: resultURL, atomically: true, encoding: .utf8)
+        #expect(DMenuStaging.readResult(for: requestID, in: dir) == "verbatim")
+
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    @Test("DMenuStaging works with spaces in the staging path (Application Support)")
+    func testDMenuStagingSpaceInPath() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("dms dmenu space test \(UUID().uuidString)", isDirectory: true)
+        let requestID = DMenuStaging.newRequestID()
+        let candidates = ["first candidate", "second candidate with  spaces", "third"]
+
+        let staged = try DMenuStaging.stage(candidates: candidates, requestID: requestID, in: dir)
+        #expect(staged.path.contains(" "))
+        #expect(DMenuStaging.candidatesPath(for: requestID, in: dir).path == staged.path)
+        #expect(DMenuStaging.readCandidates(at: staged) == candidates)
+
+        DMenuStaging.cleanup(requestID: requestID, in: dir)
+        #expect(!FileManager.default.fileExists(atPath: staged.path))
+        try? FileManager.default.removeItem(at: dir)
+    }
 }

@@ -18,6 +18,25 @@ public struct CleanedMediaInfo: Sendable, Codable, Equatable {
 /// and extracts artist names when embedded in track titles.
 public enum MediaTitleCleaner {
 
+    /// Leading track-number prefix (e.g. "01. ", "01 - ", "1) "). A separator
+    /// (`.`, `)`, `-`, `–`, `—`) is required after the digits so legitimate titles
+    /// like "7 Rings", "21 Guns", or "99 Red Balloons" are not mangled.
+    static let trackNumberPrefixRegex = try! NSRegularExpression(
+        pattern: #"^\d{1,3}\s*[.)\-–—]\s*"#,
+        options: []
+    )
+
+    /// Video/audio metadata clutter patterns stripped from titles (precompiled once).
+    static let videoClutterRegexes: [NSRegularExpression] = [
+        #"\s*[\(\[](?:Official\s+)?(?:Music\s+)?Video(?:(?:\s+Remastered)?|\s+4K|\s+HD)?[\)\]]"#,
+        #"\s*[\(\[](?:Official\s+)?Audio(?:[\s\w]+)?[\)\]]"#,
+        #"\s*[\(\[](?:Official\s+)?Lyric\s+Video[\)\]]"#,
+        #"\s*[\(\[]Visualizer[\)\]]"#,
+        #"\s*[\(\[](?:4K|HD|HQ|UHD)[\)\]]"#,
+        #"\s*[\(\[]Remastered(?:\s+\d{4})?[\)\]]"#,
+        #"\s*[\(\[]\d{4}\s+Remaster[\)\]]"#
+    ].map { try! NSRegularExpression(pattern: $0, options: [.caseInsensitive]) }
+
     /// Cleans raw title, artist, and app name into polished, standardized metadata.
     public static func clean(rawTitle: String, rawArtist: String = "", rawAppName: String = "") -> CleanedMediaInfo {
         var title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -40,9 +59,11 @@ public enum MediaTitleCleaner {
             }
         }
 
-        // 2. Strip leading track number prefix (e.g. "01. ", "01 - ", "1. ", "01 ")
-        if let match = title.range(of: #"^\d{1,3}[\.\s\-]+\s*"#, options: .regularExpression) {
-            title = String(title[match.upperBound...]).trimmingCharacters(in: .whitespaces)
+        // 2. Strip leading track number prefix (e.g. "01. ", "01 - ", "1) "; plain "01 " is kept)
+        let titleRange = NSRange(title.startIndex..., in: title)
+        if let match = trackNumberPrefixRegex.firstMatch(in: title, range: titleRange) {
+            let upper = title.index(title.startIndex, offsetBy: match.range.upperBound)
+            title = String(title[upper...]).trimmingCharacters(in: .whitespaces)
         }
 
         var isYouTube = false
@@ -155,31 +176,20 @@ public enum MediaTitleCleaner {
         if !artist.isEmpty {
             let prefixes = ["\(artist) - ", "\(artist) – ", "\(artist) — "]
             for p in prefixes {
-                if title.lowercased().hasPrefix(p.lowercased()) {
-                    title = String(title.dropFirst(p.count)).trimmingCharacters(in: .whitespaces)
+                if let range = title.range(of: p, options: [.anchored, .caseInsensitive]) {
+                    title = String(title[range.upperBound...]).trimmingCharacters(in: .whitespaces)
                     break
                 }
             }
         }
 
         // 9. Clean video/audio metadata clutter from title
-        let videoPatterns = [
-            #"\s*[\(\[](?:Official\s+)?(?:Music\s+)?Video(?:(?:\s+Remastered)?|\s+4K|\s+HD)?[\)\]]"#,
-            #"\s*[\(\[](?:Official\s+)?Audio(?:[\s\w]+)?[\)\]]"#,
-            #"\s*[\(\[](?:Official\s+)?Lyric\s+Video[\)\]]"#,
-            #"\s*[\(\[]Visualizer[\)\]]"#,
-            #"\s*[\(\[](?:4K|HD|HQ|UHD)[\)\]]"#,
-            #"\s*[\(\[]Remastered(?:\s+\d{4})?[\)\]]"#,
-            #"\s*[\(\[]\d{4}\s+Remaster[\)\]]"#
-        ]
-        for pat in videoPatterns {
-            if let regex = try? NSRegularExpression(pattern: pat, options: [.caseInsensitive]) {
-                title = regex.stringByReplacingMatches(
-                    in: title,
-                    range: NSRange(title.startIndex..., in: title),
-                    withTemplate: ""
-                ).trimmingCharacters(in: .whitespaces)
-            }
+        for regex in videoClutterRegexes {
+            title = regex.stringByReplacingMatches(
+                in: title,
+                range: NSRange(title.startIndex..., in: title),
+                withTemplate: ""
+            ).trimmingCharacters(in: .whitespaces)
         }
 
         return CleanedMediaInfo(title: title, artist: artist, appName: appName)

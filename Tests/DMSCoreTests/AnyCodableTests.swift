@@ -144,4 +144,64 @@ struct AnyCodableTests {
         #expect(set.contains(a))
         #expect(set.contains(c))
     }
+
+    @Test("intValue Guards NaN, Infinity, and Overflow Instead of Trapping")
+    func testIntValueNonFiniteAndOverflow() {
+        #expect(AnyCodable(Double.nan).intValue == nil)
+        #expect(AnyCodable(Double.infinity).intValue == nil)
+        #expect(AnyCodable(-Double.infinity).intValue == nil)
+
+        // Huge finite doubles clamp to the Int range instead of crashing
+        #expect(AnyCodable(1e300).intValue == Int(Double(Int.max - 1024)))
+        #expect(AnyCodable(-1e300).intValue == Int.min)
+
+        // Ordinary truncation still works
+        #expect(AnyCodable(3.99).intValue == 3)
+        #expect(AnyCodable(-3.99).intValue == -3)
+    }
+
+    @Test("Wrapping an Existing AnyCodable Preserves Its Value")
+    func testWrapAnyCodable() {
+        let inner = AnyCodable(42)
+        let wrapped = AnyCodable(inner)
+        #expect(wrapped.value == .int(42))
+        #expect(wrapped.intValue == 42)
+
+        let innerDict = AnyCodable(["k": AnyCodable("v")])
+        let wrappedDict = AnyCodable(innerDict)
+        #expect(wrappedDict.dictionaryValue?["k"]?.stringValue == "v")
+    }
+
+    @Test("Float, Int32, UInt and Other Integer Widths Are Handled")
+    func testAdditionalNumericTypes() {
+        #expect(AnyCodable(Float(2.5)).doubleValue == 2.5)
+        #expect(AnyCodable(Float(2.5)).intValue == 2)
+        #expect(AnyCodable(Int32(7)).intValue == 7)
+        #expect(AnyCodable(Int64(8)).intValue == 8)
+        #expect(AnyCodable(UInt(9)).intValue == 9)
+        #expect(AnyCodable(UInt32(10)).intValue == 10)
+    }
+
+    @Test("NSNumber Bool Is Distinguished From Numeric 0/1")
+    func testNSNumberBoolDistinction() {
+        let trueNum = AnyCodable(NSNumber(value: true))
+        #expect(trueNum.boolValue == true)
+        #expect(trueNum.intValue == nil)
+
+        let falseNum = AnyCodable(NSNumber(value: false))
+        #expect(falseNum.boolValue == false)
+        #expect(falseNum.intValue == nil)
+
+        let one = AnyCodable(NSNumber(value: 1))
+        #expect(one.boolValue == nil)
+        #expect(one.intValue == 1)
+
+        let zero = AnyCodable(NSNumber(value: 0))
+        #expect(zero.boolValue == nil)
+        #expect(zero.intValue == 0)
+
+        let floatNum = AnyCodable(NSNumber(value: 2.5))
+        #expect(floatNum.doubleValue == 2.5)
+        #expect(floatNum.boolValue == nil)
+    }
 }
