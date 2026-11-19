@@ -49,11 +49,7 @@ Good-faith security research conducted in accordance with this policy is authori
 | Network egress | Weather (Open-Meteo), lyrics (LRCLIB), IP geolocation |
 
 ### Out of scope
-
-- Vulnerabilities requiring physical access to the machine
-- Social engineering of users or maintainers
-- Third-party dependencies — report those upstream (e.g. MaterialMacLibrary, dank-theme-engine); we will update our pins
-- Denial of service against your own local instance
+- Third party libraries not maintained by us.
 - Anything requiring the Accessibility / Input Monitoring permissions DMS requests — those permissions are DMS's trust boundary, not a vulnerability by themselves
 - The fact that the release DMG is unsigned (see Known limitations) — but substituted or tampered release artifacts are in scope
 
