@@ -14,7 +14,7 @@ Use GitHub Private Vulnerability Reporting:
 
 Include, where possible:
 
-- Affected version / commit and install method (DMG, Homebrew cask, Nix, source build)
+- Affected version / commit and install method (DMG, Homebrew cask, Nix, source build) (make sure you are using the latest version!)
 - Step-by-step reproduction or proof of concept
 - Impact assessment (e.g. unauthorized IPC commands, reading clipboard history, keylogging via event taps, command execution through the `dms://` URL scheme)
 - A suggested fix, if you have one
