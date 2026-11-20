@@ -9,7 +9,7 @@ if [ $# -ge 1 ]; then
     VERSION=$1
 else
     VERSION=$(sed -n 's/.*public static let current = "\([^"]*\)".*/\1/p' "$ROOT/Sources/DMSCore/DMSVersion.swift" 2>/dev/null | head -n 1 || true)
-    VERSION=${VERSION:-"0.9.0"}
+    VERSION=${VERSION:-"0.9.1"}
 fi
 APP_PATH=${2:-"$HOME/Applications/DankMacShell.app"}
 OUTPUT_DMG="$ROOT/dist/DankMacShell-$VERSION.dmg"

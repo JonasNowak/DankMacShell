@@ -36,7 +36,7 @@ DankMacShell (DMS) is a native macOS shell written in Swift. It is highly inspir
 
 It runs on **stock macOS** on its own. If you use the tiling window manager [OmniWM](https://github.com/OmniNull/OmniWM), DMS integrates with it for tiling, workspaces, and border sync, but OmniWM is optional, never required (without it, DMS falls back to native SkyLight spaces).
 
-> **v0.9.0**: hardened pre-1.0 release with macOS 14+ support, locked-down IPC/URL scheme security, and full native widget/service wiring. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
+> **v0.9.1**: hardened pre-1.0 release with macOS 14+ support, locked-down IPC/URL scheme security, full native widget/service wiring, and the `media-bridge.swift` 100%-CPU hotfix. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
 
 <p align="center">
   <img src="assets/demo.gif" width="1100" alt="DankMacShell demo — launcher, DankDash and dynamic wallpaper theming">
@@ -105,7 +105,7 @@ One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`d
 
 ### ⬇️ 3. Download the DMG (reduced experience)
 
-- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.9.0.dmg`)
+- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.9.1.dmg`)
 - [ ] Open the DMG and drag **DankMacShell** into `/Applications`
 - [ ] First launch: the DMG is not signed/notarized — right-click the app and choose **Open**, or run `xattr -cr /Applications/DankMacShell.app`, then grant Accessibility & Input Monitoring when prompted
 
@@ -437,7 +437,7 @@ and is always writable, regardless of which emulator targets are managed.
 
 ## 🗺️ Roadmap
 
-Status: **v0.9.0**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: security & IPC hardening, idle-CPU/leak fixes, macOS 14+ alignment, Privacy/VPN/Sounds/DesktopWidgets/UpdateCheck wiring, and Swift 6 `DMSCore` readiness (v0.9.0); customizable Control Center tile grid + Homebrew/Nix packaging (v0.8.2); OmniWM margin auto-adjust (v0.8.1); M3 Expressive theming via `MaterialMacLibrary` + Rust theme engine (v0.8).
+Status: **v0.9.1**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: `media-bridge.swift` stdin loop 100%-CPU fix (v0.9.1); security & IPC hardening, idle-CPU/leak fixes, macOS 14+ alignment, Privacy/VPN/Sounds/DesktopWidgets/UpdateCheck wiring, and Swift 6 `DMSCore` readiness (v0.9.0); customizable Control Center tile grid + Homebrew/Nix packaging (v0.8.2); OmniWM margin auto-adjust (v0.8.1); M3 Expressive theming via `MaterialMacLibrary` + Rust theme engine (v0.8).
 
 - Next up: To be announced soon.
 - Originally I wanted to ship basic DMS parity, but the original plan was completed with v0.7. 

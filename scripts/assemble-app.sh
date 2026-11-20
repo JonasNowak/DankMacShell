@@ -110,7 +110,9 @@ for nested in "$APP/Contents/MacOS/dms" "$APP/Contents/MacOS/dms-symbian"; do
     fi
 done
 for bundle in "$APP/Contents/Resources/"*.bundle; do
-    if [ -d "$bundle" ]; then
+    # Codeless SwiftPM resource bundles cannot be signed directly on macOS 15;
+    # their contents are sealed in the enclosing app's CodeResources when signing $APP.
+    if [ -d "$bundle" ] && { [ -d "$bundle/Contents/MacOS" ] || /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$bundle/Contents/Info.plist" >/dev/null 2>&1; }; then
         codesign --force --sign "$IDENTITY" "$bundle"
     fi
 done

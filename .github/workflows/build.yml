@@ -37,7 +37,7 @@ jobs:
             VER="${GITHUB_REF_NAME#v}"
           else
             BASE_VER=$(sed -n 's/.*public static let current = "\([^"]*\)".*/\1/p' Sources/DMSCore/DMSVersion.swift | head -n 1)
-            BASE_VER="${BASE_VER:-0.9.0}"
+            BASE_VER="${BASE_VER:-0.9.1}"
             COUNT=$(git rev-list --count HEAD)
             SHORT_SHA=$(git rev-parse --short HEAD)
             VER="${BASE_VER}-dev.${COUNT}+${SHORT_SHA}"

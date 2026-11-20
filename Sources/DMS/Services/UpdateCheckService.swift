@@ -69,7 +69,7 @@ public final class UpdateCheckService: ObservableObject {
 
         var request = URLRequest(url: Self.releasesURL)
         request.timeoutInterval = 15
-        request.setValue("DankMacShell/0.9.0 (https://github.com/JonasNowak/DankMacShell)", forHTTPHeaderField: "User-Agent")
+        request.setValue(DMSVersion.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
 
         do {
