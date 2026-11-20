@@ -576,4 +576,169 @@ struct LyricsAndMediaTests {
         #expect(MediaTitleCleaner.clean(rawTitle: "Song", rawArtist: "Art", rawAppName: "com.brave.Browser").appName == "Brave")
         #expect(MediaTitleCleaner.clean(rawTitle: "Song", rawArtist: "Art", rawAppName: "app.zen-browser.zen").appName == "Zen")
     }
+
+    // MARK: - MediaRemote Bridge Regression Guards
+
+    private static func repoRootURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // DMSCoreTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // repo root
+    }
+
+    private static func normalizeNonCommentLines(_ source: String) -> [String] {
+        source
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("//") }
+    }
+
+    @Test("MediaRemote bridge script and embedded fallback stay in sync and consume trailing newlines")
+    func testMediaBridgeParityAndNoBusyLoop() throws {
+        let root = Self.repoRootURL()
+        let bridgeURL = root.appendingPathComponent("Support/media-bridge.swift")
+        let serviceURL = root.appendingPathComponent("Sources/DMS/Services/NowPlayingService.swift")
+
+        let bridgeSource = try String(contentsOf: bridgeURL, encoding: .utf8)
+        let serviceSource = try String(contentsOf: serviceURL, encoding: .utf8)
+
+        let startMarker = "private static let embeddedScript = #\"\"\"\n"
+        let endMarker = "\n\"\"\"#"
+        let startRange = try #require(serviceSource.range(of: startMarker))
+        let tail = serviceSource[startRange.upperBound...]
+        let endRange = try #require(tail.range(of: endMarker))
+        let embeddedSource = String(tail[..<endRange.lowerBound])
+
+        // Guard against the v0.9.0 100%-CPU regression where `removeSubrange(..<newlineIndex)`
+        // left `\n` in the buffer and spun forever on empty lines.
+        #expect(!bridgeSource.contains("removeSubrange(..<newlineIndex)"))
+        #expect(!embeddedSource.contains("removeSubrange(..<newlineIndex)"))
+
+        #expect(
+            Self.normalizeNonCommentLines(bridgeSource) == Self.normalizeNonCommentLines(embeddedSource),
+            "Support/media-bridge.swift and NowPlayingService.embeddedScript must stay functionally identical"
+        )
+    }
+
+    private final class LineWaiter: @unchecked Sendable {
+        private let condition = NSCondition()
+        private var buffer = Data()
+        private(set) var lines: [String] = []
+
+        func append(_ chunk: Data) {
+            condition.lock()
+            buffer.append(chunk)
+            while let nl = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+                let lineData = buffer[..<nl]
+                buffer.removeSubrange(...nl)
+                if let line = String(data: lineData, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                   !line.isEmpty {
+                    lines.append(line)
+                }
+            }
+            condition.broadcast()
+            condition.unlock()
+        }
+
+        func waitForCount(atLeast target: Int, timeout: TimeInterval) -> Int {
+            let deadline = Date().addingTimeInterval(timeout)
+            condition.lock()
+            while lines.count < target {
+                if !condition.wait(until: deadline) {
+                    break
+                }
+            }
+            let current = lines.count
+            condition.unlock()
+            return current
+        }
+        func snapshotLines() -> [String] {
+            condition.lock()
+            defer { condition.unlock() }
+            return lines
+        }
+    }
+
+    @Test("MediaRemote bridge drains newline/CRLF/split stdin commands without spinning and exits on EOF")
+    func testMediaBridgeStdinCommandFramingAndCleanExit() throws {
+        let swiftPath = "/usr/bin/swift"
+        guard FileManager.default.isExecutableFile(atPath: swiftPath) else { return }
+
+        let bridgeURL = Self.repoRootURL().appendingPathComponent("Support/media-bridge.swift")
+        #expect(FileManager.default.fileExists(atPath: bridgeURL.path))
+
+        let tmpHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dms-bridge-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpHome, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpHome) }
+
+        let inPipe = Pipe()
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        let waiter = LineWaiter()
+        let exitSema = DispatchSemaphore(value: 0)
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: swiftPath)
+        proc.arguments = [bridgeURL.path]
+        var env = ProcessInfo.processInfo.environment
+        env["HOME"] = tmpHome.path
+        proc.environment = env
+        proc.standardInput = inPipe
+        proc.standardOutput = outPipe
+        proc.standardError = errPipe
+
+        outPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                return
+            }
+            waiter.append(data)
+        }
+        proc.terminationHandler = { _ in
+            exitSema.signal()
+        }
+
+        defer {
+            outPipe.fileHandleForReading.readabilityHandler = nil
+            if proc.isRunning {
+                proc.terminate()
+                proc.waitUntilExit()
+            }
+        }
+
+        try proc.run()
+
+        // Wait for initial emitState() output so the interpreter is booted and listening on stdin.
+        let baseline = waiter.waitForCount(atLeast: 1, timeout: 15.0)
+        #expect(baseline >= 1, "media-bridge.swift did not emit initial state within timeout")
+
+        // 1. Standard LF command followed by blank lines (the v0.9.0 100%-CPU trigger).
+        try inPipe.fileHandleForWriting.write(contentsOf: Data("poll\n\n\n".utf8))
+        let afterLF = waiter.waitForCount(atLeast: baseline + 1, timeout: 5.0)
+        #expect(afterLF >= baseline + 1, "Expected poll response after LF + blank lines")
+
+        // 2. CRLF command plus the leading half of a split command.
+        try inPipe.fileHandleForWriting.write(contentsOf: Data("poll\r\npo".utf8))
+        let afterCRLF = waiter.waitForCount(atLeast: afterLF + 1, timeout: 5.0)
+        #expect(afterCRLF >= afterLF + 1, "Expected poll response after CRLF command")
+
+        // 3. Trailing half of the split command.
+        try inPipe.fileHandleForWriting.write(contentsOf: Data("ll\n".utf8))
+        let afterSplit = waiter.waitForCount(atLeast: afterCRLF + 1, timeout: 5.0)
+        #expect(afterSplit >= afterCRLF + 1, "Expected poll response after split command completed")
+
+        // Close stdin -> bridge must process EOF cleanly and exit 0 rather than spinning at 100% CPU.
+        try inPipe.fileHandleForWriting.close()
+        let exited = exitSema.wait(timeout: .now() + 5.0)
+        #expect(exited == .success, "media-bridge.swift failed to exit on stdin EOF")
+        #expect(proc.terminationStatus == 0)
+
+        for line in waiter.snapshotLines() {
+            let obj = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
+            #expect(obj != nil, "Expected valid JSON object line, got: \(line)")
+        }
+    }
 }

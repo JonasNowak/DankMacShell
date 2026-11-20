@@ -47,10 +47,10 @@ var lastEmittedJSON = ""
 var lastIsPlaying = false
 let appNameLock = NSLock()
 
-func finite(_ d: Double) -> Double { d.isFinite ? d : 0.0 }
+@Sendable func finite(_ d: Double) -> Double { d.isFinite ? d : 0.0 }
 
-func emitJSON(_ payload: [String: Any]) -> String? {
-    guard let data = try? JSONSerialization.data(withJSONObject: payload),
+@Sendable func emitJSON(_ payload: [String: Any]) -> String? {
+    guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
           let json = String(data: data, encoding: .utf8) else { return nil }
     return json
 }
@@ -192,22 +192,37 @@ func handleCommand(_ trimmed: String) {
     }
 }
 
+/// Extracts complete newline-delimited commands from `buffer`, consuming each trailing `\n`
+/// so empty or blank lines never stall or spin the reader loop.
+func drainCommandLines(from buffer: inout Data) -> [String] {
+    var commands: [String] = []
+    while let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+        let lineData = buffer[..<newlineIndex]
+        buffer.removeSubrange(...newlineIndex)
+        guard let rawLine = String(data: lineData, encoding: .utf8) else { continue }
+        let cmd = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cmd.isEmpty {
+            commands.append(cmd)
+        }
+    }
+    if buffer.count > 65_536 {
+        buffer.removeAll(keepingCapacity: false)
+    }
+    return commands
+}
+
 // Standard input listener for commands; partial lines are buffered across reads
 DispatchQueue.global(qos: .userInitiated).async {
     let stdinHandle = FileHandle.standardInput
-    var stdinBuffer = ""
+    var stdinBuffer = Data()
     while true {
         let data = stdinHandle.availableData
         if data.isEmpty {
             // Parent closed pipe -> terminate cleanly
             exit(0)
         }
-        guard let chunk = String(data: data, encoding: .utf8) else { continue }
-        stdinBuffer += chunk
-        while let newlineIndex = stdinBuffer.firstIndex(of: "\n") {
-            let cmd = String(stdinBuffer[..<newlineIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-            stdinBuffer.removeSubrange(..<newlineIndex)
-            if cmd.isEmpty { continue }
+        stdinBuffer.append(data)
+        for cmd in drainCommandLines(from: &stdinBuffer) {
             DispatchQueue.main.async {
                 handleCommand(cmd)
             }
