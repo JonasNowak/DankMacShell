@@ -2742,6 +2742,16 @@ public struct SettingsView: View {
             )
 
             SettingsToggleRow(
+                title: "Caps Lock OSD",
+                subtitle: "Displays a Caps Lock ON/OFF HUD pill on modifier state changes (keep off when using external Hyperkey/Caps Lock remappers)",
+                isOn: Binding(
+                    get: { configStore.config.rawSettings["capsLockOsdEnabled"]?.boolValue ?? false },
+                    set: { val in configStore.update { $0.rawSettings["capsLockOsdEnabled"] = AnyCodable(val) } }
+                ),
+                palette: palette
+            )
+
+            SettingsToggleRow(
                 title: "Native Media Key Interception",
                 subtitle: "Intercepts hardware volume and brightness keys (F1, F2, F10-F12) to suppress standard macOS bezel HUDs",
                 isOn: Binding(
@@ -2956,123 +2966,70 @@ public struct SettingsView: View {
     @ViewBuilder
     private func shortcutsTab(palette: DMSPalette) -> some View {
         VStack(spacing: 12) {
-            // Preset Banner & Hyper Key Guide Card
+            // Shortcut Actions & Defaults Card
             SettingsCard(
-                icon: "sparkles",
-                title: "macOS Hyper Key (⌃⌥⇧⌘) & Quick Presets",
-                subtitle: "Non-conflicting global shortcut presets for power users",
+                icon: "command",
+                title: "Global Shortcuts & Defaults",
+                subtitle: "Configure modifier + key bindings; external Hyperkey/Caps Lock remapping stays managed outside DMS",
                 palette: palette
             ) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "command.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(Color(hex: palette.primary.hex))
+                HStack(spacing: 8) {
+                    Button(action: {
+                        configStore.update {
+                            $0.launcherHotkey = true
+                            $0.launcherHotkeyModifiers = "option"
+                            $0.launcherHotkeyKey = "space"
 
-                        Text("Hyper Key maps to ⌃⌥⇧⌘ (Control + Option + Shift + Command). It provides lightning-fast system-wide activation without conflicting with standard macOS app shortcuts. Fully compatible with Karabiner-Elements, BetterTouchTool, and the Hyperkey app.")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(hex: palette.outline.hex))
+                            $0.dashHotkey = true
+                            $0.dashHotkeyModifiers = "option"
+                            $0.dashHotkeyKey = "d"
+
+                            $0.notepadHotkey = true
+                            $0.notepadHotkeyModifiers = "option"
+                            $0.notepadHotkeyKey = "n"
+
+                            $0.clipboardHotkey = true
+                            $0.clipboardHotkeyModifiers = "option"
+                            $0.clipboardHotkeyKey = "v"
+
+                            $0.wallpaperPickerHotkey = true
+                            $0.wallpaperPickerHotkeyModifiers = "option"
+                            $0.wallpaperPickerHotkeyKey = "w"
+                        }
+                        ToastCenter.shared.show(icon: "arrow.counterclockwise", message: "Restored Default Shortcuts")
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 11))
+                            Text("Restore Defaults")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: palette.surfaceContainerHigh.hex))
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                        .clipShape(Capsule())
                     }
-                    .padding(10)
-                    .background(Color(hex: palette.surfaceContainerLow.hex))
-                    .cornerRadius(8)
+                    .buttonStyle(.plain)
 
-                    HStack(spacing: 8) {
-                        Button(action: {
-                            configStore.update {
-                                $0.launcherHotkey = true
-                                $0.launcherHotkeyModifiers = "hyper"
-                                $0.launcherHotkeyKey = "space"
+                    Spacer()
 
-                                $0.dashHotkey = true
-                                $0.dashHotkeyModifiers = "hyper"
-                                $0.dashHotkeyKey = "d"
-
-                                $0.notepadHotkey = true
-                                $0.notepadHotkeyModifiers = "hyper"
-                                $0.notepadHotkeyKey = "n"
-
-                                $0.clipboardHotkey = true
-                                $0.clipboardHotkeyModifiers = "hyper"
-                                $0.clipboardHotkeyKey = "v"
-
-                                $0.wallpaperPickerHotkey = true
-                                $0.wallpaperPickerHotkeyModifiers = "hyper"
-                                $0.wallpaperPickerHotkeyKey = "w"
-                            }
-                            ToastCenter.shared.show(icon: "sparkles", message: "All Shortcuts Set to Hyper Key (⌃⌥⇧⌘)")
-                        }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 11))
-                                Text("Set All to Hyper Key")
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color(hex: palette.primary.hex))
-                            .foregroundColor(Color(hex: palette.onPrimary.hex))
-                            .clipShape(Capsule())
+                    Button(action: {
+                        KeybindsController.shared.toggle()
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "command")
+                                .font(.system(size: 11))
+                            Text("Keybinds Cheatsheet HUD")
+                                .font(.system(size: 11, weight: .semibold))
                         }
-                        .buttonStyle(.plain)
-
-                        Button(action: {
-                            configStore.update {
-                                $0.launcherHotkey = true
-                                $0.launcherHotkeyModifiers = "option"
-                                $0.launcherHotkeyKey = "space"
-
-                                $0.dashHotkey = true
-                                $0.dashHotkeyModifiers = "option"
-                                $0.dashHotkeyKey = "d"
-
-                                $0.notepadHotkey = true
-                                $0.notepadHotkeyModifiers = "option"
-                                $0.notepadHotkeyKey = "n"
-
-                                $0.clipboardHotkey = true
-                                $0.clipboardHotkeyModifiers = "option"
-                                $0.clipboardHotkeyKey = "v"
-
-                                $0.wallpaperPickerHotkey = true
-                                $0.wallpaperPickerHotkeyModifiers = "hyper"
-                                $0.wallpaperPickerHotkeyKey = "w"
-                            }
-                            ToastCenter.shared.show(icon: "arrow.counterclockwise", message: "Restored Default Shortcuts")
-                        }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 11))
-                                Text("Restore Defaults")
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color(hex: palette.surfaceContainerHigh.hex))
-                            .foregroundColor(Color(hex: palette.onSurface.hex))
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer()
-
-                        Button(action: {
-                            KeybindsController.shared.toggle()
-                        }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "command")
-                                    .font(.system(size: 11))
-                                Text("Keybinds Cheatsheet HUD")
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color(hex: palette.secondaryContainer.hex))
-                            .foregroundColor(Color(hex: palette.onSecondaryContainer.hex))
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: palette.secondaryContainer.hex))
+                        .foregroundColor(Color(hex: palette.onSecondaryContainer.hex))
+                        .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
             }
 

@@ -60,13 +60,31 @@ public final class OSDController {
             }
             .store(in: &cancellables)
 
-        flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                let isCaps = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
-                guard let self = self, isCaps != self.lastCapsLockState else { return }
-                self.lastCapsLockState = isCaps
-                self.show(type: .capsLock, isMuted: !isCaps, text: isCaps ? "ON" : "OFF")
+        ConfigStore.shared.$config
+            .map { $0.rawSettings["capsLockOsdEnabled"]?.boolValue ?? false }
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in
+                self?.setCapsLockMonitoring(enabled: enabled)
             }
+            .store(in: &cancellables)
+    }
+
+    private func setCapsLockMonitoring(enabled: Bool) {
+        if enabled {
+            guard flagsMonitor == nil else { return }
+            lastCapsLockState = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
+            flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    let isCaps = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
+                    guard let self = self, isCaps != self.lastCapsLockState else { return }
+                    self.lastCapsLockState = isCaps
+                    self.show(type: .capsLock, isMuted: !isCaps, text: isCaps ? "ON" : "OFF")
+                }
+            }
+        } else if let monitor = flagsMonitor {
+            NSEvent.removeMonitor(monitor)
+            flagsMonitor = nil
         }
     }
 

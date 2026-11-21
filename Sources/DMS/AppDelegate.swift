@@ -236,7 +236,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 5: Slanted Wallpaper Picker (with Hyper Key / customizable hotkey)
+        // 5: Slanted Wallpaper Picker (customizable hotkey)
         if config.wallpaperPickerHotkey {
             let (keyCode, mods) = HotkeyHelper.parse(
                 key: config.wallpaperPickerHotkeyKey,

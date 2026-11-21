@@ -3,50 +3,50 @@ import Foundation
 import Carbon.HIToolbox
 #endif
 
-/// Carbon modifier masks preset enumeration with first-class Hyper Key (⌃⌥⇧⌘) support.
+/// Carbon modifier masks preset enumeration for global DMS hotkeys.
 public enum HotkeyModifierPreset: String, CaseIterable, Identifiable, Sendable {
-    case hyper = "hyper"
     case option = "option"
     case cmdOpt = "cmd+opt"
     case ctrlOpt = "ctrl+opt"
-    case meh = "meh"
     case cmdCtrl = "cmd+ctrl"
     case cmdShift = "cmd+shift"
     case ctrlShift = "ctrl+shift"
+    case meh = "meh"
+    case ctrlOptShiftCmd = "ctrl+opt+shift+cmd"
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
-        case .hyper: return "Hyper Key (⌃⌥⇧⌘)"
         case .option: return "Option (⌥)"
         case .cmdOpt: return "Command + Option (⌘⌥)"
         case .ctrlOpt: return "Control + Option (⌃⌥)"
-        case .meh: return "Meh Key (⌃⌥⇧)"
         case .cmdCtrl: return "Command + Control (⌘⌃)"
         case .cmdShift: return "Command + Shift (⌘⇧)"
         case .ctrlShift: return "Control + Shift (⌃⇧)"
+        case .meh: return "Control + Option + Shift (⌃⌥⇧)"
+        case .ctrlOptShiftCmd: return "Control + Option + Shift + Command (⌃⌥⇧⌘)"
         }
     }
 
     public var carbonModifiers: Int {
         switch self {
-        case .hyper:
-            return HotkeyHelper.hyperModifier
         case .option:
             return HotkeyHelper.optionModifier
         case .cmdOpt:
             return HotkeyHelper.cmdModifier | HotkeyHelper.optionModifier
         case .ctrlOpt:
             return HotkeyHelper.controlModifier | HotkeyHelper.optionModifier
-        case .meh:
-            return HotkeyHelper.mehModifier
         case .cmdCtrl:
             return HotkeyHelper.cmdModifier | HotkeyHelper.controlModifier
         case .cmdShift:
             return HotkeyHelper.cmdModifier | HotkeyHelper.shiftModifier
         case .ctrlShift:
             return HotkeyHelper.controlModifier | HotkeyHelper.shiftModifier
+        case .meh:
+            return HotkeyHelper.mehModifier
+        case .ctrlOptShiftCmd:
+            return HotkeyHelper.allModifiers
         }
     }
 }
@@ -59,17 +59,33 @@ public struct HotkeyHelper: Sendable {
     public static let optionModifier: Int = 2048  // optionKey
     public static let controlModifier: Int = 4096 // controlKey
 
-    /// Hyper Key: ⌃⌥⇧⌘ (Control + Option + Shift + Command) - 6912 in Carbon HIToolbox
-    public static let hyperModifier: Int = controlModifier | optionModifier | shiftModifier | cmdModifier
+    /// All four primary modifiers: ⌃⌥⇧⌘ (Control + Option + Shift + Command) - 6912 in Carbon HIToolbox.
+    public static let allModifiers: Int = controlModifier | optionModifier | shiftModifier | cmdModifier
 
-    /// Meh Key: ⌃⌥⇧ (Control + Option + Shift) - 6656 in Carbon HIToolbox
+    /// ⌃⌥⇧ (Control + Option + Shift) - 6656 in Carbon HIToolbox.
     public static let mehModifier: Int = controlModifier | optionModifier | shiftModifier
 
-    /// Parses a modifier string (e.g. "hyper", "option", "cmd+opt", "ctrl+opt+shift+cmd") into a Carbon modifier bitmask.
+    /// Maps legacy/shorthand modifier strings onto a `HotkeyModifierPreset` raw value for pickers.
+    public static func canonicalPresetTag(_ str: String) -> String {
+        let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmed == "hyper" {
+            return HotkeyModifierPreset.ctrlOptShiftCmd.rawValue
+        }
+        if HotkeyModifierPreset(rawValue: trimmed) != nil {
+            return trimmed
+        }
+        let mask = parseModifiers(trimmed)
+        if let matched = HotkeyModifierPreset.allCases.first(where: { $0.carbonModifiers == mask }) {
+            return matched.rawValue
+        }
+        return HotkeyModifierPreset.option.rawValue
+    }
+
+    /// Parses a modifier string (e.g. "option", "cmd+opt", "ctrl+opt+shift+cmd") into a Carbon modifier bitmask.
     public static func parseModifiers(_ str: String) -> Int {
         let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if trimmed.isEmpty {
-            return hyperModifier
+            return optionModifier
         }
 
         // Direct preset match
@@ -82,7 +98,7 @@ public struct HotkeyHelper: Sendable {
         for token in tokens {
             let t = token.trimmingCharacters(in: .whitespaces)
             if t == "hyper" {
-                mask |= hyperModifier
+                mask |= allModifiers
             } else if t == "meh" {
                 mask |= mehModifier
             } else if t == "cmd" || t == "command" || t == "⌘" {
@@ -96,7 +112,7 @@ public struct HotkeyHelper: Sendable {
             }
         }
 
-        return mask == 0 ? hyperModifier : mask
+        return mask == 0 ? optionModifier : mask
     }
 
     /// Parses a key name string (e.g. "w", "space", "return", "tab", "p") into a Carbon virtual key code.
@@ -167,16 +183,6 @@ public struct HotkeyHelper: Sendable {
     public static func displayString(key: String, modifiers: String) -> String {
         let mask = parseModifiers(modifiers)
         var parts: [String] = []
-
-        if mask == hyperModifier {
-            let keyText = keyDisplay(key)
-            return "✧ Hyper + \(keyText) (⌃⌥⇧⌘\(keyText))"
-        }
-
-        if mask == mehModifier {
-            let keyText = keyDisplay(key)
-            return "Meh + \(keyText) (⌃⌥⇧\(keyText))"
-        }
 
         if (mask & controlModifier) != 0 { parts.append("⌃") }
         if (mask & optionModifier) != 0 { parts.append("⌥") }

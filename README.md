@@ -135,7 +135,7 @@ At a glance:
 | DankDash | `⌥D` | Dashboard: weather, calendar, media, lyrics, wellbeing |
 | Control Center | — | Drag-and-drop grid tiles, sliders & detail pages |
 | Native OSD | — | Floating volume/brightness pill with bezel suppression |
-| Wallpaper Picker & Sync | `⌃⌥⇧⌘W` | Slanted carousel switcher & OmniWM border sync |
+| Wallpaper Picker & Sync | `⌥W` | Slanted carousel switcher & OmniWM border sync |
 | Notepad | `⌥N` | Multi-note window with Markdown preview & Find/Replace |
 | Clipboard History | `⌥V` | Searchable clipboard store with sensitive filtering |
 | ProcessList | — | Activity-monitor-style task manager |
@@ -258,7 +258,7 @@ DMS registers the `dms://` URL scheme for **safe UI toggle & navigation** action
 
 ### ⌨️ Global Hotkeys
 
-All 5 global hotkeys are customizable in **Settings → Keyboard Shortcuts** (it supports hyper key):
+All 5 global hotkeys are customizable in **Settings → Keyboard Shortcuts**:
 
 | Action | Default Hotkey |
 | --- | --- |
@@ -266,7 +266,7 @@ All 5 global hotkeys are customizable in **Settings → Keyboard Shortcuts** (it
 | Toggle DankDash | `⌥D` |
 | Toggle Notepad | `⌥N` |
 | Toggle Clipboard History | `⌥V` |
-| Toggle Slanted Wallpaper Picker | `⌃⌥⇧⌘W` (`Hyper+W`) |
+| Toggle Slanted Wallpaper Picker | `⌥W` |
 
 <a id="dms-cli"></a>
 

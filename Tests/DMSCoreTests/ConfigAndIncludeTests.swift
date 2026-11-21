@@ -341,7 +341,7 @@ struct ConfigAndIncludeTests {
 
         #expect(cfg.wallpaperPickerHotkey == true)
         #expect(cfg.wallpaperPickerHotkeyKey == "w")
-        #expect(cfg.wallpaperPickerHotkeyModifiers == "hyper")
+        #expect(cfg.wallpaperPickerHotkeyModifiers == "option")
 
         // 2. Custom assignment & serialization roundtrip
         cfg.launcherHotkey = false

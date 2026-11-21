@@ -113,7 +113,7 @@ struct WallpaperTests {
         // Defaults
         #expect(cfg.wallpaperPickerHotkey == true)
         #expect(cfg.wallpaperPickerHotkeyKey == "w")
-        #expect(cfg.wallpaperPickerHotkeyModifiers == "hyper")
+        #expect(cfg.wallpaperPickerHotkeyModifiers == "option")
         #expect(cfg.wallpaperPickerFolder == "")
         #expect(cfg.wallpaperPickerOnlyFolder == false)
         #expect(cfg.wallpaperPickerSkew == 32.0)
@@ -152,15 +152,21 @@ struct WallpaperTests {
         #expect(dynamicCfg.wallpaperPickerSkew == 28.5)
     }
 
-    @Test("HotkeyHelper Hyper Key and Modifier Parsing")
+    @Test("HotkeyHelper Modifier Parsing and Canonicalization")
     func testHotkeyHelper() {
-        // Hyper key is ⌃⌥⇧⌘ (Control + Option + Shift + Command) = 6912
-        let hyperMask = HotkeyHelper.parseModifiers("hyper")
-        #expect(hyperMask == 6912)
-        #expect(hyperMask == (HotkeyHelper.controlModifier | HotkeyHelper.optionModifier | HotkeyHelper.shiftModifier | HotkeyHelper.cmdModifier))
+        // Explicit 4-modifier combination is Control + Option + Shift + Command = 6912
+        let allMask = HotkeyHelper.parseModifiers("ctrl+opt+shift+cmd")
+        #expect(allMask == 6912)
+        #expect(allMask == (HotkeyHelper.controlModifier | HotkeyHelper.optionModifier | HotkeyHelper.shiftModifier | HotkeyHelper.cmdModifier))
+        // Empty or unknown modifiers default to Option (not Hyper)
+        #expect(HotkeyHelper.parseModifiers("") == HotkeyHelper.optionModifier)
+        #expect(HotkeyHelper.parseModifiers("unknown") == HotkeyHelper.optionModifier)
+        // Legacy "hyper" config values still resolve to the 4-modifier mask and map to canonical preset
+        #expect(HotkeyHelper.parseModifiers("hyper") == 6912)
+        #expect(HotkeyHelper.canonicalPresetTag("hyper") == "ctrl+opt+shift+cmd")
 
         // Preset match
-        #expect(HotkeyModifierPreset.hyper.carbonModifiers == 6912)
+        #expect(HotkeyModifierPreset.ctrlOptShiftCmd.carbonModifiers == 6912)
         #expect(HotkeyModifierPreset.meh.carbonModifiers == (HotkeyHelper.controlModifier | HotkeyHelper.optionModifier | HotkeyHelper.shiftModifier))
         #expect(HotkeyModifierPreset.option.carbonModifiers == HotkeyHelper.optionModifier)
 
@@ -180,11 +186,11 @@ struct WallpaperTests {
         #expect(HotkeyHelper.parseKeyCode("n") == 45)
         #expect(HotkeyHelper.parseKeyCode("v") == 9)
 
-        // Display string formatting
-        let hyperDisplay = HotkeyHelper.displayString(key: "w", modifiers: "hyper")
-        #expect(hyperDisplay.contains("Hyper"))
-        #expect(hyperDisplay.contains("W"))
-        #expect(hyperDisplay.contains("⌃⌥⇧⌘"))
+        // Display string formatting uses raw modifier glyphs without "Hyper" branding
+        let allDisplay = HotkeyHelper.displayString(key: "w", modifiers: "ctrl+opt+shift+cmd")
+        #expect(!allDisplay.contains("Hyper"))
+        #expect(allDisplay == "⌃⌥⇧⌘ W")
+        #expect(HotkeyHelper.displayString(key: "w", modifiers: "hyper") == "⌃⌥⇧⌘ W")
 
         let optDisplay = HotkeyHelper.displayString(key: "w", modifiers: "option")
         #expect(optDisplay == "⌥ W")

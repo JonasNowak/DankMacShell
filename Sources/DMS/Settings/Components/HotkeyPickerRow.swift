@@ -103,7 +103,10 @@ public struct HotkeyPickerRow: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
-                        Picker("", selection: $modifiers) {
+                        Picker("", selection: Binding(
+                            get: { HotkeyHelper.canonicalPresetTag(modifiers) },
+                            set: { modifiers = $0 }
+                        )) {
                             ForEach(HotkeyModifierPreset.allCases) { preset in
                                 Text(preset.title).tag(preset.rawValue)
                             }

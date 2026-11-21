@@ -217,7 +217,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         autoGenerateWallpaperColors: Bool = true,
         wallpaperPickerHotkey: Bool = true,
         wallpaperPickerHotkeyKey: String = "w",
-        wallpaperPickerHotkeyModifiers: String = "hyper",
+        wallpaperPickerHotkeyModifiers: String = "option",
         wallpaperPickerFolder: String = "",
         wallpaperPickerOnlyFolder: Bool = false,
         wallpaperPickerSkew: Double = 32.0,
@@ -447,7 +447,7 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         self.autoGenerateWallpaperColors = try container.decodeIfPresent(Bool.self, forKey: .autoGenerateWallpaperColors) ?? true
         self.wallpaperPickerHotkey = try container.decodeIfPresent(Bool.self, forKey: .wallpaperPickerHotkey) ?? true
         self.wallpaperPickerHotkeyKey = try container.decodeIfPresent(String.self, forKey: .wallpaperPickerHotkeyKey) ?? "w"
-        self.wallpaperPickerHotkeyModifiers = try container.decodeIfPresent(String.self, forKey: .wallpaperPickerHotkeyModifiers) ?? "hyper"
+        self.wallpaperPickerHotkeyModifiers = try container.decodeIfPresent(String.self, forKey: .wallpaperPickerHotkeyModifiers) ?? "option"
         self.wallpaperPickerFolder = try container.decodeIfPresent(String.self, forKey: .wallpaperPickerFolder) ?? ""
         self.wallpaperPickerOnlyFolder = try container.decodeIfPresent(Bool.self, forKey: .wallpaperPickerOnlyFolder) ?? false
         self.wallpaperPickerSkew = try container.decodeIfPresent(Double.self, forKey: .wallpaperPickerSkew) ?? 32.0

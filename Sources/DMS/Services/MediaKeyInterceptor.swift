@@ -58,8 +58,9 @@ public final class MediaKeyInterceptor {
         // 1. Freeze OSDUIHelper so it cannot render native overlays
         SystemOSDManager.disableSystemHUD()
 
-        // 2. Hide macOS language / caps-lock popup overlay
-        SystemInputIndicator.setHidden(true)
+        // 2. Restore macOS system input / Caps Lock indicator if an older DMS version hid it;
+        //    Caps Lock and external Hyperkey remappers own that state.
+        SystemInputIndicator.restoreIfNeeded()
 
         // 3. Install event taps at session and HID levels (active -> passive -> fallback)
         _ = installTaps()
@@ -81,7 +82,7 @@ public final class MediaKeyInterceptor {
     public func stop() {
         isWanted = false
         stopPermissionObserver()
-        SystemInputIndicator.setHidden(false)
+        SystemInputIndicator.restoreIfNeeded()
         SystemOSDManager.enableSystemHUD()
 
         removeTaps()
@@ -449,12 +450,15 @@ public final class MediaKeyInterceptor {
     }
 }
 
-/// Manages macOS system input source / language indicator overlay suppression.
-/// Architecture inspired by ApolloShell.
+/// Restores macOS system input source / language indicator preference if a previous DMS run hid it.
 @MainActor
 public enum SystemInputIndicator {
     private static let key = "TSMLanguageIndicatorEnabled" as CFString
     private static let marker = "dms_hidSystemInputIndicator"
+
+    public static func restoreIfNeeded() {
+        setHidden(false)
+    }
 
     public static func setHidden(_ hide: Bool) {
         let d = UserDefaults.standard
