@@ -45,7 +45,7 @@ public final class AutoPasteService: ObservableObject {
         guard canPostKeyEvents else {
             ToastCenter.shared.show(
                 icon: "hand.raised.fill",
-                message: "Grant Accessibility access in System Settings to auto-paste"
+                message: "Grant Device Control and Data Access in System Settings to auto-paste"
             )
             openAccessibilitySettings()
             return false

@@ -18,9 +18,7 @@ public struct CalendarOverviewCard: View {
 
     public var body: some View {
         let p = themeStore.palette
-        let activeKeys = calendarService.eventDateKeys.isEmpty
-            ? calendarService.referenceDateKeys(for: currentMonth)
-            : calendarService.eventDateKeys
+        let activeKeys = calendarService.eventDateKeys
 
         let days = CalendarEngine.generateMonthGrid(
             year: currentMonth.year,
@@ -92,6 +90,26 @@ public struct CalendarOverviewCard: View {
                         }
                     )
                 }
+            }
+
+            // Compact Material 3 action button when calendar access is missing
+            if !calendarService.isAuthorized {
+                Button(action: {
+                    if calendarService.authorizationStatus == .notDetermined {
+                        calendarService.requestAccess()
+                    } else {
+                        calendarService.openCalendarPrivacySettings()
+                    }
+                }) {
+                    Text(calendarService.authorizationStatus == .notDetermined ? "Connect Calendar" : "Open Calendar Privacy Settings")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color(hex: p.onPrimary.hex))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(Color(hex: p.primary.hex))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 10)

@@ -16,9 +16,20 @@ public final class ColorPickerService: ObservableObject {
         "#9C27B0", "#00BCD4", "#009688", "#8BC34A", "#FFEB3B", "#607D8B"
     ]
 
+    /// Whether the app currently has Screen Recording permission (required for screen color sampling).
+    public var hasScreenCapturePermission: Bool { CGPreflightScreenCaptureAccess() }
+
+    /// Prompts the user to grant Screen Recording permission; returns whether access is granted.
+    @discardableResult
+    public func requestScreenCapturePermission() -> Bool { CGRequestScreenCaptureAccess() }
+
     private init() {}
 
     public func sampleColor() {
+        if !CGPreflightScreenCaptureAccess() {
+            _ = CGRequestScreenCaptureAccess()
+            ToastCenter.shared.show(icon: "eyedropper.halffull", message: "Grant Screen Recording access in System Settings → Privacy & Security to sample screen colors", duration: 4.0)
+        }
         let sampler = NSColorSampler()
         sampler.show { [weak self] color in
             guard let color = color else { return }

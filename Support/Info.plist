@@ -53,6 +53,8 @@
 	<string>DMS uses Input Monitoring to observe hardware media and brightness keys to replace the native system bezel HUD.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>DMS uses Bluetooth to display and toggle adapter power in the control center.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>DankMacShell needs Screen Recording permission to sample screen colors and render workspace window previews.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>DankMaterialShell</string>
 </dict>

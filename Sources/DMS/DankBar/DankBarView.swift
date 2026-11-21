@@ -19,6 +19,7 @@ public struct DankBarView: View {
     private let battery = BatteryService.shared
     @ObservedObject private var configStore = ConfigStore.shared
     @ObservedObject private var island = DIslandController.shared
+    @ObservedObject private var updateCheckService = UpdateCheckService.shared
 
     @State private var leftSectionSize: CGFloat = 200
     @State private var rightSectionSize: CGFloat = 300
@@ -913,17 +914,44 @@ public struct DankBarView: View {
     }
 
     private func systemUpdatePill(style: BarWidgetStyleOptions) -> some View {
-        Button {
-            SettingsController.shared.show(tab: "about")
-        } label: {
-            Image(systemName: "arrow.triangle.2.circlepath.circle")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
-                .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
+        Group {
+            if updateCheckService.updateAvailable {
+                Button {
+                    updateCheckService.checkNow(force: true)
+                    SettingsController.shared.show(tab: "about")
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onPrimary))
+                        if !isVertical && style.showLabel && !style.compactMode {
+                            Text(updateCheckService.latestVersion ?? "Update")
+                                .font(theme.font(size: 10, weight: .bold, mono: true))
+                                .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onPrimary))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                    }
+                    .padding(.horizontal, isVertical ? 0 : 8)
+                    .frame(width: isVertical ? 28 : nil, height: 28)
+                    .background(resolveWidgetBackground(style, defaultColor: theme.primary))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Update available: \(updateCheckService.latestVersion ?? "Update")")
+            } else {
+                Button {
+                    SettingsController.shared.show(tab: "about")
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath.circle")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
+                        .frame(width: 28, height: 28)
+                        .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("System Update")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("System Update")
     }
 
     private func volumePill(style: BarWidgetStyleOptions) -> some View {

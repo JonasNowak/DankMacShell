@@ -16,6 +16,7 @@ public struct SettingsView: View {
     @ObservedObject var weatherService = WeatherService.shared
     @ObservedObject var wellbeingService = WellbeingService.shared
     @ObservedObject var updateCheckService = UpdateCheckService.shared
+    @ObservedObject var launchAtLogin = LaunchAtLoginManager.shared
     @Bindable var mediaKeyInterceptor = MediaKeyInterceptor.shared
 
     public typealias SettingsSection = DMSSettingsTab
@@ -3304,7 +3305,7 @@ public struct SettingsView: View {
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.open.fill")
-                        Text("Open Device Control & Data Access (macOS 15+)")
+                        Text("Open Device Control & Data Access")
                     }
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 10)
@@ -3330,7 +3331,7 @@ public struct SettingsView: View {
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                     Spacer()
                 }
-                Text("Native macOS volume HUD is suppressed and volume adjustments trigger the HUD via CoreAudio. In macOS 15+, Accessibility is renamed to 'Device Control and Data Access'.")
+                Text("Native macOS volume HUD is suppressed and volume adjustments trigger the HUD via CoreAudio. Grant 'Device Control and Data Access' in Privacy & Security for direct key interception.")
                     .font(.caption2)
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
@@ -3340,7 +3341,7 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "lock.open.fill")
-                            Text("Open Device Control (Accessibility)")
+                            Text("Open Device Control & Data Access")
                         }
                         .font(.caption.weight(.medium))
                         .padding(.horizontal, 10)
@@ -3920,6 +3921,53 @@ public struct SettingsView: View {
                         ok: !DankSearchClient.shared.healthState.isDegraded,
                         palette: palette
                     )
+                }
+            }
+        }
+
+        SettingsCard(icon: "gearshape.2.fill", title: "Startup & Updates", subtitle: "Login item, automatic update checks, and setup", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                SettingsToggleRow(
+                    title: "Start DankMacShell at Login",
+                    subtitle: "Launch DMS automatically when you sign in to macOS",
+                    isOn: Binding(
+                        get: { launchAtLogin.isEnabled },
+                        set: { launchAtLogin.setEnabled($0) }
+                    ),
+                    palette: palette
+                )
+
+                SettingsToggleRow(
+                    title: "Check for Updates Automatically",
+                    subtitle: "Check GitHub for newer DankMacShell releases in the background",
+                    isOn: Binding(
+                        get: { configStore.config.rawSettings["checkForUpdatesAutomatically"]?.boolValue ?? true },
+                        set: { val in configStore.update { $0.rawSettings["checkForUpdatesAutomatically"] = AnyCodable(val) } }
+                    ),
+                    palette: palette
+                )
+
+                Divider().opacity(0.3).padding(.vertical, 2)
+
+                HStack {
+                    Button(action: {
+                        OnboardingController.shared.show()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11))
+                            Text("Re-run Welcome & Setup Wizard…")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundColor(Color(hex: palette.onPrimary.hex))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(hex: palette.primary.hex))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
                 }
             }
         }

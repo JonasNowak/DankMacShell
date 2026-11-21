@@ -17,8 +17,9 @@ func printHelp() {
       dms restart                      Restart DankMaterialShell
       dms status                       Show running status of DMS daemon and socket
       dms doctor                       Run diagnostics check on permissions and subsystems
-      dms permission                   Open Accessibility settings to enable full OSD swallowing
+      dms permission                   Open Device Control and Data Access settings to enable full OSD swallowing
       dms setup-cert                   Create/trust persistent 'dms-cert' and re-sign DankMacShell.app for TCC persistence
+      dms onboard                      Re-open the first-run onboarding flow (alias: onboarding)
 
       dms ipc call <target> <action> [args...]  Send IPC command to shell
       dms dmenu [--prompt <text>]   dmenu/rofi drop-in: read candidates from stdin, print selection to stdout
@@ -690,11 +691,15 @@ case "start", "run":
     }
 
 case "stop":
-    let task = Process()
-    task.launchPath = "/usr/bin/pkill"
-    task.arguments = ["-x", "DankMaterialShell|DankMacShell"]
-    try? task.run()
-    task.waitUntilExit()
+    // pkill -x matches the pattern literally ("|" is not an alternation),
+    // so each process name needs its own pkill invocation.
+    for processName in ["DankMaterialShell", "DankMacShell"] {
+        let task = Process()
+        task.launchPath = "/usr/bin/pkill"
+        task.arguments = ["-x", processName]
+        try? task.run()
+        task.waitUntilExit()
+    }
 
     // Wait up to 3s for the daemon to exit (and remove its own socket) before unlinking.
     for _ in 0..<30 {
@@ -710,11 +715,15 @@ case "stop":
     print("DankMacShell stopped.")
 
 case "restart":
-    let stopTask = Process()
-    stopTask.launchPath = "/usr/bin/pkill"
-    stopTask.arguments = ["-x", "DankMaterialShell|DankMacShell"]
-    try? stopTask.run()
-    stopTask.waitUntilExit()
+    // pkill -x matches the pattern literally ("|" is not an alternation),
+    // so each process name needs its own pkill invocation.
+    for processName in ["DankMaterialShell", "DankMacShell"] {
+        let stopTask = Process()
+        stopTask.launchPath = "/usr/bin/pkill"
+        stopTask.arguments = ["-x", processName]
+        try? stopTask.run()
+        stopTask.waitUntilExit()
+    }
 
     // Drain wait until previous PID fully terminates
     for _ in 0..<20 {
@@ -747,7 +756,7 @@ case "permission", "accessibility":
     } else if let legacyURL {
         NSWorkspace.shared.open(legacyURL)
     }
-    print("Opened System Settings > Privacy & Security > Accessibility (Gerätesteuerung und Datenzugriff).")
+    print("Opened System Settings > Privacy & Security > Device Control and Data Access (Gerätesteuerung und Datenzugriff).")
     print("Toggle 'DankMacShell' ON to enable active media key interception and full OSD swallowing.")
 
 case "setup-cert", "cert":
@@ -819,7 +828,7 @@ case "doctor":
             print("  \(line)")
         }
         if daemonDoc.contains("AXTrusted=false") {
-            print("\n[!] Accessibility Permission: NOT GRANTED")
+            print("\n[!] Device Control and Data Access Permission: NOT GRANTED")
             print("    Media keys are in passive listening mode.")
             print("    Run 'dms permission' and toggle DankMacShell ON to enable active event swallowing.")
         }
@@ -842,6 +851,9 @@ case "listen":
 
 case "shell":
     runShell()
+
+case "onboard", "onboarding":
+    sendAndPrint("ipc call onboard")
 
 case "ipc":
     // dms ipc call <target> <action> [args...]

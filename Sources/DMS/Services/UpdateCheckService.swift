@@ -19,6 +19,9 @@ public final class UpdateCheckService: ObservableObject {
     @Published public private(set) var releaseURL: URL? = nil
     @Published public private(set) var isChecking: Bool = false
 
+    /// True when a newer release than the running build is available (alias for `hasUpdate`).
+    public var updateAvailable: Bool { hasUpdate }
+
     private var checkTask: Task<Void, Never>?
 
     private init() {}
@@ -30,20 +33,7 @@ public final class UpdateCheckService: ObservableObject {
 
     /// Compares two `vX.Y.Z`-style version strings; returns true when `latest` is newer than `current`.
     nonisolated private static func isNewer(latest: String, current: String) -> Bool {
-        func components(_ v: String) -> [Int] {
-            v.trimmingCharacters(in: .whitespaces)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
-                .split(separator: "-").first.map { $0.split(separator: ".").compactMap { Int($0) } } ?? []
-        }
-        let a = components(latest)
-        let b = components(current)
-        let count = max(a.count, b.count)
-        for i in 0..<count {
-            let av = i < a.count ? a[i] : 0
-            let bv = i < b.count ? b[i] : 0
-            if av != bv { return av > bv }
-        }
-        return false
+        DMSVersion.isNewerVersion(latest, than: current)
     }
 
     /// Runs an update check unless one ran within the last 6 hours (unless `force`).
@@ -98,5 +88,26 @@ public final class UpdateCheckService: ObservableObject {
                 Self.log.error("Update check failed: \\(error.localizedDescription)")
             }
         }
+    }
+}
+
+extension DMSVersion {
+    /// Compares two `vX.Y.Z`-style version strings; returns true when `candidate` is newer than `current`.
+    /// Fallback home for the comparison until DMSCore ships it natively.
+    public static func isNewerVersion(_ candidate: String, than current: String) -> Bool {
+        func components(_ v: String) -> [Int] {
+            v.trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+                .split(separator: "-").first.map { $0.split(separator: ".").compactMap { Int($0) } } ?? []
+        }
+        let a = components(candidate)
+        let b = components(current)
+        let count = max(a.count, b.count)
+        for i in 0..<count {
+            let av = i < a.count ? a[i] : 0
+            let bv = i < b.count ? b[i] : 0
+            if av != bv { return av > bv }
+        }
+        return false
     }
 }

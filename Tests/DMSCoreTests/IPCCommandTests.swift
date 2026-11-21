@@ -483,4 +483,21 @@ struct IPCCommandTests {
         #expect(!FileManager.default.fileExists(atPath: staged.path))
         try? FileManager.default.removeItem(at: dir)
     }
+
+    // MARK: - Onboarding command
+
+    @Test("dms://onboard and dms://onboarding parse to .onboard and are allowed from the URL scheme")
+    func testOnboardURLParsing() {
+        #expect(IPCCommand.parse(url: URL(string: "dms://onboard")!) == .onboard)
+        #expect(IPCCommand.parse(url: URL(string: "dms://onboarding")!) == .onboard)
+        #expect(IPCCommand.parse(url: URL(string: "dms://onboard/")!) == .onboard)
+        #expect(IPCCommand.onboard.isAllowedFromURLScheme)
+    }
+
+    @Test("CLI parsing maps onboard/onboarding to .onboard")
+    func testOnboardCLIParsing() {
+        #expect(IPCCommand.parseCLI(args: ["onboard"]) == .onboard)
+        #expect(IPCCommand.parseCLI(args: ["onboarding"]) == .onboard)
+        #expect(IPCCommand.parseCLI(args: ["ipc", "call", "onboard"]) == .onboard)
+    }
 }

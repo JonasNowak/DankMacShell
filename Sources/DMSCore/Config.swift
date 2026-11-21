@@ -1400,4 +1400,24 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         }
         set { rawSettings["notepadPreviewMode"] = AnyCodable(newValue) }
     }
+
+    // MARK: - Onboarding & Updates
+
+    /// Whether the first-run onboarding flow has been completed (default `false`).
+    public var onboardingCompleted: Bool {
+        get { rawSettings["onboardingCompleted"]?.boolValue ?? false }
+        set { rawSettings["onboardingCompleted"] = AnyCodable(newValue) }
+    }
+
+    /// Whether DMS checks for updates automatically (default `true`).
+    public var checkForUpdatesAutomatically: Bool {
+        get { rawSettings["checkForUpdatesAutomatically"]?.boolValue ?? true }
+        set { rawSettings["checkForUpdatesAutomatically"] = AnyCodable(newValue) }
+    }
+
+    /// Whether DMS launches automatically at login (default `false`).
+    public var launchAtLogin: Bool {
+        get { rawSettings["launchAtLogin"]?.boolValue ?? false }
+        set { rawSettings["launchAtLogin"] = AnyCodable(newValue) }
+    }
 }

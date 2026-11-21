@@ -105,6 +105,9 @@ public enum IPCCommand: Sendable, Equatable {
     case reloadConfig
     case status
 
+    // Onboarding
+    case onboard
+
     // Plugins & Applets
     case listPlugins
     case searchPlugins(query: String)
@@ -190,6 +193,9 @@ public enum IPCCommand: Sendable, Equatable {
             return true
         // QR generator: open only, without mutating state
         case .openQR:
+            return true
+        // Onboarding: re-opening the first-run flow is safe UI navigation
+        case .onboard:
             return true
         // Wallpaper: picker only — never set/next/prev/random
         case .wallpaper(let action, _):
@@ -425,6 +431,9 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "status":
             return .status
+
+        case "onboard", "onboarding":
+            return .onboard
 
         case "weather":
             let act = param("action") ?? subPath
@@ -749,6 +758,9 @@ public enum IPCCommand: Sendable, Equatable {
 
         case "status":
             return .status
+
+        case "onboard", "onboarding":
+            return .onboard
 
         case "weather":
             switch action {

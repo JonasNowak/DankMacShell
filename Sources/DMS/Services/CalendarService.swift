@@ -1,14 +1,17 @@
 import Foundation
+import AppKit
 import EventKit
 import DMSCore
 
-/// Provides integration with macOS EventKit for calendar events and fallback reference sets.
+/// Provides integration with macOS EventKit for calendar events.
 @MainActor
 public final class CalendarService: ObservableObject {
     public static let shared = CalendarService()
 
     @Published public private(set) var eventDateKeys: Set<String> = []
+    @Published public private(set) var upcomingEvents: [EKEvent] = []
     @Published public private(set) var isAuthorized: Bool = false
+    @Published public var authorizationStatus: EKAuthorizationStatus = EKEventStore.authorizationStatus(for: .event)
 
     private let eventStore = EKEventStore()
 
@@ -18,6 +21,7 @@ public final class CalendarService: ObservableObject {
 
     public func checkAuthorization() {
         let status = EKEventStore.authorizationStatus(for: .event)
+        authorizationStatus = status
         if #available(macOS 14.0, *) {
             isAuthorized = (status == .fullAccess)
         } else {
@@ -29,44 +33,54 @@ public final class CalendarService: ObservableObject {
         if #available(macOS 14.0, *) {
             eventStore.requestFullAccessToEvents { [weak self] granted, _ in
                 Task { @MainActor [weak self] in
-                    self?.isAuthorized = granted
+                    guard let self else {
+                        completion?(granted)
+                        return
+                    }
+                    self.authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+                    self.isAuthorized = granted
+                    if granted {
+                        self.loadEvents()
+                    }
                     completion?(granted)
                 }
             }
         } else {
             eventStore.requestAccess(to: .event) { [weak self] granted, _ in
                 Task { @MainActor [weak self] in
-                    self?.isAuthorized = granted
+                    guard let self else {
+                        completion?(granted)
+                        return
+                    }
+                    self.authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+                    self.isAuthorized = granted
+                    if granted {
+                        self.loadEvents()
+                    }
                     completion?(granted)
                 }
             }
         }
     }
 
-    /// Default reference date keys that reproduce the exact calendar dots from dankdash.png
-    public func referenceDateKeys(for month: CalendarMonth) -> Set<String> {
-        if month.year == 2025 && month.month == 10 {
-            return [
-                "2025-10-12", "2025-10-13", "2025-10-14", "2025-10-22",
-                "2025-10-25", "2025-10-26", "2025-10-28", "2025-10-31",
-                "2025-11-02", "2025-11-04"
-            ]
-        }
+    /// Opens System Settings at the Calendar privacy pane.
+    public func openCalendarPrivacySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") else { return }
+        NSWorkspace.shared.open(url)
+    }
 
-        // For other months when not authorized, generate plausible event dots
-        var keys: Set<String> = []
-        let sampleDays = [3, 8, 12, 17, 21, 24, 28]
-        for d in sampleDays {
-            keys.insert(CalendarEngine.dateKey(year: month.year, month: month.month, day: d))
-        }
-        return keys
+    /// Loads events for the current month.
+    public func loadEvents() {
+        loadEvents(for: CalendarMonth())
     }
 
     /// Loads events for the given visible month
     public func loadEvents(for month: CalendarMonth) {
         checkAuthorization()
         guard isAuthorized else {
-            self.eventDateKeys = referenceDateKeys(for: month)
+            // Unauthorized users never see fabricated event dots.
+            eventDateKeys = []
+            upcomingEvents = []
             return
         }
 
@@ -92,10 +106,15 @@ public final class CalendarService: ObservableObject {
             for event in events {
                 keys.insert(CalendarEngine.dateKey(from: event.startDate, calendar: cal))
             }
+            let now = Date()
+            let upcoming = events
+                .filter { $0.endDate >= now }
+                .sorted { $0.startDate < $1.startDate }
             Task { @MainActor [weak self] in
                 guard let self, !Task.isCancelled else { return }
                 // A legitimately empty month stays empty — no fabricated reference dots.
                 self.eventDateKeys = keys
+                self.upcomingEvents = upcoming
             }
         }
     }

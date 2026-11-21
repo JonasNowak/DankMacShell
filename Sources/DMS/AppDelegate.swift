@@ -139,6 +139,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = NowPlayingService.shared
         _ = WeatherService.shared
 
+        // Automatic update check (skipped when the user disabled it in Settings -> About)
+        if ConfigStore.shared.config.checkForUpdatesAutomatically {
+            UpdateCheckService.shared.checkNow(force: false)
+        }
+
+        // First-run Welcome & Setup wizard (shown once, until onboardingCompleted is set)
+        if !ConfigStore.shared.config.onboardingCompleted {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                OnboardingController.shared.show()
+            }
+        }
+
         print("DankMaterialShell for macOS started successfully.")
     }
 

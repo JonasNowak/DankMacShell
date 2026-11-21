@@ -874,6 +874,10 @@ public enum IPCCommandExecutor {
         case .shell:
             return "Interactive REPL is client-side; use 'dms shell'"
 
+        case .onboard:
+            OnboardingController.shared.show()
+            return "Onboarding opened"
+
         case .unknown(let raw):
             return "Unknown command: \(raw)"
         }
