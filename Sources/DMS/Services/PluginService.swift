@@ -12,6 +12,13 @@ public final class PluginService: ObservableObject {
 
     private let fileManager = FileManager.default
 
+    /// Hot-reload subscription: re-runs applet/plugin lifecycles when an external config
+    /// reload changes `enabledPlugins` or any `show*` flag (v0.9.3).
+    private var configCancellable: AnyCancellable?
+    /// Last observed lifecycle-relevant config signature, so self-inflicted config writes
+    /// (e.g. from `updatePluginLifecycles`) don't retrigger the reload loop.
+    private var lastLifecycleSignature: String?
+
     private var lockfileURL: URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("DMS")
@@ -22,6 +29,43 @@ public final class PluginService: ObservableObject {
     private init() {
         loadPlugins()
         loadApplets()
+        lastLifecycleSignature = Self.lifecycleSignature(ConfigStore.shared.config)
+        configCancellable = ConfigStore.shared.$config
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] cfg in
+                guard let self else { return }
+                let signature = Self.lifecycleSignature(cfg)
+                guard signature != self.lastLifecycleSignature else { return }
+                self.lastLifecycleSignature = signature
+                self.loadApplets()
+                self.loadPlugins()
+                self.updatePluginLifecycles(enabledIDs: Set(cfg.enabledPlugins))
+            }
+    }
+
+    /// Signature of the config fields that drive applet/plugin lifecycles: `enabledPlugins`
+    /// plus every `show*` visibility flag.
+    private static func lifecycleSignature(_ cfg: DMSConfig) -> String {
+        var parts: [String] = cfg.enabledPlugins
+        parts.append("showTelemetry=\(cfg.showTelemetry)")
+        parts.append("showWeather=\(cfg.showWeather)")
+        parts.append("showMedia=\(cfg.showMedia)")
+        parts.append("showSpaces=\(cfg.showSpaces)")
+        parts.append("showWorkspaceApps=\(cfg.showWorkspaceApps)")
+        parts.append("showLauncher=\(cfg.showLauncher)")
+        parts.append("showClock=\(cfg.showClock)")
+        parts.append("showInhibit=\(cfg.showInhibit)")
+        parts.append("showMic=\(cfg.showMic)")
+        parts.append("showWifi=\(cfg.showWifi)")
+        parts.append("showVolume=\(cfg.showVolume)")
+        parts.append("showControlCenter=\(cfg.showControlCenter)")
+        parts.append("showPowerMenu=\(cfg.showPowerMenu)")
+        parts.append("showNotepadApplet=\(cfg.showNotepadApplet)")
+        parts.append("showClipboardApplet=\(cfg.showClipboardApplet)")
+        parts.append("showColorPickerApplet=\(cfg.showColorPickerApplet)")
+        parts.append("showSymbianApplet=\(cfg.showSymbianApplet)")
+        return parts.joined(separator: "|")
     }
 
     public func loadPlugins() {

@@ -115,7 +115,10 @@ struct SettingsTests {
         #expect(!catalog.isEmpty)
         #expect(catalog.contains(where: { $0.id == "diskUsage" }))
         #expect(catalog.contains(where: { $0.id == "cpuTemperature" }))
-        #expect(catalog.contains(where: { $0.id == "systemTray" }))
+        // Redundant pills are deprecated and must not be offered in the catalog
+        #expect(!catalog.contains(where: { $0.id == "systemTray" }))
+        #expect(!catalog.contains(where: { $0.id == "systemTrayPill" }))
+        #expect(!catalog.contains(where: { $0.id == "notificationCenterButton" }))
         #expect(catalog.contains(where: { $0.id == "privacyIndicator" }))
         #expect(catalog.contains(where: { $0.id == "clock" }))
         #expect(catalog.contains(where: { $0.id == "mediaControls" }))

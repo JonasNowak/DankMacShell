@@ -25,11 +25,23 @@ public struct SettingsView: View {
     @State private var customSeedHexInput: String = ""
     @State private var expandedWidgetStyleId: String? = nil
 
+    // Multi-Bar Management: index of the bar currently being edited in the Bar tabs.
+    @State private var selectedBarIndex: Int = 0
+
+    /// Safely clamped index into `configStore.config.barConfigs` (always `0..<max(1, count)`).
+    private var activeBarIndex: Int {
+        let count = max(1, configStore.config.barConfigs.count)
+        return min(max(0, selectedBarIndex), count - 1)
+    }
+
     // Wallpaper Tab States
     @State private var wallpaperSelectedSource: WallpaperSource = .all
     @State private var wallpaperSearchQuery: String = ""
     @State private var selectedWallpaperItem: WallpaperItem? = nil
     @State private var pendingWallpaperChange: Bool = false
+    /// Path of the wallpaper the user picked but has not applied yet; drives the footer's
+    /// "Apply Selected Wallpaper" button (hidden once it matches the active config).
+    @State private var selectedWallpaperPath: String? = nil
 
     // Modal Sheet States
     @State private var activeAddWidgetSection: String? = nil
@@ -102,26 +114,29 @@ public struct SettingsView: View {
                         .foregroundColor(Color(hex: p.outline.hex))
                         .lineLimit(1)
                     Spacer()
-                    Button(action: {
-                        if pendingWallpaperChange, let sel = selectedWallpaperItem {
-                            wallpaperService.applyWallpaper(sel)
+                    Text("All changes saved automatically")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: p.outline.hex))
+                    if let selPath = selectedWallpaperPath, selPath != configStore.config.wallpaperPath {
+                        Button(action: {
+                            if let sel = selectedWallpaperItem {
+                                wallpaperService.applyWallpaper(sel)
+                            }
+                            selectedWallpaperPath = nil
                             pendingWallpaperChange = false
-                        } else if let sel = selectedWallpaperItem, (sel.path != nil && sel.path != wallpaperService.currentDesktopPath) || (sel.path == nil && sel.associatedTheme != nil && sel.associatedTheme != configStore.config.theme) {
-                            wallpaperService.applyWallpaper(sel)
-                            pendingWallpaperChange = false
+                            configStore.flushSave()
+                            ToastCenter.shared.show(icon: "checkmark.circle.fill", message: "Wallpaper Applied")
+                        }) {
+                            Text("Apply Selected Wallpaper")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Color(hex: p.onPrimary.hex))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .background(Color(hex: p.primary.hex))
+                                .cornerRadius(8)
                         }
-                        configStore.flushSave()
-                        ToastCenter.shared.show(icon: "checkmark.circle.fill", message: "Settings Saved")
-                    }) {
-                        Text("Apply Changes")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(Color(hex: p.onPrimary.hex))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
-                            .background(Color(hex: p.primary.hex))
-                            .cornerRadius(8)
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -146,10 +161,10 @@ public struct SettingsView: View {
                     palette: p,
                     onAdd: { widgetId in
                         guard !configStore.config.barConfigs.isEmpty else { return }
-                        var layout = configStore.config.barConfigs[0].layout
+                        var layout = (configStore.config.barConfigs.indices.contains(activeBarIndex) ? configStore.config.barConfigs[activeBarIndex] : .default).layout
                         let targetSec: SettingsWidgetCatalog.Section = section == "left" ? .left : (section == "center" ? .center : .right)
                         SettingsWidgetCatalog.addWidget(to: targetSec, widgetId: widgetId, in: &layout)
-                        configStore.update { $0.barConfigs[0].layout = layout }
+                        configStore.update { if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].layout = layout } }
                         activeAddWidgetSection = nil
                         ToastCenter.shared.show(icon: "plus.circle.fill", message: "Added \(widgetId)")
                     },
@@ -470,6 +485,19 @@ public struct SettingsView: View {
                     palette: palette
                 )
 
+                SettingsToggleRow(
+                    title: "Sync Workspace Bar",
+                    subtitle: "Apply theme colors to the OmniWM workspace switcher bar",
+                    isOn: Binding(
+                        get: { configStore.config.omniwmSyncWorkspaceBar },
+                        set: { val in
+                            configStore.update { $0.omniwmSyncWorkspaceBar = val }
+                            omniWMThemeSync.syncTheme(palette: palette, force: true)
+                        }
+                    ),
+                    palette: palette
+                )
+
                 HStack {
                     if let lastSync = omniWMThemeSync.lastSyncDate {
                         Text("Last synced: \(lastSync.formatted(date: .omitted, time: .standard))")
@@ -710,6 +738,18 @@ public struct SettingsView: View {
                     set: { val in configStore.update(immediate: false) { $0.popupTransparency = val } }
                 ),
                 range: 0.0...1.0,
+                step: 0.05,
+                palette: palette
+            )
+
+            SettingsSliderRow(
+                title: "Floating Window Transparency",
+                valueFormatted: "\(Int(configStore.config.floatingWindowTransparency * 100))%",
+                value: Binding(
+                    get: { configStore.config.floatingWindowTransparency },
+                    set: { val in configStore.update(immediate: false) { $0.floatingWindowTransparency = val } }
+                ),
+                range: 0.2...1.0,
                 step: 0.05,
                 palette: palette
             )
@@ -1290,6 +1330,7 @@ public struct SettingsView: View {
 
                                 Button(action: {
                                     selectedWallpaperItem = wp
+                                    selectedWallpaperPath = wp.path
                                     pendingWallpaperChange = true
                                 }) {
                                     VStack(alignment: .leading, spacing: 6) {
@@ -1338,6 +1379,7 @@ public struct SettingsView: View {
                                 .simultaneousGesture(TapGesture(count: 2).onEnded {
                                     wallpaperService.applyWallpaper(wp)
                                     selectedWallpaperItem = wp
+                                    selectedWallpaperPath = nil
                                     pendingWallpaperChange = false
                                 })
                             }
@@ -1365,6 +1407,7 @@ public struct SettingsView: View {
                             Button(action: {
                                 wallpaperService.applyWallpaper(sel)
                                 selectedWallpaperItem = sel
+                                selectedWallpaperPath = nil
                                 pendingWallpaperChange = false
                             }) {
                                 HStack(spacing: 6) {
@@ -1540,6 +1583,28 @@ public struct SettingsView: View {
 
                 Divider().opacity(0.3)
 
+                HStack {
+                    Text("Display / Headline Font Family")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                    Spacer()
+                    SettingsSegmentedControl(
+                        options: [
+                            ("SF Pro", "System"),
+                            ("Rounded", "SF Pro Rounded"),
+                            ("Serif", "New York"),
+                            ("Avenir", "Avenir Next")
+                        ],
+                        selection: Binding(
+                            get: { configStore.config.fontFamilyDisplay },
+                            set: { val in configStore.update { $0.fontFamilyDisplay = val } }
+                        ),
+                        palette: palette
+                    )
+                }
+
+                Divider().opacity(0.3)
+
                 SettingsSliderRow(
                     title: "Global Font Scale",
                     valueFormatted: "\(Int(round(configStore.config.fontScale * 100)))%",
@@ -1655,10 +1720,128 @@ public struct SettingsView: View {
         }
     }
 
+    /// Compact multi-bar management card rendered at the top of the Bar tabs: switch the
+    /// active bar, add/remove bars, and edit the active bar's name and display preferences.
+    @ViewBuilder
+    private func activeBarSelectorCard(palette: DMSPalette) -> some View {
+        let bars = configStore.config.barConfigs
+        let idx = activeBarIndex
+        let screenNames = NSScreen.screens.map(\.localizedName)
+
+        SettingsCard(icon: "menubar.rectangle", title: "Active Bar", subtitle: "Multiple bars can attach to different screen edges and displays", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Picker("Bar", selection: Binding(
+                        get: { idx },
+                        set: { selectedBarIndex = $0 }
+                    )) {
+                        ForEach(Array(bars.enumerated()), id: \.element.id) { i, bar in
+                            Text("\(bar.name) (\(bar.position))").tag(i)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(maxWidth: 240)
+
+                    Button(action: {
+                        configStore.update { cfg in
+                            cfg.barConfigs.append(BarConfig(
+                                id: "bar-\(UUID().uuidString.prefix(6))",
+                                name: "Bar \(cfg.barConfigs.count + 1)",
+                                position: "top"
+                            ))
+                        }
+                        selectedBarIndex = max(0, configStore.config.barConfigs.count - 1)
+                    }) {
+                        Label("+ Add Bar", systemImage: "plus")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(hex: palette.primary.hex))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(hex: palette.primaryContainer.hex).opacity(0.5))
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+
+                    if bars.count > 1 {
+                        Button(action: {
+                            let removeIdx = activeBarIndex
+                            configStore.update { cfg in
+                                guard cfg.barConfigs.count > 1, cfg.barConfigs.indices.contains(removeIdx) else { return }
+                                cfg.barConfigs.remove(at: removeIdx)
+                            }
+                            selectedBarIndex = 0
+                        }) {
+                            Label("Remove Bar", systemImage: "trash")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color(hex: palette.error.hex))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color(hex: palette.errorContainer.hex).opacity(0.5))
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Spacer()
+                }
+
+                HStack(spacing: 8) {
+                    Text("Name")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: palette.outline.hex))
+                    TextField("Bar name", text: Binding(
+                        get: { bars.indices.contains(idx) ? bars[idx].name : "" },
+                        set: { val in
+                            configStore.update {
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].name = val }
+                            }
+                        }
+                    ))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11))
+                    .padding(6)
+                    .background(Color(hex: palette.surfaceContainerLow.hex))
+                    .cornerRadius(6)
+
+                    Text("Displays")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: palette.outline.hex))
+                    Menu {
+                        Button("All Displays") {
+                            configStore.update {
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].screenPreferences = ["all"] }
+                            }
+                        }
+                        Divider()
+                        ForEach(screenNames, id: \.self) { name in
+                            Button(name) {
+                                configStore.update {
+                                    if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].screenPreferences = [name] }
+                                }
+                            }
+                        }
+                    } label: {
+                        let prefs = bars.indices.contains(idx) ? bars[idx].screenPreferences : ["all"]
+                        Label(prefs == ["all"] ? "All Displays" : prefs.joined(separator: ", "), systemImage: "display")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(hex: palette.surfaceContainerLow.hex))
+                            .cornerRadius(6)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - 6. Primary Bar - Appearance Tab
     @ViewBuilder
     private func barAppearanceTab(palette: DMSPalette) -> some View {
-        let barCfg = configStore.config.barConfigs.first ?? .default
+        let barCfg = configStore.config.barConfigs.indices.contains(activeBarIndex) ? configStore.config.barConfigs[activeBarIndex] : .default
+
+        activeBarSelectorCard(palette: palette)
 
         SettingsCard(icon: "menubar.rectangle", title: "Bar Position & Orientation", subtitle: "Attach to Top, Bottom, Left, or Right screen edge", palette: palette) {
             SettingsSegmentedControl(
@@ -1687,7 +1870,7 @@ public struct SettingsView: View {
                     get: { Double(barCfg.thickness) },
                     set: { val in
                         configStore.update(immediate: false) {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].thickness = Int(val) }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].thickness = Int(val) }
                         }
                     }
                 ),
@@ -1704,7 +1887,7 @@ public struct SettingsView: View {
                     set: { val in
                         configStore.update(immediate: false) {
                             $0.barMarginX = val
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].margin = Int(val) }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].margin = Int(val) }
                         }
                     }
                 ),
@@ -1720,7 +1903,7 @@ public struct SettingsView: View {
                     get: { barCfg.horizontalPadding },
                     set: { val in
                         configStore.update(immediate: false) {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].horizontalPadding = val }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].horizontalPadding = val }
                         }
                     }
                 ),
@@ -1736,7 +1919,7 @@ public struct SettingsView: View {
                     get: { barCfg.verticalPadding },
                     set: { val in
                         configStore.update(immediate: false) {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].verticalPadding = val }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].verticalPadding = val }
                         }
                     }
                 ),
@@ -1752,7 +1935,7 @@ public struct SettingsView: View {
                     get: { Double(barCfg.spacing) },
                     set: { val in
                         configStore.update(immediate: false) {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].spacing = Int(val) }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].spacing = Int(val) }
                         }
                     }
                 ),
@@ -1779,7 +1962,7 @@ public struct SettingsView: View {
                         get: { barCfg.backgroundStyle },
                         set: { val in
                             configStore.update {
-                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].backgroundStyle = val }
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].backgroundStyle = val }
                             }
                         }
                     ),
@@ -1794,7 +1977,7 @@ public struct SettingsView: View {
                     get: { barCfg.transparency },
                     set: { val in
                         configStore.update(immediate: false) {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].transparency = val }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].transparency = val }
                         }
                     }
                 ),
@@ -1812,7 +1995,7 @@ public struct SettingsView: View {
                     get: { barCfg.borderEnabled },
                     set: { val in
                         configStore.update {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].borderEnabled = val }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].borderEnabled = val }
                         }
                     }
                 ),
@@ -1827,7 +2010,7 @@ public struct SettingsView: View {
                         get: { barCfg.borderWidth },
                         set: { val in
                             configStore.update(immediate: false) {
-                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].borderWidth = val }
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].borderWidth = val }
                             }
                         }
                     ),
@@ -1835,6 +2018,60 @@ public struct SettingsView: View {
                     step: 0.5,
                     palette: palette
                 )
+
+                Divider().opacity(0.3)
+
+                HStack(spacing: 8) {
+                    Text("Border Color")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: palette.onSurface.hex))
+
+                    TextField("#CBA6F7 (empty = theme default)", text: Binding(
+                        get: { barCfg.borderColor ?? "" },
+                        set: { val in
+                            configStore.update(immediate: false) {
+                                if $0.barConfigs.indices.contains(activeBarIndex) {
+                                    let trimmed = val.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    $0.barConfigs[activeBarIndex].borderColor = trimmed.isEmpty ? nil : trimmed
+                                }
+                            }
+                        }
+                    ))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .padding(6)
+                    .background(Color(hex: palette.surfaceContainerLow.hex))
+                    .cornerRadius(6)
+                    .frame(width: 190)
+
+                    ForEach(["#CBA6F7", "#90CAF9", "#81C784", "#FFB74D", "#E57373", "#FFFFFF", "#000000"], id: \.self) { hex in
+                        Button(action: {
+                            configStore.update {
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].borderColor = hex }
+                            }
+                        }) {
+                            Circle()
+                                .fill(Color(hex: hex))
+                                .frame(width: 16, height: 16)
+                                .overlay(
+                                    Circle()
+                                        .stroke((barCfg.borderColor ?? "") == hex ? Color(hex: palette.primary.hex) : Color(hex: palette.outline.hex).opacity(0.4), lineWidth: (barCfg.borderColor ?? "") == hex ? 2 : 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button(action: {
+                        configStore.update {
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].borderColor = nil }
+                        }
+                    }) {
+                        Text("Clear")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(hex: palette.outline.hex))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
         }
@@ -1856,8 +2093,8 @@ public struct SettingsView: View {
                         get: { barCfg.cornerStyle },
                         set: { style in
                             configStore.update {
-                                if !$0.barConfigs.isEmpty {
-                                    $0.barConfigs[0].cornerStyle = style
+                                if $0.barConfigs.indices.contains(activeBarIndex) {
+                                    $0.barConfigs[activeBarIndex].cornerStyle = style
                                 }
                             }
                             DankBarController.shared.reposition()
@@ -1881,7 +2118,7 @@ public struct SettingsView: View {
                         get: { barCfg.gothFilletRadius },
                         set: { val in
                             configStore.update(immediate: false) {
-                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].gothFilletRadius = val }
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].gothFilletRadius = val }
                             }
                             DankBarController.shared.reposition()
                         }
@@ -1899,7 +2136,7 @@ public struct SettingsView: View {
                         get: { barCfg.cornerRadius < 0 ? 24.0 : barCfg.cornerRadius },
                         set: { val in
                             configStore.update(immediate: false) {
-                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].cornerRadius = val }
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].cornerRadius = val }
                             }
                             DankBarController.shared.reposition()
                         }
@@ -1919,7 +2156,7 @@ public struct SettingsView: View {
                         get: { barCfg.cornerRadius > 0 ? barCfg.cornerRadius : 16 },
                         set: { val in
                             configStore.update(immediate: false) {
-                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].cornerRadius = val }
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].cornerRadius = val }
                             }
                         }
                     ),
@@ -1939,7 +2176,7 @@ public struct SettingsView: View {
                     get: { barCfg.autoSquareAttachedCorners },
                     set: { val in
                         configStore.update {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].autoSquareAttachedCorners = val }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].autoSquareAttachedCorners = val }
                         }
                     }
                 ),
@@ -1966,7 +2203,9 @@ public struct SettingsView: View {
     // MARK: - 7. Primary Bar - Settings & Mac Notch Tab
     @ViewBuilder
     private func barSettingsTab(palette: DMSPalette) -> some View {
-        let barCfg = configStore.config.barConfigs.first ?? .default
+        let barCfg = configStore.config.barConfigs.indices.contains(activeBarIndex) ? configStore.config.barConfigs[activeBarIndex] : .default
+
+        activeBarSelectorCard(palette: palette)
 
         SettingsCard(icon: "laptopcomputer", title: "Mac Display Notch & Safe Area Handling", subtitle: "Automatic safe-zone splitting around MacBook notches & Dynamic Island", palette: palette) {
             SettingsToggleRow(
@@ -1976,7 +2215,7 @@ public struct SettingsView: View {
                     get: { barCfg.adaptToNotch },
                     set: { val in
                         configStore.update {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].adaptToNotch = val }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].adaptToNotch = val }
                         }
                     }
                 ),
@@ -1992,7 +2231,7 @@ public struct SettingsView: View {
                     get: { barCfg.simulateNotch },
                     set: { val in
                         configStore.update {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].simulateNotch = val }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].simulateNotch = val }
                         }
                     }
                 ),
@@ -2007,7 +2246,7 @@ public struct SettingsView: View {
                         get: { barCfg.simulatedNotchWidth },
                         set: { val in
                             configStore.update(immediate: false) {
-                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].simulatedNotchWidth = val }
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].simulatedNotchWidth = val }
                             }
                         }
                     ),
@@ -2023,7 +2262,7 @@ public struct SettingsView: View {
                         get: { barCfg.simulatedNotchHeight },
                         set: { val in
                             configStore.update(immediate: false) {
-                                if !$0.barConfigs.isEmpty { $0.barConfigs[0].simulatedNotchHeight = val }
+                                if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].simulatedNotchHeight = val }
                             }
                         }
                     ),
@@ -2054,7 +2293,7 @@ public struct SettingsView: View {
                     get: { barCfg.smartAutoHide },
                     set: { val in
                         configStore.update {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].smartAutoHide = val }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].smartAutoHide = val }
                         }
                     }
                 ),
@@ -2068,7 +2307,7 @@ public struct SettingsView: View {
                     get: { Double(barCfg.hoverOpenDelayMs) },
                     set: { val in
                         configStore.update(immediate: false) {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].hoverOpenDelayMs = Int(val) }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].hoverOpenDelayMs = Int(val) }
                         }
                     }
                 ),
@@ -2084,7 +2323,7 @@ public struct SettingsView: View {
                     get: { Double(barCfg.hoverCloseDelayMs) },
                     set: { val in
                         configStore.update(immediate: false) {
-                            if !$0.barConfigs.isEmpty { $0.barConfigs[0].hoverCloseDelayMs = Int(val) }
+                            if $0.barConfigs.indices.contains(activeBarIndex) { $0.barConfigs[activeBarIndex].hoverCloseDelayMs = Int(val) }
                         }
                     }
                 ),
@@ -2098,10 +2337,12 @@ public struct SettingsView: View {
     // MARK: - 8. Primary Bar - Widgets Tab (Ordering & Per-Widget Styling)
     @ViewBuilder
     private func barWidgetsTab(palette: DMSPalette) -> some View {
-        let barConfig = configStore.config.barConfigs.first ?? .default
+        let barConfig = configStore.config.barConfigs.indices.contains(activeBarIndex) ? configStore.config.barConfigs[activeBarIndex] : .default
         let layout = barConfig.layout
 
         VStack(alignment: .leading, spacing: 10) {
+            activeBarSelectorCard(palette: palette)
+
             Text("Reorder widgets with ↑/↓, move between sections, toggle visibility, or click the Edit Layout button for per-widget styling.")
                 .font(.system(size: 10))
                 .foregroundColor(Color(hex: palette.outline.hex))
@@ -2135,7 +2376,7 @@ public struct SettingsView: View {
                                         guard index > 0 else { return }
                                         var updated = layout
                                         SettingsWidgetCatalog.moveWidget(in: secEnum, fromIndex: index, toIndex: index - 1, in: &updated)
-                                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                                        configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                                     }) {
                                         Image(systemName: "chevron.up")
                                             .font(.system(size: 9, weight: .bold))
@@ -2149,7 +2390,7 @@ public struct SettingsView: View {
                                         guard index + 1 < items.count else { return }
                                         var updated = layout
                                         SettingsWidgetCatalog.moveWidget(in: secEnum, fromIndex: index, toIndex: index + 1, in: &updated)
-                                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                                        configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                                     }) {
                                         Image(systemName: "chevron.down")
                                             .font(.system(size: 9, weight: .bold))
@@ -2173,7 +2414,7 @@ public struct SettingsView: View {
                                     Button(action: {
                                         var updated = layout
                                         SettingsWidgetCatalog.toggleWidget(id: item.id, in: &updated)
-                                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                                        configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                                     }) {
                                         Image(systemName: item.enabled ? "eye" : "eye.slash")
                                             .font(.system(size: 10))
@@ -2185,7 +2426,7 @@ public struct SettingsView: View {
                                     Button(action: {
                                         var updated = layout
                                         SettingsWidgetCatalog.removeWidget(id: item.id, in: &updated)
-                                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                                        configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                                     }) {
                                         Image(systemName: "xmark")
                                             .font(.system(size: 10))
@@ -2230,6 +2471,11 @@ public struct SettingsView: View {
     @ViewBuilder
     private func widgetStyleDrawer(for item: BarWidgetEntry, in layout: BarLayout, palette: DMSPalette) -> some View {
         let style = item.styleOptions
+        let applyOption: (String, AnyCodable?) -> Void = { key, value in
+            var updated = layout
+            SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: key, value: value ?? AnyCodable(nil), in: &updated)
+            configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
+        }
         VStack(alignment: .leading, spacing: 6) {
             Divider().opacity(0.25)
 
@@ -2239,7 +2485,7 @@ public struct SettingsView: View {
                     set: { val in
                         var updated = layout
                         SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "compactMode", value: AnyCodable(val), in: &updated)
-                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                        configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                     }
                 ))
                 .font(.system(size: 10))
@@ -2249,7 +2495,7 @@ public struct SettingsView: View {
                     set: { val in
                         var updated = layout
                         SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "showIcon", value: AnyCodable(val), in: &updated)
-                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                        configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                     }
                 ))
                 .font(.system(size: 10))
@@ -2259,10 +2505,138 @@ public struct SettingsView: View {
                     set: { val in
                         var updated = layout
                         SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "showLabel", value: AnyCodable(val), in: &updated)
-                        configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                        configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                     }
                 ))
                 .font(.system(size: 10))
+            }
+
+            HStack(spacing: 12) {
+                Toggle("Bold Label", isOn: Binding(
+                    get: { style.bold ?? false },
+                    set: { applyOption("bold", AnyCodable($0)) }
+                ))
+                .font(.system(size: 10))
+            }
+
+            HStack(spacing: 8) {
+                Text("Custom Label")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(hex: palette.onSurface.hex).opacity(0.7))
+                TextField("Alias (empty = default)", text: Binding(
+                    get: { style.alias ?? "" },
+                    set: { val in
+                        let trimmed = val.trimmingCharacters(in: .whitespaces)
+                        applyOption("alias", trimmed.isEmpty ? nil : AnyCodable(trimmed))
+                    }
+                ))
+                .textFieldStyle(.plain)
+                .font(.system(size: 10, design: .monospaced))
+                .padding(5)
+                .background(Color(hex: palette.surfaceContainerLow.hex))
+                .cornerRadius(5)
+                .frame(width: 170)
+            }
+
+            HStack(spacing: 8) {
+                Text("Custom Tint")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(hex: palette.onSurface.hex).opacity(0.7))
+                TextField("#CBA6F7 (empty = theme)", text: Binding(
+                    get: { style.customTintHex ?? "" },
+                    set: { val in
+                        let trimmed = val.trimmingCharacters(in: .whitespaces)
+                        applyOption("customTintHex", trimmed.isEmpty ? nil : AnyCodable(trimmed))
+                    }
+                ))
+                .textFieldStyle(.plain)
+                .font(.system(size: 10, design: .monospaced))
+                .padding(5)
+                .background(Color(hex: palette.surfaceContainerLow.hex))
+                .cornerRadius(5)
+                .frame(width: 170)
+            }
+
+            HStack(spacing: 8) {
+                Text("Custom Background")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(hex: palette.onSurface.hex).opacity(0.7))
+                TextField("#1E1E2E (empty = theme)", text: Binding(
+                    get: { style.customBackgroundHex ?? "" },
+                    set: { val in
+                        let trimmed = val.trimmingCharacters(in: .whitespaces)
+                        applyOption("customBackgroundHex", trimmed.isEmpty ? nil : AnyCodable(trimmed))
+                    }
+                ))
+                .textFieldStyle(.plain)
+                .font(.system(size: 10, design: .monospaced))
+                .padding(5)
+                .background(Color(hex: palette.surfaceContainerLow.hex))
+                .cornerRadius(5)
+                .frame(width: 170)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Font Scale Override", isOn: Binding(
+                    get: { style.fontScaleOverride != nil },
+                    set: { applyOption("fontScaleOverride", $0 ? AnyCodable(style.fontScaleOverride ?? 1.0) : nil) }
+                ))
+                .font(.system(size: 10))
+                if style.fontScaleOverride != nil {
+                    SettingsSliderRow(
+                        title: "Font Scale",
+                        valueFormatted: String(format: "%.2fx", style.fontScaleOverride ?? 1.0),
+                        value: Binding(
+                            get: { style.fontScaleOverride ?? 1.0 },
+                            set: { applyOption("fontScaleOverride", AnyCodable($0)) }
+                        ),
+                        range: 0.75...1.4,
+                        step: 0.05,
+                        palette: palette
+                    )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Horizontal Padding Override", isOn: Binding(
+                    get: { style.paddingOverride != nil },
+                    set: { applyOption("paddingOverride", $0 ? AnyCodable(style.paddingOverride ?? 8) : nil) }
+                ))
+                .font(.system(size: 10))
+                if style.paddingOverride != nil {
+                    SettingsSliderRow(
+                        title: "Horizontal Padding",
+                        valueFormatted: "\(Int(style.paddingOverride ?? 8)) px",
+                        value: Binding(
+                            get: { style.paddingOverride ?? 8 },
+                            set: { applyOption("paddingOverride", AnyCodable($0)) }
+                        ),
+                        range: 2...24,
+                        step: 1,
+                        palette: palette
+                    )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Corner Radius Override", isOn: Binding(
+                    get: { style.cornerRadiusOverride != nil },
+                    set: { applyOption("cornerRadiusOverride", $0 ? AnyCodable(style.cornerRadiusOverride ?? 8) : nil) }
+                ))
+                .font(.system(size: 10))
+                if style.cornerRadiusOverride != nil {
+                    SettingsSliderRow(
+                        title: "Corner Radius",
+                        valueFormatted: "\(Int(style.cornerRadiusOverride ?? 8)) px",
+                        value: Binding(
+                            get: { style.cornerRadiusOverride ?? 8 },
+                            set: { applyOption("cornerRadiusOverride", AnyCodable($0)) }
+                        ),
+                        range: 0...24,
+                        step: 1,
+                        palette: palette
+                    )
+                }
             }
 
             if item.widgetId == "clock" {
@@ -2272,7 +2646,7 @@ public struct SettingsView: View {
                         set: { val in
                             var updated = layout
                             SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "timeFormat", value: AnyCodable(val ? "24h" : "12h"), in: &updated)
-                            configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                            configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                         }
                     ))
                     .font(.system(size: 10))
@@ -2282,7 +2656,7 @@ public struct SettingsView: View {
                         set: { val in
                             var updated = layout
                             SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "showSeconds", value: AnyCodable(val), in: &updated)
-                            configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                            configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                         }
                     ))
                     .font(.system(size: 10))
@@ -2292,7 +2666,7 @@ public struct SettingsView: View {
                         set: { val in
                             var updated = layout
                             SettingsWidgetCatalog.updateWidgetOption(id: item.id, key: "showDate", value: AnyCodable(val), in: &updated)
-                            configStore.update { guard !$0.barConfigs.isEmpty else { return }; $0.barConfigs[0].layout = updated }
+                            configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                         }
                     ))
                     .font(.system(size: 10))
@@ -2759,7 +3133,7 @@ public struct SettingsView: View {
                 subtitle: "Show playing track, artist, and album artwork",
                 isOn: Binding(
                     get: { configStore.config.showMedia },
-                    set: { val in configStore.update { $0.showMedia = val } }
+                    set: { val in configStore.update { $0.setMediaBarPillVisible(val) } }
                 ),
                 palette: palette
             )
@@ -3294,6 +3668,21 @@ public struct SettingsView: View {
                         get: { configStore.config.clipboardAutoPaste },
                         set: { val in configStore.update { $0.clipboardAutoPaste = val } }
                     ),
+                    palette: palette
+                )
+
+                Divider().opacity(0.3)
+
+                SettingsSliderRow(
+                    title: "Max Clipboard History Items",
+                    valueFormatted: "\(configStore.config.clipboardMaxItems)",
+                    value: Binding(
+                        get: { Double(configStore.config.clipboardMaxItems) },
+                        set: { val in configStore.update(immediate: false) { $0.clipboardMaxItems = Int(val) } }
+                    ),
+                    range: 25...500,
+                    step: 25,
+                    helper: "Older items beyond this limit are pruned from history.",
                     palette: palette
                 )
             }

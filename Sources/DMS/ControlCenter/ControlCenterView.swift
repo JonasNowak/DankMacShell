@@ -98,6 +98,13 @@ public struct ControlCenterView: View {
         return max(showTileLibrary ? 316.0 : 180.0, headerH + slidersH + gridH + bottomH + spacing + padding)
     }
 
+    /// Root background opacity for this floating panel: `floatingWindowTransparency`
+    /// (clamped `0.2...1.0`) multiplied into the usual popup/surface opacity.
+    private var floatingWindowOpacity: Double {
+        let clamped = max(0.2, min(1.0, theme.surfaceTokens.floatingWindowTransparency))
+        return clamped * min(theme.surfaceTokens.popupTransparency, theme.surfaceTokens.surfaceOpacity)
+    }
+
     public init() {}
 
     private var activePage: ControlCenterPage {
@@ -110,7 +117,7 @@ public struct ControlCenterView: View {
     }
 
     public var body: some View {
-        PopoutSurfaceContainer(bodyWidth: sheetWidth, bodyHeight: sheetHeight) {
+        PopoutSurfaceContainer(bodyWidth: sheetWidth, bodyHeight: sheetHeight, backgroundOpacity: floatingWindowOpacity) {
             ZStack {
                 if activePage == .root {
                     rootDashboardView

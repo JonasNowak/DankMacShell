@@ -1025,6 +1025,34 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         }
     }
 
+    /// Synchronizes the global `showMedia` switch with the `media` bar widget across every
+    /// bar layout (v0.9.3). Sets `showMedia` and updates all `barConfigs[i].layout` sections
+    /// so any `"media"` widget entry gets `enabled = visible`; when enabling and no `"media"`
+    /// entry exists yet, one is appended to the center section.
+    public mutating func setMediaBarPillVisible(_ visible: Bool) {
+        self.showMedia = visible
+        for i in barConfigs.indices {
+            var layout = barConfigs[i].layout
+            var hasMediaEntry = false
+            for j in layout.left.indices where layout.left[j].id == "media" || layout.left[j].widgetId == "media" {
+                layout.left[j].enabled = visible
+                hasMediaEntry = true
+            }
+            for j in layout.center.indices where layout.center[j].id == "media" || layout.center[j].widgetId == "media" {
+                layout.center[j].enabled = visible
+                hasMediaEntry = true
+            }
+            for j in layout.right.indices where layout.right[j].id == "media" || layout.right[j].widgetId == "media" {
+                layout.right[j].enabled = visible
+                hasMediaEntry = true
+            }
+            if visible && !hasMediaEntry {
+                layout.center.append(BarWidgetEntry(id: "media", enabled: true))
+            }
+            barConfigs[i].layout = layout
+        }
+    }
+
     // MARK: - Global Theme & Customization Typed Accessors (Spec 01 / 03 / 31)
 
     /// Whether terminal theme export is enabled for a given emulator (v0.7 THEME).

@@ -177,6 +177,10 @@ public struct PopoutSurfaceContainer<Content: View>: View {
     /// honored when `notification.object` is exactly this panel, so dismissing one popout
     /// never collapses another open popout (or Control Center) to 0x0.
     public var ownerPanel: NSPanel?
+    /// Optional root background opacity override for floating panels (e.g. Control Center,
+    /// Dash) so `floatingWindowTransparency` has a live effect. `nil` keeps the default
+    /// `min(popupTransparency, surfaceOpacity)` behavior.
+    public var backgroundOpacity: Double?
     @ViewBuilder public let content: () -> Content
 
     @State private var isPresented: Bool = false
@@ -190,6 +194,7 @@ public struct PopoutSurfaceContainer<Content: View>: View {
         cornerRadius: CGFloat = 18,
         anchorToControlCenter: Bool = false,
         ownerPanel: NSPanel? = nil,
+        backgroundOpacity: Double? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.bodyWidth = bodyWidth
@@ -197,6 +202,7 @@ public struct PopoutSurfaceContainer<Content: View>: View {
         self.cornerRadius = cornerRadius
         self.anchorToControlCenter = anchorToControlCenter
         self.ownerPanel = ownerPanel
+        self.backgroundOpacity = backgroundOpacity
         self.content = content
     }
 
@@ -280,7 +286,7 @@ public struct PopoutSurfaceContainer<Content: View>: View {
                         .padding(.vertical, (isConnected && isVertical) ? filletRadius : 0)
                 }
                 .frame(width: totalWidth, height: totalHeight)
-                .background(GlassSurfaceBackground())
+                .background(GlassSurfaceBackground(opacity: backgroundOpacity))
                 .clipShape(
                     BarGothCornerShape(
                         position: barPosition,

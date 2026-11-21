@@ -66,6 +66,13 @@ public struct LauncherView: View {
     /// can clear its in-flight request ID.
     public var onDMenuResolved: (() -> Void)?
 
+    /// Root background opacity for this floating panel: `floatingWindowTransparency`
+    /// (clamped `0.2...1.0`) multiplied into the usual popup/surface opacity.
+    private var floatingWindowOpacity: Double {
+        let clamped = max(0.2, min(1.0, theme.surfaceTokens.floatingWindowTransparency))
+        return clamped * min(theme.surfaceTokens.popupTransparency, theme.surfaceTokens.surfaceOpacity)
+    }
+
     public init(initialQuery: String = "", sessionID: UUID = UUID(), onClose: @escaping () -> Void) {
         self._query = State(initialValue: initialQuery)
         self.sessionID = sessionID
@@ -740,7 +747,7 @@ public struct LauncherView: View {
             // Grow the panel to 900pt so the 220pt action sidebar fits without clipping.
             LauncherController.shared.resizeForActionPanel(newValue)
         }
-        .background(GlassSurfaceBackground())
+        .background(GlassSurfaceBackground(opacity: floatingWindowOpacity))
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)

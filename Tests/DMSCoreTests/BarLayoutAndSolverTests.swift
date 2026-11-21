@@ -341,4 +341,109 @@ struct BarLayoutAndSolverTests {
         #expect(config.barSmartAutoHide == false)
         #expect(config.barConfigs.first?.smartAutoHide == false)
     }
+
+    @Test("BarLayout init strips deprecated redundant widget ids")
+    func testBarLayoutInitStripsDeprecatedRedundantWidgets() {
+        let layout = BarLayout(
+            left: [BarWidgetEntry(id: "systemTray"), BarWidgetEntry(id: "launcherButton")],
+            center: [BarWidgetEntry(id: "systemTrayPill"), BarWidgetEntry(id: "clock")],
+            right: [BarWidgetEntry(id: "notificationCenterButton"), BarWidgetEntry(id: "battery"), BarWidgetEntry(id: "custom-1", widgetId: "systemTray")]
+        )
+
+        #expect(layout.left.map(\.id) == ["launcherButton"])
+        #expect(layout.center.map(\.id) == ["clock"])
+        #expect(layout.right.map(\.id) == ["battery"])
+        #expect(!layout.left.contains { BarLayout.deprecatedRedundantWidgetIds.contains($0.id) || BarLayout.deprecatedRedundantWidgetIds.contains($0.widgetId) })
+        #expect(!layout.center.contains { BarLayout.deprecatedRedundantWidgetIds.contains($0.id) || BarLayout.deprecatedRedundantWidgetIds.contains($0.widgetId) })
+        #expect(!layout.right.contains { BarLayout.deprecatedRedundantWidgetIds.contains($0.id) || BarLayout.deprecatedRedundantWidgetIds.contains($0.widgetId) })
+
+        // Default layout must not contain any deprecated redundant pill
+        #expect(!BarLayout.default.left.contains { BarLayout.deprecatedRedundantWidgetIds.contains($0.id) })
+        #expect(!BarLayout.default.center.contains { BarLayout.deprecatedRedundantWidgetIds.contains($0.id) })
+        #expect(!BarLayout.default.right.contains { BarLayout.deprecatedRedundantWidgetIds.contains($0.id) })
+    }
+
+    @Test("BarLayout JSON decode strips deprecated redundant widget ids")
+    func testBarLayoutDecodeStripsDeprecatedRedundantWidgets() throws {
+        let json = """
+        {
+            "left": [{"id": "systemTray"}, {"id": "launcherButton", "widgetId": "launcherButton"}],
+            "center": [{"id": "clock"}, {"id": "systemTrayPill"}],
+            "right": [{"id": "notificationCenterButton"}, {"id": "battery"}, {"id": "x", "widgetId": "systemTrayPill"}]
+        }
+        """.data(using: .utf8)!
+
+        let layout = try JSONDecoder().decode(BarLayout.self, from: json)
+        #expect(layout.left.map(\.id) == ["launcherButton"])
+        #expect(layout.center.map(\.id) == ["clock"])
+        #expect(layout.right.map(\.id) == ["battery"])
+
+        // Round-trip: re-encoding the decoded layout must not resurrect the stripped ids
+        let reencoded = try JSONEncoder().encode(layout)
+        let redecoded = try JSONDecoder().decode(BarLayout.self, from: reencoded)
+        #expect(redecoded == layout)
+    }
+
+    @Test("setMediaBarPillVisible synchronizes showMedia and media widget entries")
+    func testSetMediaBarPillVisibleSyncsShowMediaAndLayout() {
+        var config = DMSConfig.default
+        #expect(config.barConfigs.first?.layout.center.contains(where: { $0.id == "media" }) == true)
+
+        // Hiding: showMedia = false and every "media" entry in every bar is disabled
+        config.setMediaBarPillVisible(false)
+        #expect(config.showMedia == false)
+        for bar in config.barConfigs {
+            for entry in bar.layout.left + bar.layout.center + bar.layout.right where entry.id == "media" || entry.widgetId == "media" {
+                #expect(entry.enabled == false)
+            }
+        }
+
+        // Showing again: showMedia = true and existing "media" entries are re-enabled
+        config.setMediaBarPillVisible(true)
+        #expect(config.showMedia == true)
+        for bar in config.barConfigs {
+            for entry in bar.layout.left + bar.layout.center + bar.layout.right where entry.id == "media" || entry.widgetId == "media" {
+                #expect(entry.enabled == true)
+            }
+        }
+
+        // Showing with no "media" entry anywhere appends one to the center section
+        var config2 = DMSConfig.default
+        for i in config2.barConfigs.indices {
+            config2.barConfigs[i].layout = BarLayout(
+                left: [BarWidgetEntry(id: "launcherButton")],
+                center: [BarWidgetEntry(id: "clock")],
+                right: [BarWidgetEntry(id: "battery")]
+            )
+        }
+        config2.setMediaBarPillVisible(true)
+        #expect(config2.showMedia == true)
+        for bar in config2.barConfigs {
+            #expect(bar.layout.center.contains { $0.id == "media" && $0.enabled })
+        }
+
+        // Hiding keeps an existing "media" entry but disables it (it is never removed)
+        config2.setMediaBarPillVisible(false)
+        #expect(config2.showMedia == false)
+        for bar in config2.barConfigs {
+            for entry in bar.layout.center where entry.id == "media" || entry.widgetId == "media" {
+                #expect(entry.enabled == false)
+            }
+        }
+
+        // Hiding when no "media" entry exists does not append one
+        var config3 = DMSConfig.default
+        for i in config3.barConfigs.indices {
+            config3.barConfigs[i].layout = BarLayout(
+                left: [BarWidgetEntry(id: "launcherButton")],
+                center: [BarWidgetEntry(id: "clock")],
+                right: [BarWidgetEntry(id: "battery")]
+            )
+        }
+        config3.setMediaBarPillVisible(false)
+        #expect(config3.showMedia == false)
+        for bar in config3.barConfigs {
+            #expect(!bar.layout.center.contains { $0.id == "media" || $0.widgetId == "media" })
+        }
+    }
 }

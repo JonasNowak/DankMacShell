@@ -372,7 +372,7 @@ struct NotchLayoutSolverTests {
         config.layout = BarLayout(
             left: [BarWidgetEntry(id: "workspaces"), BarWidgetEntry(id: "runningApps")],
             center: [BarWidgetEntry(id: "clock"), BarWidgetEntry(id: "weather")],
-            right: [BarWidgetEntry(id: "systemTray"), BarWidgetEntry(id: "battery"), BarWidgetEntry(id: "controlCenter")]
+            right: [BarWidgetEntry(id: "privacyIndicator"), BarWidgetEntry(id: "battery"), BarWidgetEntry(id: "controlCenter")]
         )
 
         let layout = NotchAwareBarLayoutSolver.solve(

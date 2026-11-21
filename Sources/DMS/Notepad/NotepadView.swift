@@ -26,6 +26,13 @@ public struct NotepadView: View {
         configStore.config.notepadPreviewMode
     }
 
+    /// Root background opacity for this floating panel: `floatingWindowTransparency`
+    /// (clamped `0.2...1.0`) multiplied into the usual popup/surface opacity.
+    private var floatingWindowOpacity: Double {
+        let clamped = max(0.2, min(1.0, themeStore.surfaceTokens.floatingWindowTransparency))
+        return clamped * min(themeStore.surfaceTokens.popupTransparency, themeStore.surfaceTokens.surfaceOpacity)
+    }
+
     private var matches: [Range<String.Index>] {
         FindReplaceEngine.matches(in: notepad.activeNote.content, query: findText, caseSensitive: caseSensitive)
     }
@@ -370,7 +377,7 @@ public struct NotepadView: View {
             .background(themeStore.panelHeaderBackground)
         }
         .frame(minWidth: 480, idealWidth: previewMode == "split" ? 780 : 480, maxWidth: .infinity, minHeight: 360, idealHeight: 420, maxHeight: .infinity)
-        .background(GlassSurfaceBackground())
+        .background(GlassSurfaceBackground(opacity: floatingWindowOpacity))
         .cornerRadius(24)
         .overlay(
             RoundedRectangle(cornerRadius: 24)

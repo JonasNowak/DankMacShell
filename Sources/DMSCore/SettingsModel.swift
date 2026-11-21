@@ -325,12 +325,6 @@ public struct SettingsWidgetCatalog {
             icon: "gauge.with.dots.needle.67percent"
         ),
         BarWidgetMeta(
-            id: "systemTray",
-            name: "System Tray",
-            description: "System notification area icons",
-            icon: "bell.badge.fill"
-        ),
-        BarWidgetMeta(
             id: "privacyIndicator",
             name: "Privacy Indicator",
             description: "Shows when microphone, camera, or screen sharing is active",
@@ -468,12 +462,6 @@ public struct SettingsWidgetCatalog {
             name: "Monitor Pill",
             description: "Current display identifier badge",
             icon: "display"
-        ),
-        BarWidgetMeta(
-            id: "notificationCenterButton",
-            name: "Notifications Bell",
-            description: "Unread notification center trigger",
-            icon: "bell.fill"
         ),
         BarWidgetMeta(
             id: "controlCenterButton",

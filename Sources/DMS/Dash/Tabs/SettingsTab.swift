@@ -191,6 +191,29 @@ public struct SettingsTab: View {
                 .padding(18)
                 .background(Color(hex: p.surfaceContainerHigh.hex))
                 .cornerRadius(22)
+
+                // Full Settings Window Shortcut
+                Button(action: {
+                    DashController.shared.hide()
+                    SettingsController.shared.show()
+                }) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(hex: p.primary.hex))
+                        Text("Open Full Settings…")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Color(hex: p.onSurface.hex))
+                        Spacer()
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: p.outline.hex))
+                    }
+                    .padding(14)
+                    .background(Color(hex: p.surfaceContainerHigh.hex))
+                    .cornerRadius(14)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.vertical, 4)
         }

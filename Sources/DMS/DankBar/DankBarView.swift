@@ -642,7 +642,7 @@ public struct DankBarView: View {
             return CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
         case "media", "mediaControls":
             let t = NowPlayingService.shared.currentTrack
-            return t.isPlaying || (!t.title.isEmpty && t.title != "No Track Playing")
+            return configStore.config.showMedia && (!t.title.isEmpty || t.isPlaying)
         case "mediaLyricLine":
             let t = NowPlayingService.shared.currentTrack
             return configStore.config.showMediaLyricLine && (!t.title.isEmpty && t.title != "No Track Playing")
@@ -730,12 +730,8 @@ public struct DankBarView: View {
             PrivacyIndicatorWidget(isVertical: isVertical, options: options, style: style)
         case "systemUpdate":
             systemUpdatePill(style: style)
-        case "systemTray":
-            systemTrayPill(style: style)
         case "volume", "audio":
             volumePill(style: style)
-        case "notificationCenterButton":
-            notificationCenterButton(style: style)
         case "controlCenterButton":
             controlCenterButton(style: style)
         case "powerMenuButton":
@@ -930,21 +926,6 @@ public struct DankBarView: View {
         .accessibilityLabel("System Update")
     }
 
-    private func systemTrayPill(style: BarWidgetStyleOptions) -> some View {
-        Button {
-            DIslandController.shared.toggle(activity: .home)
-        } label: {
-            Image(systemName: "menubar.rectangle")
-                .symbolVariant(.fill)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
-                .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("System Tray")
-    }
-
     private func volumePill(style: BarWidgetStyleOptions) -> some View {
         Button {
             AudioPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x)
@@ -960,20 +941,6 @@ public struct DankBarView: View {
         .buttonStyle(.plain)
         .help("Audio Output: \(audio.currentOutputName) (\(Int(audio.volume * 100))%)")
         .accessibilityLabel("Volume")
-    }
-
-    private func notificationCenterButton(style: BarWidgetStyleOptions) -> some View {
-        Button {
-            DIslandController.shared.toggle(activity: .notification)
-        } label: {
-            Image(systemName: "bell.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
-                .frame(width: 28, height: 28)
-                .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Notifications")
     }
 
     private func controlCenterButton(style: BarWidgetStyleOptions) -> some View {

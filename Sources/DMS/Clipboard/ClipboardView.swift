@@ -21,6 +21,13 @@ public struct ClipboardView: View {
         return clipboard.search(query: searchText)
     }
 
+    /// Root background opacity for this floating panel: `floatingWindowTransparency`
+    /// (clamped `0.2...1.0`) multiplied into the usual popup/surface opacity.
+    private var floatingWindowOpacity: Double {
+        let clamped = max(0.2, min(1.0, themeStore.surfaceTokens.floatingWindowTransparency))
+        return clamped * min(themeStore.surfaceTokens.popupTransparency, themeStore.surfaceTokens.surfaceOpacity)
+    }
+
     private var safeSelectedIndex: Int {
         let items = filteredItems
         guard !items.isEmpty else { return 0 }
@@ -197,7 +204,7 @@ public struct ClipboardView: View {
             .background(themeStore.panelHeaderBackground)
         }
         .frame(width: 480, height: 440)
-        .background(GlassSurfaceBackground())
+        .background(GlassSurfaceBackground(opacity: floatingWindowOpacity))
         .cornerRadius(24)
         .overlay(
             RoundedRectangle(cornerRadius: 24)

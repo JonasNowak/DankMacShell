@@ -107,18 +107,39 @@ public struct BarWidgetEntry: Sendable, Codable, Equatable, Identifiable {
 
 /// 3-section layout model for DankBar.
 public struct BarLayout: Sendable, Codable, Equatable {
+    /// Widget ids removed in v0.9.3 because they duplicated the Dynamic Island / Control
+    /// Center entry points (redundant pills). Any entry carrying one of these ids —
+    /// either as its `id` or its `widgetId` — is stripped on init and on decode, so
+    /// legacy saved configs automatically drop the redundant pills.
+    public static let deprecatedRedundantWidgetIds: Set<String> = ["systemTray", "systemTrayPill", "notificationCenterButton"]
+
     public var left: [BarWidgetEntry]
     public var center: [BarWidgetEntry]
     public var right: [BarWidgetEntry]
+
+    private static func strippingRedundant(_ entries: [BarWidgetEntry]) -> [BarWidgetEntry] {
+        entries.filter { !deprecatedRedundantWidgetIds.contains($0.id) && !deprecatedRedundantWidgetIds.contains($0.widgetId) }
+    }
 
     public init(
         left: [BarWidgetEntry] = [],
         center: [BarWidgetEntry] = [],
         right: [BarWidgetEntry] = []
     ) {
-        self.left = left
-        self.center = center
-        self.right = right
+        self.left = Self.strippingRedundant(left)
+        self.center = Self.strippingRedundant(center)
+        self.right = Self.strippingRedundant(right)
+    }
+
+    public enum CodingKeys: String, CodingKey {
+        case left, center, right
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.left = Self.strippingRedundant(try container.decodeIfPresent([BarWidgetEntry].self, forKey: .left) ?? [])
+        self.center = Self.strippingRedundant(try container.decodeIfPresent([BarWidgetEntry].self, forKey: .center) ?? [])
+        self.right = Self.strippingRedundant(try container.decodeIfPresent([BarWidgetEntry].self, forKey: .right) ?? [])
     }
 
     public static let `default` = BarLayout(

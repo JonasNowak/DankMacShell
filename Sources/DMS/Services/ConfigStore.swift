@@ -25,6 +25,11 @@ public final class ConfigStore: ObservableObject {
     private nonisolated static let lastWriteLock = NSLock()
     nonisolated(unsafe) private static var lastWrittenData: Data?
 
+    /// Dedup for the "invalid settings.json" toast so a single bad external save (which can
+    /// fire several watcher events: write + rename + extend) only toasts once.
+    private nonisolated static let invalidToastLock = NSLock()
+    nonisolated(unsafe) private static var lastInvalidToastData: Data?
+
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         self.configDirectory = appSupport.appendingPathComponent("DMS", isDirectory: true)
@@ -63,17 +68,36 @@ public final class ConfigStore: ObservableObject {
 
     private var suppressWatcherUntil: Date = .distantPast
 
-    /// Validates that `data` parses as a JSON object before handing it to `DMSConfig.load`.
-    /// Returns nil for a non-empty file that fails JSON parsing (e.g. a mid-edit syntax
-    /// error from an external editor) so callers keep the current in-memory config
-    /// instead of factory-resetting to `.default`.
+    /// Parses `data` via the throwing loader. Returns nil for anything that fails to load
+    /// (e.g. a mid-edit syntax error from an external editor) so callers keep the current
+    /// valid in-memory config instead of factory-resetting to `.default`. On failure the
+    /// warning is logged and a non-intrusive toast is shown on the MainActor.
     private nonisolated static func parseConfig(_ data: Data, baseDirectory: URL) -> DMSConfig? {
-        if !data.isEmpty {
-            guard let obj = try? JSONSerialization.jsonObject(with: data), obj is [String: Any] else {
-                return nil
-            }
+        if data.isEmpty {
+            return nil
         }
-        return DMSConfig.load(from: data, baseDirectory: baseDirectory)
+        do {
+            return try DMSConfig.loadThrowing(from: data, baseDirectory: baseDirectory)
+        } catch {
+            log.warning("Invalid settings.json change ignored (keeping in-memory config): \(error.localizedDescription, privacy: .public)")
+            reportInvalidConfigChange(data)
+            return nil
+        }
+    }
+
+    /// Shows the "invalid settings.json" toast on the MainActor, deduplicated per payload so
+    /// repeated watcher events for the same bad bytes don't stack toasts.
+    private nonisolated static func reportInvalidConfigChange(_ data: Data) {
+        invalidToastLock.lock()
+        let alreadyReported = (lastInvalidToastData == data)
+        if !alreadyReported {
+            lastInvalidToastData = data
+        }
+        invalidToastLock.unlock()
+        guard !alreadyReported else { return }
+        Task { @MainActor in
+            ToastCenter.shared.show(icon: "exclamationmark.triangle.fill", message: "Invalid settings.json change ignored")
+        }
     }
 
     public func loadConfig() {
@@ -117,10 +141,8 @@ public final class ConfigStore: ObservableObject {
                     return nil
                 }
                 guard let data = try? Data(contentsOf: fileToLoad) else { return nil }
-                if !data.isEmpty, (try? JSONSerialization.jsonObject(with: data)) == nil {
-                    Self.log.warning("Config file \(fileToLoad.lastPathComponent, privacy: .public) exists but is not valid JSON; keeping in-memory config")
-                    return .some(nil)
-                }
+                // parseConfig validates via the throwing loader and reports invalid JSON
+                // (toast + log) while returning nil so the in-memory config is preserved.
                 return .some(Self.parseConfig(data, baseDirectory: baseDir))
             }.value
 

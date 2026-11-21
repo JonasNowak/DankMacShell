@@ -363,7 +363,9 @@ private struct ExpandedIslandContent: View {
         VStack(spacing: 8) {
             // Top Activity Switcher Header
             HStack(spacing: 6) {
-                ForEach([IslandActivity.home, .media, .controlCenter, .dash, .clipboard, .weather], id: \.rawValue) { act in
+                // `.notification` is intentionally excluded from the user-clickable tabs:
+                // notifications surface via the island's own toast/notification flow, not a tab.
+                ForEach([IslandActivity.home, .media, .controlCenter, .dash, .clipboard, .weather].filter { $0 != .notification }, id: \.rawValue) { act in
                     if settings.enabledActivities.contains(act.rawValue) || act == .home {
                         Button {
                             controller.open(activity: act)

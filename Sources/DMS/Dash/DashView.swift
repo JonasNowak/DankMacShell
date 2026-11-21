@@ -13,11 +13,18 @@ public struct DashView: View {
         self.onClose = onClose
     }
 
+    /// Root background opacity for this floating panel: `floatingWindowTransparency`
+    /// (clamped `0.2...1.0`) multiplied into the usual popup/surface opacity.
+    private var floatingWindowOpacity: Double {
+        let clamped = max(0.2, min(1.0, themeStore.surfaceTokens.floatingWindowTransparency))
+        return clamped * min(themeStore.surfaceTokens.popupTransparency, themeStore.surfaceTokens.surfaceOpacity)
+    }
+
     public var body: some View {
         let p = themeStore.palette
         let isBottom = ConfigStore.shared.config.barPosition.lowercased() == "bottom"
 
-        PopoutSurfaceContainer(bodyWidth: DashController.defaultWidth, bodyHeight: DashController.defaultHeight, cornerRadius: 16) {
+        PopoutSurfaceContainer(bodyWidth: DashController.defaultWidth, bodyHeight: DashController.defaultHeight, cornerRadius: 16, backgroundOpacity: floatingWindowOpacity) {
             VStack(spacing: 0) {
                 // Top Tab Navigation Bar
             HStack(spacing: 0) {
