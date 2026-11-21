@@ -497,10 +497,10 @@ public struct SettingsView: View {
             }
         }
 
-        SettingsCard(icon: "terminal.fill", title: "Terminal Theme Sync", subtitle: "Live-export the active M3 + Dank16 palette to terminal emulators (skips nix/home-manager managed files)", palette: palette) {
+        SettingsCard(icon: "paintpalette.fill", title: "App & CLI Theme Sync", subtitle: "Live-export the active M3 + Dank16 palette to terminals, Neovim, tmux, editors, and CLI tools (skips nix/home-manager managed files)", palette: palette) {
             SettingsToggleRow(
-                title: "Sync Terminal Themes",
-                subtitle: "Write Ghostty / Kitty / Alacritty / iTerm2 theme files and ~/Library/Application Support/DMS/theme.json on every theme change",
+                title: "Sync App & CLI Themes",
+                subtitle: "Write theme files for every enabled target plus ~/Library/Application Support/DMS/theme.json on every theme change",
                 isOn: Binding(
                     get: { configStore.config.terminalThemeSync },
                     set: { val in
@@ -520,29 +520,104 @@ public struct SettingsView: View {
             if configStore.config.terminalThemeSync {
                 Divider().opacity(0.3)
 
-                VStack(spacing: 10) {
-                    ForEach([
-                        ("Ghostty (~/.config/ghostty/themes/dms)", \DMSConfig.terminalThemeGhostty),
-                        ("Kitty (~/.config/kitty/dms-theme.conf)", \DMSConfig.terminalThemeKitty),
-                        ("Alacritty (~/.config/alacritty/dms-theme.toml)", \DMSConfig.terminalThemeAlacritty),
-                        ("iTerm2 Dynamic Profile (dms.json)", \DMSConfig.terminalThemeITerm2)
-                    ], id: \.0) { label, keyPath in
-                        SettingsToggleRow(
-                            title: label,
-                            subtitle: nil,
-                            isOn: Binding(
-                                get: { configStore.config[keyPath: keyPath] },
-                                set: { val in
-                                    configStore.update { $0[keyPath: keyPath] = val }
-                                    terminalThemeExporter.exportIfEnabled(
-                                        palette: themeStore.palette,
-                                        themeName: themeStore.themeName,
-                                        isDark: themeStore.palette.isDark
-                                    )
+                let detectedSet = Set(ThemeSyncTarget.allCases.filter {
+                    terminalThemeExporter.detectedTargetIds.contains($0.dteTargetId)
+                })
+
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(ThemeSyncCategory.allCases, id: \.self) { category in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                Image(systemName: category.icon)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(hex: palette.primary.hex))
+                                Text(category.displayName)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                            }
+                            ForEach(ThemeSyncTarget.targets(in: category)) { target in
+                                HStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(target.displayName)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundColor(Color(hex: palette.onSurface.hex))
+                                            if terminalThemeExporter.detectedTargetIds.contains(target.dteTargetId) {
+                                                Text("Detected")
+                                                    .font(.system(size: 8.5, weight: .bold))
+                                                    .foregroundColor(Color(hex: palette.onPrimary.hex))
+                                                    .padding(.horizontal, 5)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color(hex: palette.primary.hex))
+                                                    .cornerRadius(4)
+                                            }
+                                        }
+                                        Text(themeTargetSubtitle(target))
+                                            .font(.system(size: 9))
+                                            .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+                                        if target == .obsidian && configStore.config.isThemeTargetConfiguredOn(.obsidian, detected: detectedSet) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "info.circle.fill")
+                                                    .font(.system(size: 8.5))
+                                                Text("Remember to activate the 'dms' CSS snippet in Obsidian → Settings → Appearance → CSS snippets")
+                                                    .font(.system(size: 8.5, weight: .medium))
+                                            }
+                                            .foregroundColor(Color(hex: palette.primary.hex))
+                                            .padding(.top, 2)
+                                        }
+                                    }
+                                    Spacer()
+                                    if target == .obsidian {
+                                        Button(action: { addObsidianVault() }) {
+                                            Text("Add Vault…")
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundColor(Color(hex: palette.primary.hex))
+                                        }
+                                        .buttonStyle(.plain)
+                                        if !configStore.config.obsidianVaultPaths.isEmpty {
+                                            Button(action: { resetObsidianVaults() }) {
+                                                Text("Reset Vaults")
+                                                    .font(.system(size: 9, weight: .medium))
+                                                    .foregroundColor(Color(hex: palette.warning.hex))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    if let snippet = target.setupSnippet {
+                                        Button(action: {
+                                            let pasteboard = NSPasteboard.general
+                                            pasteboard.clearContents()
+                                            pasteboard.setString(snippet, forType: .string)
+                                            ToastCenter.shared.show(icon: "doc.on.clipboard", message: "Copied \(target.displayName) setup snippet")
+                                        }) {
+                                            Text("Copy Snippet")
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundColor(Color(hex: palette.primary.hex))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    Toggle("", isOn: Binding(
+                                        get: { configStore.config.isThemeTargetConfiguredOn(target, detected: detectedSet) },
+                                        set: { val in
+                                            configStore.update { $0.setThemeTargetEnabled(target, val) }
+                                            terminalThemeExporter.exportIfEnabled(
+                                                palette: themeStore.palette,
+                                                themeName: themeStore.themeName,
+                                                isDark: themeStore.palette.isDark
+                                            )
+                                            if target == .obsidian && val {
+                                                ToastCenter.shared.show(
+                                                    icon: "sparkles",
+                                                    message: "Obsidian snippet synced — remember to activate 'dms' in Obsidian Settings → Appearance → CSS snippets",
+                                                    duration: 4.5
+                                                )
+                                            }
+                                        }
+                                    ))
+                                    .labelsHidden()
                                 }
-                            ),
-                            palette: palette
-                        )
+                            }
+                        }
                     }
                 }
 
@@ -582,6 +657,9 @@ public struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+        .onAppear {
+            terminalThemeExporter.refreshDetectedTargets()
         }
 
         SettingsCard(icon: "sun.max.fill", title: "Appearance Mode, Opacity, Blur & Shadows", palette: palette) {
@@ -1364,6 +1442,54 @@ public struct SettingsView: View {
             }
             wallpaperService.addFolder(path: url.path)
         }
+    }
+
+    /// Subtitle for a theme-sync target row. Obsidian lists every resolved vault snippet path
+    /// (home shortened to `~`, joined with ` • `); all other targets show their path summary.
+    private func themeTargetSubtitle(_ target: ThemeSyncTarget) -> String {
+        guard target == .obsidian else { return target.relativePathSummary }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let urls = TerminalThemePaths.resolveObsidianSnippetURLs(customVaultPaths: configStore.config.obsidianVaultPaths)
+        return urls.map { $0.path.replacingOccurrences(of: home, with: "~") }.joined(separator: " • ")
+    }
+
+    /// Opens a directory picker and appends the chosen Obsidian vault folder(s) to the custom
+    /// vault path list, then re-exports so the new vaults get the theme immediately.
+    private func addObsidianVault() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        panel.prompt = "Add Vault"
+        panel.message = "Choose one or more Obsidian vault folders to sync the theme into"
+
+        if panel.runModal() == .OK {
+            var paths = configStore.config.obsidianVaultPaths
+            for url in panel.urls where !paths.contains(url.path) {
+                paths.append(url.path)
+            }
+            configStore.update { $0.obsidianVaultPaths = paths }
+            terminalThemeExporter.exportIfEnabled(
+                palette: themeStore.palette,
+                themeName: themeStore.themeName,
+                isDark: themeStore.palette.isDark
+            )
+            ToastCenter.shared.show(
+                icon: "sparkles",
+                message: "Obsidian vault added — remember to activate 'dms' in Obsidian Settings → Appearance → CSS snippets",
+                duration: 4.5
+            )
+        }
+    }
+
+    /// Clears custom vault overrides, returning to the vaults auto-detected from obsidian.json.
+    private func resetObsidianVaults() {
+        configStore.update { $0.obsidianVaultPaths = [] }
+        terminalThemeExporter.exportIfEnabled(
+            palette: themeStore.palette,
+            themeName: themeStore.themeName,
+            isDark: themeStore.palette.isDark
+        )
     }
 
     // MARK: - 3. Typography & Motion Tab

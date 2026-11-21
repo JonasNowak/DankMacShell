@@ -1038,6 +1038,73 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         }
     }
 
+    /// Whether theme export is enabled for a given dank-theme-engine target (v0.9.2).
+    /// Respects the master `terminalThemeSync` switch, exactly like `isTerminalThemeEnabled`.
+    public func isThemeTargetEnabled(_ target: ThemeSyncTarget) -> Bool {
+        guard terminalThemeSync else { return false }
+        return isThemeTargetConfiguredOn(target)
+    }
+
+    /// The stored per-target toggle, ignoring the master `terminalThemeSync` switch.
+    /// Used for UI toggle bindings so the switch state survives disabling the master switch.
+    public func isThemeTargetConfiguredOn(_ target: ThemeSyncTarget) -> Bool {
+        switch target {
+        case .ghostty: return terminalThemeGhostty
+        case .kitty: return terminalThemeKitty
+        case .alacritty: return terminalThemeAlacritty
+        case .iterm2: return terminalThemeITerm2
+        default:
+            return rawSettings["themeTarget_\(target.rawValue)"]?.boolValue ?? target.defaultEnabled
+        }
+    }
+
+    /// Whether the user explicitly set a toggle for this target (stored in `rawSettings`).
+    public func isThemeTargetExplicitlyConfigured(_ target: ThemeSyncTarget) -> Bool {
+        rawSettings["themeTarget_\(target.rawValue)"]?.boolValue != nil
+    }
+
+    /// Persists the per-target toggle (v0.9.2). The four legacy emulators also update their
+    /// dedicated config keys; every target (including the legacy four) is always recorded in
+    /// `rawSettings["themeTarget_<id>"]` so the explicit override survives and is detectable.
+    public mutating func setThemeTargetEnabled(_ target: ThemeSyncTarget, _ enabled: Bool) {
+        switch target {
+        case .ghostty: terminalThemeGhostty = enabled
+        case .kitty: terminalThemeKitty = enabled
+        case .alacritty: terminalThemeAlacritty = enabled
+        case .iterm2: terminalThemeITerm2 = enabled
+        default: break
+        }
+        rawSettings["themeTarget_\(target.rawValue)"] = AnyCodable(enabled)
+    }
+
+    /// Whether theme export is enabled for a target given the set of detected (genuinely
+    /// installed) targets (v0.9.2). Respects the master `terminalThemeSync` switch.
+    ///
+    /// An explicit `rawSettings` override always wins. Otherwise a target is enabled only
+    /// when it is a default-enabled target AND actually detected as installed — so DMS never
+    /// creates config directories/files for apps that are not on this machine.
+    public func isThemeTargetEnabled(_ target: ThemeSyncTarget, detected: Set<ThemeSyncTarget>) -> Bool {
+        guard terminalThemeSync else { return false }
+        return isThemeTargetConfiguredOn(target, detected: detected)
+    }
+
+    /// The stored per-target toggle given the detected set, ignoring the master switch.
+    /// Used for UI toggle bindings so the switch state survives disabling the master switch.
+    public func isThemeTargetConfiguredOn(_ target: ThemeSyncTarget, detected: Set<ThemeSyncTarget>) -> Bool {
+        if let explicit = rawSettings["themeTarget_\(target.rawValue)"]?.boolValue {
+            return explicit
+        }
+        // Legacy emulator keys: an explicit `false` there disables the target.
+        switch target {
+        case .ghostty: if !terminalThemeGhostty { return false }
+        case .kitty: if !terminalThemeKitty { return false }
+        case .alacritty: if !terminalThemeAlacritty { return false }
+        case .iterm2: if !terminalThemeITerm2 { return false }
+        default: break
+        }
+        return target.defaultEnabled && detected.contains(target)
+    }
+
     /// Theme mode: "dark", "light", or "system". Syncs with `isLightMode`.
     public var themeMode: String {
         get {
@@ -1060,6 +1127,13 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var themeSeedColor: String {
         get { rawSettings["themeSeedColor"]?.stringValue ?? "#D0BCFF" }
         set { rawSettings["themeSeedColor"] = AnyCodable(newValue) }
+    }
+
+    /// User-configured custom Obsidian vault paths (in addition to the vaults auto-discovered
+    /// from `~/Library/Application Support/obsidian/obsidian.json`).
+    public var obsidianVaultPaths: [String] {
+        get { rawSettings["obsidianVaultPaths"]?.arrayValue?.compactMap(\.stringValue) ?? [] }
+        set { rawSettings["obsidianVaultPaths"] = AnyCodable(newValue.map { AnyCodable($0) }) }
     }
 
     /// Matugen scheme algorithm (`scheme-tonal-spot`, `scheme-vibrant`, `scheme-expressive`, `scheme-fidelity`, `scheme-neutral`, `scheme-monochrome`).

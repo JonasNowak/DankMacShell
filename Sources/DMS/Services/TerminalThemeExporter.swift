@@ -25,8 +25,19 @@ public final class TerminalThemeExporter: ObservableObject {
     @Published public private(set) var lastExportError: String?
     /// Emulators skipped in the last export because their target is nix-store managed.
     @Published public private(set) var lastSkippedManaged: [String] = []
+    /// dank-theme-engine target ids detected as installed on this machine (v0.9.2).
+    @Published public private(set) var detectedTargetIds: Set<String> = []
 
-    private init() {}
+    private init() {
+        refreshDetectedTargets()
+    }
+
+    /// Re-queries installed targets and stores the detected target ids.
+    /// Uses `TerminalThemeDetector.detectedTargets()` exclusively so DMS's own generated
+    /// theme files can never cause a false-positive "installed" detection.
+    public func refreshDetectedTargets() {
+        detectedTargetIds = Set(TerminalThemeDetector.detectedTargets().map(\.dteTargetId))
+    }
 
     /// Debounced entry point called from `ThemeStore` palette changes.
     public func exportIfEnabled(palette: ThemePalette, themeName: String, isDark: Bool, config: DMSConfig? = nil) {
@@ -42,11 +53,31 @@ public final class TerminalThemeExporter: ObservableObject {
 
     /// Writes all enabled emulator theme files plus the canonical `theme.json`.
     /// Returns per-emulator success. Never throws: one failing/managed target does not abort the rest.
+    /// Delegates to `exportAllTargets` and maps the four legacy `TerminalEmulator` cases back
+    /// for full backward compatibility (v0.9.2).
     @discardableResult
     public func export(palette: ThemePalette, themeName: String, isDark: Bool, config: DMSConfig? = nil) -> [TerminalEmulator: Bool] {
+        let allResults = exportAllTargets(palette: palette, themeName: themeName, isDark: isDark, config: config)
+        var results: [TerminalEmulator: Bool] = [:]
+        for emulator in TerminalEmulator.allCases {
+            guard let target = ThemeSyncTarget(rawValue: emulator.rawValue),
+                  let success = allResults[target] else { continue }
+            results[emulator] = success
+        }
+        return results
+    }
+
+    /// Writes every enabled dank-theme-engine target theme file plus the canonical `theme.json` (v0.9.2).
+    /// Returns per-target success. Never throws: one failing/managed target does not abort the rest.
+    @discardableResult
+    public func exportAllTargets(palette: ThemePalette, themeName: String, isDark: Bool, config: DMSConfig? = nil) -> [ThemeSyncTarget: Bool] {
         let cfg = config ?? ConfigStore.shared.config
         let dank16 = Dank16Generator.generate(from: palette)
-        var results: [TerminalEmulator: Bool] = [:]
+        // Local detection is the gate: only genuinely installed targets are written, so DMS
+        // never creates config directories/files for uninstalled apps.
+        let detected = TerminalThemeDetector.detectedTargets()
+        detectedTargetIds = Set(detected.map(\.dteTargetId))
+        var results: [ThemeSyncTarget: Bool] = [:]
         var skipped: [String] = []
         var firstError: String?
 
@@ -65,16 +96,17 @@ public final class TerminalThemeExporter: ObservableObject {
             logger.error("Failed to write canonical theme.json: \(error.localizedDescription)")
         }
 
-        for emulator in TerminalEmulator.allCases where cfg.isTerminalThemeEnabled(emulator) {
-            let target = TerminalThemePaths.targetPath(for: emulator)
-            if TerminalThemeSecurity.isManagedSymlink(path: target.path) {
-                logger.warning("Skipping \(emulator.rawValue) theme at \(target.path, privacy: .public): symlink resolves into /nix/store (home-manager managed). DMS only writes files home-manager does not declare.")
-                skipped.append(emulator.displayName)
-                results[emulator] = false
-                continue
+        for target in ThemeSyncTarget.allCases where cfg.isThemeTargetEnabled(target, detected: detected) {
+            let targetURL = TerminalThemePaths.targetPath(for: target)
+            // Obsidian syncs every discovered vault; all other targets have a single path.
+            let writeURLs: [URL]
+            if target == .obsidian {
+                writeURLs = TerminalThemePaths.resolveObsidianSnippetURLs(customVaultPaths: cfg.obsidianVaultPaths)
+            } else {
+                writeURLs = [targetURL]
             }
             let content = TerminalThemeRenderer.render(
-                emulator: emulator,
+                target: target,
                 palette: palette,
                 dank16: dank16,
                 themeName: themeName
@@ -82,26 +114,43 @@ public final class TerminalThemeExporter: ObservableObject {
             // Never write empty / whitespace-only output — a render failure must not
             // overwrite the user's existing theme file with a 0-byte document.
             if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                results[emulator] = false
-                firstError = firstError ?? "Rendered \(emulator.rawValue) theme is empty; refusing to overwrite \(target.path)"
-                logger.error("Rendered \(emulator.rawValue) theme is empty; skipping write to \(target.path, privacy: .public)")
+                results[target] = false
+                firstError = firstError ?? "Rendered \(target.rawValue) theme is empty; refusing to overwrite \(targetURL.path)"
+                logger.error("Rendered \(target.rawValue) theme is empty; skipping write to \(targetURL.path, privacy: .public)")
                 continue
             }
-            do {
-                try Self.writeAtomically(string: content, to: target)
-                results[emulator] = true
-                logger.info("Wrote \(emulator.rawValue) theme to \(target.path, privacy: .public)")
-                if emulator == .kitty {
+            var wroteAny = false
+            for url in writeURLs {
+                if TerminalThemeSecurity.isManagedSymlink(path: url.path) {
+                    logger.warning("Skipping \(target.rawValue) theme at \(url.path, privacy: .public): symlink resolves into /nix/store (home-manager managed). DMS only writes files home-manager does not declare.")
+                    skipped.append(target.displayName)
+                    continue
+                }
+                do {
+                    try Self.writeAtomically(string: content, to: url)
+                    wroteAny = true
+                    logger.info("Wrote \(target.rawValue) theme to \(url.path, privacy: .public)")
+                } catch {
+                    firstError = firstError ?? error.localizedDescription
+                    logger.error("Failed to write \(target.rawValue) theme to \(url.path, privacy: .public): \(error.localizedDescription)")
+                }
+            }
+            results[target] = wroteAny
+            if wroteAny {
+                switch target {
+                case .kitty:
                     // Kitty only auto-reloads its top-level config (never includes, and under
                     // home-manager that file is a read-only /nix/store symlink), so poke the
                     // running kitty processes with its own reload signal.
                     Self.signalKittyConfigReload(logger: logger)
                     Self.warnIfKittyConfigMissesInclude(logger: logger)
+                case .tmux:
+                    _ = EmulatorReload.reloadTmux(themePath: targetURL.path)
+                case .neovim:
+                    _ = EmulatorReload.signalNeovimReload()
+                default:
+                    break
                 }
-            } catch {
-                results[emulator] = false
-                firstError = firstError ?? error.localizedDescription
-                logger.error("Failed to write \(emulator.rawValue) theme to \(target.path, privacy: .public): \(error.localizedDescription)")
             }
         }
 
