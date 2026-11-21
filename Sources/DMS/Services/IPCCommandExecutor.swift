@@ -377,21 +377,24 @@ public enum IPCCommandExecutor {
         case .brightness(let act, let val):
             switch act.lowercased() {
             case "set":
-                if let valStr = val, let b = Double(valStr) {
+                if let valStr = val, let b = Double(valStr), b.isFinite {
                     BrightnessService.shared.brightness = min(1.0, max(0.0, b > 1.0 ? b / 100.0 : b))
-                    return "Brightness set to \(Int(BrightnessService.shared.brightness * 100))%"
+                    return "Brightness set to \(Int(round(BrightnessService.shared.brightness * 100)))%"
                 }
                 return "Missing brightness argument"
             case "increment":
+                BrightnessService.shared.refreshIfStale()
                 let cur = BrightnessService.shared.brightness
                 BrightnessService.shared.brightness = min(1.0, cur + 0.05)
-                return "Brightness: \(Int(BrightnessService.shared.brightness * 100))%"
+                return "Brightness: \(Int(round(BrightnessService.shared.brightness * 100)))%"
             case "decrement":
+                BrightnessService.shared.refreshIfStale()
                 let cur = BrightnessService.shared.brightness
                 BrightnessService.shared.brightness = max(0.0, cur - 0.05)
-                return "Brightness: \(Int(BrightnessService.shared.brightness * 100))%"
+                return "Brightness: \(Int(round(BrightnessService.shared.brightness * 100)))%"
             default:
-                return "Brightness: \(Int(BrightnessService.shared.brightness * 100))%"
+                BrightnessService.shared.refreshIfStale()
+                return "Brightness: \(Int(round(BrightnessService.shared.brightness * 100)))%"
             }
 
         case .inhibit(let act):

@@ -414,4 +414,77 @@ struct IslandBarAndOSDTests {
         bar.transparency = 0.0
         #expect(bar.transparency == 0.0)
     }
+
+    @Test("DisplayBrightnessNotification Parses Valid userInfo and Rejects Invalid Payloads Without Defaulting to Zero")
+    func testDisplayBrightnessNotificationParsing() {
+        #expect(DisplayBrightnessNotification.extractBrightness(from: ["value": NSNumber(value: Float(0.75))]) == 0.75)
+        let exact = DisplayBrightnessNotification.extractBrightness(from: ["value": NSNumber(value: 0.9623517)])
+        #expect(exact != nil && abs(exact! - 0.9623517) < 0.0001)
+
+        // Clamps out-of-range finite floats
+        #expect(DisplayBrightnessNotification.extractBrightness(from: ["value": NSNumber(value: 1.25)]) == 1.0)
+        #expect(DisplayBrightnessNotification.extractBrightness(from: ["value": NSNumber(value: -0.25)]) == 0.0)
+
+        // Nil, missing key, booleans, non-numeric values, and non-finite numbers return nil instead of 0.0
+        #expect(DisplayBrightnessNotification.extractBrightness(from: nil) == nil)
+        #expect(DisplayBrightnessNotification.extractBrightness(from: [:]) == nil)
+        #expect(DisplayBrightnessNotification.extractBrightness(from: ["value": "0.5"]) == nil)
+        #expect(DisplayBrightnessNotification.extractBrightness(from: ["value": NSNumber(value: false)]) == nil)
+        #expect(DisplayBrightnessNotification.extractBrightness(from: ["value": NSNumber(value: true)]) == nil)
+        #expect(DisplayBrightnessNotification.extractBrightness(from: ["value": Double.nan]) == nil)
+        #expect(DisplayBrightnessNotification.extractBrightness(from: ["value": Double.infinity]) == nil)
+    }
+
+    @Test("DisplayBrightnessNotification Filters Uninitialized, Tolerance, and Post-Write Echo Updates")
+    func testDisplayBrightnessExternalUpdateFiltering() {
+        // Ignored before initialization
+        #expect(
+            DisplayBrightnessNotification.externalUpdateValue(
+                currentValue: 0.8,
+                candidateValue: 0.5,
+                isInitialized: false,
+                secondsSinceLocalWrite: 10.0
+            ) == nil
+        )
+
+        // Delayed XPC self-echo within settle window is ignored so rapid writes don't bounce backward
+        #expect(
+            DisplayBrightnessNotification.externalUpdateValue(
+                currentValue: 0.8,
+                candidateValue: 0.7,
+                isInitialized: true,
+                secondsSinceLocalWrite: 0.1
+            ) == nil
+        )
+
+        // Small jitter within tolerance is ignored
+        #expect(
+            DisplayBrightnessNotification.externalUpdateValue(
+                currentValue: 0.8,
+                candidateValue: 0.802,
+                isInitialized: true,
+                secondsSinceLocalWrite: 5.0
+            ) == nil
+        )
+
+        // Non-finite candidate never clamps to 0.0
+        #expect(
+            DisplayBrightnessNotification.externalUpdateValue(
+                currentValue: 0.8,
+                candidateValue: .nan,
+                isInitialized: true,
+                secondsSinceLocalWrite: 5.0
+            ) == nil
+        )
+
+        // Genuine external change after settle window is applied cleanly
+        #expect(
+            DisplayBrightnessNotification.externalUpdateValue(
+                currentValue: 0.8,
+                candidateValue: 0.55,
+                isInitialized: true,
+                secondsSinceLocalWrite: 5.0
+            ) == 0.55
+        )
+    }
 }

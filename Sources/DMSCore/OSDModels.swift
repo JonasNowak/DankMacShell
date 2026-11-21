@@ -215,3 +215,51 @@ public enum SystemKey: Equatable, Sendable {
         return min(max(n * abs(d), 0.0), 1.0)
     }
 }
+
+/// Parses and filters display brightness change notifications emitted by `DisplayServices`.
+public enum DisplayBrightnessNotification {
+    /// Cooldown window after a local brightness write during which delayed XPC echoes are ignored.
+    public static let localWriteSettleInterval: Double = 0.25
+
+    /// Minimum delta required for an external notification to update the cached brightness.
+    public static let changeTolerance: Double = 0.005
+
+    /// Extracts a finite clamped brightness fraction (`0.0...1.0`) from a `DisplayServices`
+    /// notification `userInfo` dictionary (`@{ "value": NSNumber }`). Returns `nil` when absent,
+    /// boolean, non-numeric, or non-finite so callers never fall back to `0.0`.
+    public static func extractBrightness(from userInfo: [AnyHashable: Any]?) -> Double? {
+        guard let raw = userInfo?["value"] else { return nil }
+        let numberValue: Double
+        if let number = raw as? NSNumber {
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                return nil
+            }
+            numberValue = number.doubleValue
+        } else if let dbl = raw as? Double {
+            numberValue = dbl
+        } else if let flt = raw as? Float {
+            numberValue = Double(flt)
+        } else {
+            return nil
+        }
+        guard numberValue.isFinite else { return nil }
+        return min(max(numberValue, 0.0), 1.0)
+    }
+
+    /// Returns the clamped brightness value to apply from an external notification callback,
+    /// or `nil` when uninitialized, invalid, inside the post-write settle window, or within
+    /// `changeTolerance` of `currentValue`.
+    public static func externalUpdateValue(
+        currentValue: Double,
+        candidateValue: Double,
+        isInitialized: Bool,
+        secondsSinceLocalWrite: Double,
+        settleInterval: Double = localWriteSettleInterval
+    ) -> Double? {
+        guard isInitialized, candidateValue.isFinite else { return nil }
+        guard secondsSinceLocalWrite >= settleInterval else { return nil }
+        let clamped = min(max(candidateValue, 0.0), 1.0)
+        guard abs(currentValue - clamped) > changeTolerance else { return nil }
+        return clamped
+    }
+}
