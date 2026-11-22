@@ -56,7 +56,7 @@ public struct MediaOverviewCard: View {
                             )
 
                             Image(systemName: "music.note")
-                                .font(.system(size: 18))
+                                .font(ThemeStore.shared.font(size: 18))
                                 .foregroundColor(Color(hex: p.primary.hex))
                         }
                     }
@@ -72,13 +72,13 @@ public struct MediaOverviewCard: View {
             // Track Title & Artist
             VStack(spacing: 1.5) {
                 Text(displayTitle)
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 10.5, weight: .bold))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(displayArtist)
-                    .font(.system(size: 9.0, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 9.0, weight: .medium))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -100,7 +100,7 @@ public struct MediaOverviewCard: View {
             HStack(spacing: 10) {
                 Button(action: { nowPlaying.previous() }) {
                     Image(systemName: "backward.end.fill")
-                        .font(.system(size: 10.5))
+                        .font(ThemeStore.shared.font(size: 10.5))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                 }
                 .buttonStyle(.plain)
@@ -112,7 +112,7 @@ public struct MediaOverviewCard: View {
                             .frame(width: 28, height: 28)
 
                         Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 10.5, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 10.5, weight: .bold))
                             .foregroundColor(Color(hex: p.onPrimary.hex))
                     }
                 }
@@ -120,7 +120,7 @@ public struct MediaOverviewCard: View {
 
                 Button(action: { nowPlaying.next() }) {
                     Image(systemName: "forward.end.fill")
-                        .font(.system(size: 10.5))
+                        .font(ThemeStore.shared.font(size: 10.5))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                 }
                 .buttonStyle(.plain)

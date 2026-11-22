@@ -226,7 +226,7 @@ public struct ControlCenterView: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(theme.primary.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                         Text("No tiles — click + Add Tile")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 12, weight: .semibold, design: .rounded))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
                     .frame(height: 44)
@@ -351,7 +351,7 @@ public struct ControlCenterView: View {
                             .fill(Color.black.opacity(0.45))
                             .frame(width: 36, height: 36)
                         Image(systemName: "shuffle")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
@@ -361,12 +361,12 @@ public struct ControlCenterView: View {
             // User Name & System Uptime
             VStack(alignment: .leading, spacing: 2) {
                 Text(NSUserName().isEmpty ? "User" : NSUserName())
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
                     .lineLimit(1)
 
                 Text(uptimeText.isEmpty ? "--" : uptimeText)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(theme.onSurfaceVariant)
                     .lineLimit(1)
             }
@@ -439,16 +439,16 @@ public struct ControlCenterView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: dnd.isEnabled ? "bell.slash.fill" : "bell.slash")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(dnd.isEnabled ? theme.primary : theme.onSurface)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Do Not Disturb")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 12, weight: .bold, design: .rounded))
                             .foregroundColor(theme.onSurface)
                         if dnd.isEnabled {
                             Text(dnd.remainingSeconds != nil ? WellbeingFormatter.formatDuration(seconds: dnd.remainingSeconds!) : "Active")
-                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 10, weight: .medium, design: .rounded))
                                 .foregroundColor(theme.primary)
                         }
                     }
@@ -456,7 +456,7 @@ public struct ControlCenterView: View {
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
                 }
                 .padding(.horizontal, 12)
@@ -478,7 +478,7 @@ public struct ControlCenterView: View {
                     ConfigStore.shared.update { $0.isLightMode = theme.isLightMode }
                 } label: {
                     Image(systemName: theme.isLightMode ? "sun.max.fill" : "moon.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(theme.isLightMode ? theme.primary : theme.onSurface)
                         .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
                         .background(theme.surfaceContainerHigh)
@@ -495,7 +495,7 @@ public struct ControlCenterView: View {
                     cycleTheme()
                 } label: {
                     Image(systemName: "circle.lefthalf.filled")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(theme.onSurface)
                         .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
                         .background(theme.surfaceContainerHigh)
@@ -785,7 +785,7 @@ public struct ControlCenterView: View {
                             .fill(Color.black.opacity(0.45))
                             .frame(width: 36, height: 36)
                         Image(systemName: "shuffle")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
@@ -795,12 +795,12 @@ public struct ControlCenterView: View {
             // User Name & System Uptime
             VStack(alignment: .leading, spacing: 2) {
                 Text(NSUserName().isEmpty ? "User" : NSUserName())
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
                     .lineLimit(1)
 
                 Text(uptimeText.isEmpty ? "--" : uptimeText)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(theme.onSurfaceVariant)
                     .lineLimit(1)
             }
@@ -828,7 +828,7 @@ public struct ControlCenterView: View {
                             resizeWidget(widget)
                         } label: {
                             Image(systemName: "arrow.left.and.right")
-                                .font(.system(size: 7, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 7, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 14, height: 14)
                                 .background(theme.primary)
@@ -844,7 +844,7 @@ public struct ControlCenterView: View {
                             removeWidget(widget)
                         } label: {
                             Image(systemName: "xmark")
-                                .font(.system(size: 6, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 6, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 14, height: 14)
                                 .background(Color(hex: theme.palette.error.hex))
@@ -863,7 +863,7 @@ public struct ControlCenterView: View {
                             resizeWidget(widget)
                         } label: {
                             Image(systemName: "arrow.left.and.right")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 18, height: 18)
                                 .background(theme.primary)
@@ -878,7 +878,7 @@ public struct ControlCenterView: View {
                             removeWidget(widget)
                         } label: {
                             Image(systemName: "xmark")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 8, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 18, height: 18)
                                 .background(Color(hex: theme.palette.error.hex))
@@ -1023,7 +1023,7 @@ public struct ControlCenterView: View {
                 nowPlaying.playPause()
             } label: {
                 Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 16, weight: .bold))
                     .foregroundColor(track.isPlaying ? theme.onPrimary : theme.onSurfaceVariant)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(track.isPlaying ? theme.primary : theme.surfaceContainerHigh)
@@ -1042,7 +1042,7 @@ public struct ControlCenterView: View {
                     nowPlaying.playPause()
                 } label: {
                     Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .bold))
                         .foregroundColor(track.isPlaying ? theme.onPrimary : theme.onSurfaceVariant)
                         .frame(width: 28, height: 28)
                         .background(track.isPlaying ? theme.primary : theme.surfaceContainerHighest)
@@ -1051,7 +1051,7 @@ public struct ControlCenterView: View {
                 .buttonStyle(.plain)
 
                 Text(track.title.isEmpty ? "Media" : track.title)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1081,13 +1081,13 @@ public struct ControlCenterView: View {
                             .fill(theme.primary)
                             .frame(width: 58, height: 32)
                         Image(systemName: "pause.fill")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 14, weight: .bold))
                             .foregroundColor(theme.onPrimary)
                     } else {
                         Color.clear
                             .frame(width: 58, height: 32)
                         Image(systemName: "play.fill")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 15, weight: .semibold))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
                 }
@@ -1096,12 +1096,12 @@ public struct ControlCenterView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title.isEmpty ? "No Media Playing" : track.title)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
                     .lineLimit(1)
                 if !track.artist.isEmpty {
                     Text(track.artist)
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium, design: .rounded))
                         .foregroundColor(theme.onSurfaceVariant)
                         .lineLimit(1)
                 }
@@ -1284,7 +1284,7 @@ public struct HeaderActionButton: View {
     public var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                 .foregroundColor(theme.onSurfaceVariant)
                 .frame(width: 28, height: 28)
                 .background(Color.clear)
@@ -1322,7 +1322,7 @@ public struct ControlCenterPillSlider: View {
         HStack(spacing: 8) {
             Button(action: onIconTap) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                     .foregroundColor(theme.onSurfaceVariant)
                     .frame(width: 20, height: 20)
             }
@@ -1414,7 +1414,7 @@ public struct ControlCenterTile: View {
                 onTap()
             } label: {
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 16, weight: .bold))
                     .foregroundColor((isPillIcon && isActive) ? theme.onPrimary : theme.onSurfaceVariant)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background((isPillIcon && isActive) ? theme.primary : theme.surfaceContainerHigh)
@@ -1434,7 +1434,7 @@ public struct ControlCenterTile: View {
                     onTap()
                 } label: {
                     Image(systemName: icon)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .bold))
                         .foregroundColor((isPillIcon && isActive) ? theme.onPrimary : theme.onSurfaceVariant)
                         .frame(width: 28, height: 28)
                         .background((isPillIcon && isActive) ? theme.primary : theme.surfaceContainerHighest)
@@ -1451,7 +1451,7 @@ public struct ControlCenterTile: View {
                     }
                 } label: {
                     Text(title)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .rounded))
                         .foregroundColor(theme.onSurface)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -1486,14 +1486,14 @@ public struct ControlCenterTile: View {
                             .frame(width: 58, height: 32)
 
                         Image(systemName: icon)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 14, weight: .bold))
                             .foregroundColor(theme.onPrimary)
                     } else {
                         Color.clear
                             .frame(width: 58, height: 32)
 
                         Image(systemName: icon)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 15, weight: .semibold))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
                 }
@@ -1510,13 +1510,13 @@ public struct ControlCenterTile: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(theme.onSurface)
                         .lineLimit(1)
 
                     if !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium, design: .rounded))
                             .foregroundColor(theme.onSurfaceVariant)
                             .lineLimit(1)
                     }

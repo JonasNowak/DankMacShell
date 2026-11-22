@@ -57,11 +57,11 @@ public struct NetworkMonitorWidget: View {
             if isVertical {
                 VStack(spacing: 2) {
                     Image(systemName: "arrow.up.arrow.down")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         .foregroundColor(tintColor)
 
                     Text(SystemTelemetry.formatCompactByteRate(downRate))
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 9, weight: .bold, design: .monospaced))
                         .foregroundColor(tintColor)
                         .lineLimit(1)
                 }
@@ -71,32 +71,32 @@ public struct NetworkMonitorWidget: View {
                 HStack(spacing: 5) {
                     if style.showIcon {
                         Image(systemName: "arrow.up.arrow.down")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                             .foregroundColor(theme.primary)
                     }
 
                     if style.showLabel {
                         if isCompact {
                             Text("↓\(SystemTelemetry.formatCompactByteRate(downRate)) ↑\(SystemTelemetry.formatCompactByteRate(upRate))")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .monospaced))
                                 .foregroundColor(tintColor)
                         } else {
                             HStack(spacing: 4) {
                                 HStack(spacing: 2) {
                                     Image(systemName: "arrow.down")
-                                        .font(.system(size: 8, weight: .bold))
+                                        .font(ThemeStore.shared.font(size: 8, weight: .bold))
                                         .foregroundColor(theme.primary)
                                     Text(SystemTelemetry.formatByteRate(downRate))
-                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                        .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .monospaced))
                                         .foregroundColor(tintColor)
                                 }
 
                                 HStack(spacing: 2) {
                                     Image(systemName: "arrow.up")
-                                        .font(.system(size: 8, weight: .bold))
+                                        .font(ThemeStore.shared.font(size: 8, weight: .bold))
                                         .foregroundColor(theme.secondary)
                                     Text(SystemTelemetry.formatByteRate(upRate))
-                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                        .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .monospaced))
                                         .foregroundColor(tintColor)
                                 }
                             }

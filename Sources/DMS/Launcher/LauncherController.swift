@@ -89,6 +89,9 @@ public final class LauncherController {
 
     private func present(_ makeView: () -> LauncherView) {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        // Capture the previously active app before taking focus so `:emoji` / `nf:` auto-paste
+        // targets the app the user came from.
+        AutoPasteService.shared.capturePreviousApp()
         ControlCenterController.shared.hide()
         PowerMenuController.shared.hide()
         DashController.shared.hide()

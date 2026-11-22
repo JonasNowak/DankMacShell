@@ -15,7 +15,7 @@ public struct DoNotDisturbDetailPage: View {
             // Master Switch Tile
             HStack(spacing: 10) {
                 Image(systemName: dndService.isEnabled ? "bell.slash.fill" : "bell.fill")
-                    .font(.system(size: 18))
+                    .font(ThemeStore.shared.font(size: 18))
                     .foregroundColor(dndService.isEnabled ? Color(hex: p.onPrimary.hex) : Color(hex: p.primary.hex))
                     .frame(width: 36, height: 36)
                     .background(dndService.isEnabled ? Color(hex: p.primary.hex) : Color(hex: p.primaryContainer.hex).opacity(0.4))
@@ -23,16 +23,16 @@ public struct DoNotDisturbDetailPage: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Do Not Disturb")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     if dndService.isEnabled, let secs = dndService.remainingSeconds {
                         Text("Active • \(WellbeingFormatter.formatDuration(seconds: secs)) remaining")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: p.primary.hex))
                     } else {
                         Text(dndService.isEnabled ? "Active • Indefinite" : "Silence notifications and alerts")
-                            .font(.system(size: 10))
+                            .font(ThemeStore.shared.font(size: 10))
                             .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     }
                 }
@@ -54,7 +54,7 @@ public struct DoNotDisturbDetailPage: View {
             // Duration Presets
             VStack(alignment: .leading, spacing: 6) {
                 Text("Duration Presets")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                     .padding(.horizontal, 4)
 
@@ -67,14 +67,14 @@ public struct DoNotDisturbDetailPage: View {
                         }) {
                             HStack {
                                 Text(preset.label)
-                                    .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                                    .font(ThemeStore.shared.font(size: 11, weight: isSelected ? .bold : .medium))
                                     .foregroundColor(isSelected ? Color(hex: p.onPrimary.hex) : Color(hex: p.onSurface.hex))
 
                                 Spacer()
 
                                 if isSelected {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 10, weight: .bold))
+                                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                         .foregroundColor(Color(hex: p.onPrimary.hex))
                                 }
                             }
@@ -98,7 +98,7 @@ public struct DoNotDisturbDetailPage: View {
                     Image(systemName: "gearshape")
                     Text("macOS Focus Settings…")
                 }
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(Color(hex: p.primary.hex))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)

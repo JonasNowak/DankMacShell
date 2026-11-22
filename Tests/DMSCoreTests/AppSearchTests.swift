@@ -118,9 +118,9 @@ struct AppSearchTests {
 
     @Test("Emoji Search by Name and Keywords")
     func testEmojiSearch() {
-        // Empty query defaults to top emojis
+        // Empty query defaults to the first 24 items of the combined pool
         let top = AppSearch.searchEmojis(query: "")
-        #expect(top.count == 12)
+        #expect(top.count == 24)
 
         // Name match
         let fire = AppSearch.searchEmojis(query: "fire")
@@ -137,6 +137,144 @@ struct AppSearchTests {
         // Non-matching query
         let none = AppSearch.searchEmojis(query: "xyznonexistentemoji")
         #expect(none.isEmpty)
+    }
+
+    @Test("Emoji Query Detection and Prefix Pools")
+    func testIsEmojiQueryAndPrefixes() {
+        // isEmojiQuery
+        #expect(AppSearch.isEmojiQuery("emoji:fire") == true)
+        #expect(AppSearch.isEmojiQuery("nf:folder") == true)
+        #expect(AppSearch.isEmojiQuery(":fire") == true)
+        #expect(AppSearch.isEmojiQuery(":f") == true)
+        #expect(AppSearch.isEmojiQuery("  :fire  ") == true)
+        #expect(AppSearch.isEmojiQuery("EMOJI:fire") == true)
+        #expect(AppSearch.isEmojiQuery(":") == false)
+        #expect(AppSearch.isEmojiQuery(": fire") == false)
+        #expect(AppSearch.isEmojiQuery("fire") == false)
+        #expect(AppSearch.isEmojiQuery("") == false)
+        #expect(AppSearch.isEmojiQuery("emoji search") == false)
+
+        // "nf:" searches only the nerd font pool
+        let nf = AppSearch.searchEmojis(query: "nf:folder")
+        #expect(!nf.isEmpty)
+        #expect(nf.allSatisfy { $0.isNerdFont })
+        #expect(nf.contains(where: { $0.shortcode == "nf-fa-folder" }))
+
+        // "emoji:" searches only the common pool
+        let em = AppSearch.searchEmojis(query: "emoji:fire")
+        #expect(em.contains(where: { $0.emoji == "🔥" }))
+        #expect(em.allSatisfy { !$0.isNerdFont })
+
+        // ":" searches both pools; shortcode/name prefix matches sort first
+        let colon = AppSearch.searchEmojis(query: ":rocket")
+        #expect(colon.first?.emoji == "🚀")
+
+        // Trailing colon is stripped
+        let trailing = AppSearch.searchEmojis(query: ":fire:")
+        #expect(trailing.contains(where: { $0.emoji == "🔥" }))
+
+        // Empty stripped query returns the first 24 items of the pool
+        #expect(AppSearch.searchEmojis(query: "").count == 24)
+        let nfEmpty = AppSearch.searchEmojis(query: "nf:")
+        #expect(nfEmpty.count == 24)
+        #expect(nfEmpty.allSatisfy { $0.isNerdFont })
+
+        // Shortcode matching
+        let byShortcode = AppSearch.searchEmojis(query: "nf-dev-git")
+        #expect(byShortcode.contains(where: { $0.shortcode == "nf-dev-git_branch" }))
+    }
+
+    @Test("Web Search !bang Resolution")
+    func testResolveWebSearchBangs() {
+        // Bang at start
+        let gh = AppSearch.resolveWebSearch(query: "!gh dankmacshell")
+        #expect(gh?.isBang == true)
+        #expect(gh?.providerName == "github")
+        #expect(gh?.query == "dankmacshell")
+        #expect(gh?.url.absoluteString.contains("github.com/search?q=dankmacshell") == true)
+
+        let ddg = AppSearch.resolveWebSearch(query: "!ddg swift concurrency")
+        #expect(ddg?.isBang == true)
+        #expect(ddg?.providerName == "duckduckgo")
+        #expect(ddg?.url.absoluteString.contains("duckduckgo.com/?q=swift%20concurrency") == true)
+
+        // Bang at end
+        let yt = AppSearch.resolveWebSearch(query: "swift tips !yt")
+        #expect(yt?.isBang == true)
+        #expect(yt?.providerName == "youtube")
+        #expect(yt?.query == "swift tips")
+        #expect(yt?.url.absoluteString.contains("youtube.com/results?search_query=swift%20tips") == true)
+
+        let w = AppSearch.resolveWebSearch(query: "!w actor model")
+        #expect(w?.providerName == "wikipedia")
+        #expect(w?.url.absoluteString.contains("en.wikipedia.org/w/index.php?search=actor%20model") == true)
+
+        let kagi = AppSearch.resolveWebSearch(query: "!kagi m3 design")
+        #expect(kagi?.providerName == "kagi")
+        #expect(kagi?.url.absoluteString.contains("kagi.com/search?q=m3%20design") == true)
+
+        let brew = AppSearch.resolveWebSearch(query: "!brew neovim")
+        #expect(brew?.providerName == "homebrew")
+        #expect(brew?.url.absoluteString.contains("formulae.brew.sh") == true)
+
+        let crates = AppSearch.resolveWebSearch(query: "!crates serde")
+        #expect(crates?.providerName == "crates")
+        #expect(crates?.url.absoluteString.contains("crates.io/search?q=serde") == true)
+
+        let npm = AppSearch.resolveWebSearch(query: "!npm react")
+        #expect(npm?.providerName == "npm")
+        #expect(npm?.url.absoluteString.contains("npmjs.com/search?q=react") == true)
+
+        let so = AppSearch.resolveWebSearch(query: "!so optional chaining")
+        #expect(so?.providerName == "stackoverflow")
+        #expect(so?.url.absoluteString.contains("stackoverflow.com/search?q=optional%20chaining") == true)
+
+        let apple = AppSearch.resolveWebSearch(query: "!apple swiftui")
+        #expect(apple?.providerName == "apple")
+        #expect(apple?.url.absoluteString.contains("developer.apple.com/search/") == true)
+
+        let g = AppSearch.resolveWebSearch(query: "!g dank shell")
+        #expect(g?.providerName == "google")
+        #expect(g?.url.absoluteString.contains("google.com/search?q=dank%20shell") == true)
+
+        // No bang -> default provider, isBang false
+        let plain = AppSearch.resolveWebSearch(query: "hello world")
+        #expect(plain?.isBang == false)
+        #expect(plain?.providerName == "google")
+        #expect(plain?.query == "hello world")
+        #expect(plain?.url.absoluteString.contains("google.com/search?q=hello%20world") == true)
+
+        let ddgDefault = AppSearch.resolveWebSearch(query: "hello", defaultProvider: "ddg")
+        #expect(ddgDefault?.isBang == false)
+        #expect(ddgDefault?.providerName == "duckduckgo")
+        #expect(ddgDefault?.url.absoluteString.contains("duckduckgo.com/?q=hello") == true)
+
+        // webSearchURL honors bangs over the configured provider
+        let viaURL = AppSearch.webSearchURL(query: "!gh dms", provider: "google")
+        #expect(viaURL?.absoluteString.contains("github.com/search?q=dms") == true)
+
+        // Unknown bang token is not treated as a bang
+        let unknown = AppSearch.resolveWebSearch(query: "!xyz hello")
+        #expect(unknown?.isBang == false)
+        #expect(unknown?.query == "!xyz hello")
+
+        // Empty queries resolve to nil
+        #expect(AppSearch.resolveWebSearch(query: "   ") == nil)
+        #expect(AppSearch.resolveWebSearch(query: "!g") == nil)
+    }
+
+    @Test("Math Evaluation Routes Unit Conversions")
+    func testMathRoutesUnitConverter() {
+        let km = AppSearch.evaluateMath(query: "1 km in mi")
+        #expect(km?.expression == "1 km → mi")
+        #expect(km?.result == "0.62 mi")
+
+        let currency = AppSearch.evaluateMath(query: "100 usd in eur")
+        #expect(currency?.expression == "100 USD → EUR")
+        #expect(currency?.result == "92.00 EUR")
+
+        // Plain math still evaluates through the math parser
+        #expect(AppSearch.evaluateMath(query: "3 + 7")?.result == "10")
     }
 
     @Test("Web Search URL Generation")
@@ -201,16 +339,6 @@ struct AppSearchTests {
         // Fallback text file
         let fallback = FileItem(name: "notes.xyz", path: "/test/notes.xyz", isDirectory: false)
         #expect(fallback.sfSymbol == "doc.text.fill")
-    }
-
-    @Test("WindowItem Properties")
-    func testWindowItem() {
-        let win = WindowItem(windowID: 101, ownerPID: 4321, ownerName: "Finder", title: "Downloads")
-        #expect(win.id == 101)
-        #expect(win.windowID == 101)
-        #expect(win.ownerPID == 4321)
-        #expect(win.ownerName == "Finder")
-        #expect(win.title == "Downloads")
     }
 
     @Test("File Query Parsing and Search Mode")

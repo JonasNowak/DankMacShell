@@ -139,12 +139,12 @@ public struct DurationPopoutView: View {
                 Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
                     .foregroundColor(inhibit.isInhibited ? theme.primary : theme.onSurfaceVariant)
                 Text("Sleep Inhibit")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
                         .frame(width: 22, height: 22)
                         .background(theme.surfaceContainerHigh)
@@ -163,20 +163,20 @@ public struct DurationPopoutView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(inhibit.isInhibited ? "System Awake" : "Default Sleep")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .bold))
                             .foregroundColor(inhibit.isInhibited ? theme.primary : theme.onSurface)
 
                         if let remaining = inhibit.formattedRemainingTime {
                             Text("Expires in \(remaining)")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 11, weight: .medium, design: .monospaced))
                                 .foregroundColor(theme.secondary)
                         } else if inhibit.isInhibited {
                             Text("Indefinite (no timer)")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 11, weight: .medium))
                                 .foregroundColor(theme.onSurfaceVariant)
                         } else {
                             Text("Standard macOS power management")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 10, weight: .medium))
                                 .foregroundColor(theme.onSurfaceVariant)
                         }
                     }
@@ -195,7 +195,7 @@ public struct DurationPopoutView: View {
                             inhibit.enable(preset: preset)
                         } label: {
                             Text(preset.shortLabel)
-                                .font(.system(size: 11, weight: isSelected ? .bold : .semibold, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 11, weight: isSelected ? .bold : .semibold, design: .rounded))
                                 .foregroundColor(isSelected ? theme.onPrimary : theme.onSurface)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 7)
@@ -213,9 +213,9 @@ public struct DurationPopoutView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "power")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .bold))
                             Text("Disable Inhibit")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         }
                         .foregroundColor(theme.error)
                         .frame(maxWidth: .infinity)

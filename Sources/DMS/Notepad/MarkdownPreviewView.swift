@@ -54,11 +54,11 @@ public struct MarkdownPreviewView: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let language, !language.isEmpty {
                     Text(language)
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 9, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(hex: p.primary.hex))
                 }
                 Text(code)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 11, design: .monospaced))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -86,7 +86,7 @@ public struct MarkdownPreviewView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .top, spacing: 8) {
                         Text("•")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 13, weight: .bold))
                             .foregroundColor(Color(hex: p.primary.hex))
                         inlineText(
                             item,
@@ -104,7 +104,7 @@ public struct MarkdownPreviewView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
                     HStack(alignment: .top, spacing: 8) {
                         Text("\(idx + 1).")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(Color(hex: p.primary.hex))
                             .frame(width: 20, alignment: .trailing)
                         inlineText(

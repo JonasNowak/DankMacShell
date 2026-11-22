@@ -305,6 +305,31 @@ struct ThemeTokensAndCustomizationTests {
         #expect(decoded.islandSettings.springStiffness == 620.0)
         #expect(decoded.islandSettings.gothCorners == true)
     }
+
+    @Test("DMSConfig Single-Font Override, Nerd Font Family & Custom Font Paths")
+    func testSingleFontOverrideAndCustomFontConfig() throws {
+        var cfg = DMSConfig()
+        #expect(cfg.useSingleFontEverywhere == false)
+        #expect(cfg.fontFamilyNerd == "Auto")
+        #expect(cfg.customFontPaths.isEmpty)
+
+        cfg.fontFamily = "JetBrainsMono Nerd Font"
+        cfg.fontFamilyMono = "SF Mono"
+        cfg.fontFamilyDisplay = "New York"
+        cfg.useSingleFontEverywhere = true
+        cfg.fontFamilyNerd = "JetBrainsMono Nerd Font"
+        cfg.customFontPaths = ["/tmp/CustomFont.ttf"]
+
+        let tokens = cfg.typographyTokens
+        #expect(tokens.fontFamilyUI == "JetBrainsMono Nerd Font")
+        #expect(tokens.fontFamilyMono == "JetBrainsMono Nerd Font")
+        #expect(tokens.fontFamilyDisplay == "JetBrainsMono Nerd Font")
+
+        let decoded = DMSConfig.load(from: try cfg.encodeJSON())
+        #expect(decoded.useSingleFontEverywhere == true)
+        #expect(decoded.fontFamilyNerd == "JetBrainsMono Nerd Font")
+        #expect(decoded.customFontPaths == ["/tmp/CustomFont.ttf"])
+    }
 }
 
 @Suite("Mac Display Notch and Bar Layout Solver Tests")

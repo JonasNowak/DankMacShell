@@ -25,7 +25,7 @@ public struct IdleInhibitorDetailPage: View {
             // Master Caffeine Switch Tile
             HStack(spacing: 10) {
                 Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
-                    .font(.system(size: 18))
+                    .font(ThemeStore.shared.font(size: 18))
                     .foregroundColor(inhibit.isInhibited ? Color(hex: p.onPrimary.hex) : Color(hex: p.primary.hex))
                     .frame(width: 36, height: 36)
                     .background(inhibit.isInhibited ? Color(hex: p.primary.hex) : Color(hex: p.primaryContainer.hex).opacity(0.4))
@@ -33,16 +33,16 @@ public struct IdleInhibitorDetailPage: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Keep Awake (Caffeine)")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     if inhibit.isInhibited, let secs = inhibit.remainingSeconds {
                         Text("Active • \(IdleInhibitCountdown.formatRemaining(seconds: secs)) remaining")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: p.primary.hex))
                     } else {
                         Text(inhibit.isInhibited ? "Active • Indefinite" : "Prevent display and system sleep")
-                            .font(.system(size: 10))
+                            .font(ThemeStore.shared.font(size: 10))
                             .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     }
                 }
@@ -66,12 +66,12 @@ public struct IdleInhibitorDetailPage: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("Remaining Duration")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         Spacer()
                         if let remaining = inhibit.remainingSeconds {
                             Text(IdleInhibitCountdown.formatRemainingShort(seconds: remaining))
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                                 .foregroundColor(Color(hex: p.primary.hex))
                         }
                     }
@@ -94,7 +94,7 @@ public struct IdleInhibitorDetailPage: View {
             // Duration Presets Grid
             VStack(alignment: .leading, spacing: 6) {
                 Text("Timed Duration Presets")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                     .padding(.horizontal, 4)
 
@@ -106,7 +106,7 @@ public struct IdleInhibitorDetailPage: View {
                             inhibit.enable(preset: preset)
                         }) {
                             Text(preset.rawValue)
-                                .font(.system(size: 11, weight: isSelected ? .bold : .medium, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 11, weight: isSelected ? .bold : .medium, design: .rounded))
                                 .foregroundColor(isSelected ? Color(hex: p.onPrimary.hex) : Color(hex: p.onSurface.hex))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 7)
@@ -122,12 +122,12 @@ public struct IdleInhibitorDetailPage: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Active Sleep Assertions")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                     Spacer()
                     Button(action: refreshAssertions) {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10))
+                            .font(ThemeStore.shared.font(size: 10))
                             .foregroundColor(Color(hex: p.primary.hex))
                     }
                     .buttonStyle(.plain)
@@ -136,7 +136,7 @@ public struct IdleInhibitorDetailPage: View {
 
                 if activeAssertions.isEmpty {
                     Text("No external applications are currently preventing sleep.")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                         .foregroundColor(Color(hex: p.outline.hex))
                         .padding(.horizontal, 4)
                 } else {
@@ -146,16 +146,16 @@ public struct IdleInhibitorDetailPage: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(a.processName)
-                                            .font(.system(size: 10, weight: .bold))
+                                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                             .foregroundColor(Color(hex: p.onSurface.hex))
                                         Text(a.assertionType)
-                                            .font(.system(size: 8))
+                                            .font(ThemeStore.shared.font(size: 8))
                                             .foregroundColor(Color(hex: p.outline.hex))
                                             .lineLimit(1)
                                     }
                                     Spacer()
                                     Text("PID \(a.pid)")
-                                        .font(.system(size: 9, design: .monospaced))
+                                        .font(ThemeStore.shared.font(size: 9, design: .monospaced))
                                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                                 }
                                 .padding(.horizontal, 8)

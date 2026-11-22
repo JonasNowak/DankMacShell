@@ -142,15 +142,15 @@ public struct OnboardingView: View {
             Spacer().frame(width: 68)
 
             Image(systemName: "sparkles")
-                .font(.system(size: 14, weight: .bold))
+                .font(ThemeStore.shared.font(size: 14, weight: .bold))
                 .foregroundColor(Color(hex: p.primary.hex))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("DankMacShell Setup")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 15, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                 Text("Step \(step + 1) of \(stepTitles.count) · \(stepTitles[step])")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
             }
 
@@ -175,7 +175,7 @@ public struct OnboardingView: View {
     private func footer(_ p: DMSPalette) -> some View {
         HStack(spacing: 10) {
             Text("Changes apply live")
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 .foregroundColor(Color(hex: p.outline.hex))
 
             Spacer()
@@ -183,7 +183,7 @@ public struct OnboardingView: View {
             if step > 0 {
                 Button(action: { withAnimation(.easeInOut(duration: 0.18)) { step -= 1 } }) {
                     Text("Back")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
                         .background(Color(hex: p.surfaceContainerHigh.hex))
@@ -196,7 +196,7 @@ public struct OnboardingView: View {
             if step < stepTitles.count - 1 {
                 Button(action: { withAnimation(.easeInOut(duration: 0.18)) { step += 1 } }) {
                     Text("Next")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .bold))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 7)
                         .background(Color(hex: p.primary.hex))
@@ -246,7 +246,7 @@ public struct OnboardingView: View {
     private func welcomeStep(p: DMSPalette) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Welcome to the Material Mac experience")
-                .font(.system(size: 13, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                 .foregroundColor(Color(hex: p.onSurface.hex))
 
             LazyVGrid(
@@ -260,7 +260,7 @@ public struct OnboardingView: View {
             }
 
             Text("Click Next to configure permissions and appearance.")
-                .font(.system(size: 10.5))
+                .font(ThemeStore.shared.font(size: 10.5))
                 .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
         }
     }
@@ -268,7 +268,7 @@ public struct OnboardingView: View {
     private func overviewCard(_ item: OverviewItem, _ p: DMSPalette) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: item.icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 15, weight: .semibold))
                 .foregroundColor(Color(hex: p.onPrimaryContainer.hex))
                 .frame(width: 30, height: 30)
                 .background(Color(hex: p.primaryContainer.hex))
@@ -277,11 +277,11 @@ public struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(item.title)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .bold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                     if let hotkey = item.hotkey {
                         Text(hotkey)
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 9, weight: .bold, design: .monospaced))
                             .foregroundColor(Color(hex: p.primary.hex))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -291,7 +291,7 @@ public struct OnboardingView: View {
                     Spacer(minLength: 0)
                 }
                 Text(item.description)
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -309,15 +309,15 @@ public struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Optional macOS permissions used by specific shell features in System Settings → Privacy & Security.")
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                 Spacer()
                 Button(action: { refreshPermissions() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 9.5, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 9.5, weight: .bold))
                         Text("Refresh")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -423,7 +423,7 @@ public struct OnboardingView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                 .foregroundColor(Color(hex: p.primary.hex))
                 .frame(width: 28, height: 28)
                 .background(Color(hex: p.primaryContainer.hex).opacity(0.45))
@@ -431,10 +431,10 @@ public struct OnboardingView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11.5, weight: .semibold))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                 Text(subtitle)
-                    .font(.system(size: 9.5))
+                    .font(ThemeStore.shared.font(size: 9.5))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     .lineLimit(2)
             }
@@ -443,10 +443,10 @@ public struct OnboardingView: View {
             // Fixed-width status column so all 5 status badges align vertically.
             HStack(spacing: 5) {
                 Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
                     .foregroundColor(granted ? Color(hex: p.success.hex) : Color(hex: p.error.hex))
                 Text(granted ? "Granted" : "Not granted")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                     .foregroundColor(granted ? Color(hex: p.success.hex) : Color(hex: p.error.hex))
             }
             .frame(width: 92, alignment: .leading)
@@ -454,7 +454,7 @@ public struct OnboardingView: View {
             // Fixed-width action column so buttons align uniformly on the right edge.
             Button(action: action) {
                 Text(granted ? "Open Settings" : actionTitle)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold))
                     .frame(width: 148)
                     .padding(.vertical, 6)
                     .background(granted ? Color(hex: p.surfaceContainerHighest.hex) : Color(hex: p.primary.hex))
@@ -481,7 +481,7 @@ public struct OnboardingView: View {
             SettingsCard(icon: "menubar.rectangle", title: "Bar Position", subtitle: "Attach DankBar to a screen edge — applies live", palette: p) {
                 HStack {
                     Text("Screen Edge")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                     Spacer()
                     SettingsSegmentedControl(
@@ -508,7 +508,7 @@ public struct OnboardingView: View {
             SettingsCard(icon: "paintbrush.pointed.fill", title: "Bar Background Style", subtitle: "Solid surface, frosted glass, or floating island pills", palette: p) {
                 HStack {
                     Text("Surface Style")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                     Spacer()
                     SettingsSegmentedControl(
@@ -543,12 +543,12 @@ public struct OnboardingView: View {
             SettingsCard(icon: "paintpalette.fill", title: "Theme", subtitle: "Stock & community Material 3 palettes — applies live", palette: p) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Stock")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     themeGrid(names: StockThemes.allThemeNames, p: p)
 
                     Text("Community")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     themeGrid(names: StockThemes.communityThemeNames, p: p)
                 }
@@ -601,13 +601,13 @@ public struct OnboardingView: View {
                             .fill(themeColor(for: name))
                             .frame(width: 11, height: 11)
                         Text(name.replacingOccurrences(of: "-", with: " ").capitalized)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                             .foregroundColor(Color(hex: p.onSurface.hex))
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         if themeStore.themeName.lowercased() == name {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 8.5, weight: .bold))
                                 .foregroundColor(Color(hex: p.primary.hex))
                         }
                     }
@@ -661,7 +661,7 @@ public struct OnboardingView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
                     Text("Finish Setup")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
@@ -672,7 +672,7 @@ public struct OnboardingView: View {
             .buttonStyle(.plain)
 
             Text("You can change all of this later in Settings.")
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
         }
     }

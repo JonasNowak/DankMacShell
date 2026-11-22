@@ -66,7 +66,7 @@ public struct MediaLyricLineWidget: View {
         Button(action: openLyricsHub) {
             HStack(spacing: 5) {
                 Image(systemName: "quote.bubble.fill")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(tint)
                 if !isVertical {
                     lyricTicker
@@ -218,7 +218,7 @@ struct MediaArtThumbnail: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(tint.opacity(0.18))
                 Image(systemName: isPlaying ? "music.note" : "pause.fill")
-                    .font(.system(size: size * 0.5, weight: .bold))
+                    .font(ThemeStore.shared.font(size: size * 0.5, weight: .bold))
                     .foregroundColor(tint)
             }
         }

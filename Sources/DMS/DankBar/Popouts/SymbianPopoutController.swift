@@ -149,12 +149,12 @@ public struct SymbianPopoutView: View {
                             .foregroundColor(theme.primary)
                     }
                     Text("Nokia Belle Sync")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(theme.onSurface)
                     Spacer()
                     Button(action: onClose) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .foregroundColor(theme.onSurfaceVariant)
                             .frame(width: 22, height: 22)
                             .background(theme.surfaceContainerHigh)
@@ -175,13 +175,13 @@ public struct SymbianPopoutView: View {
                             .fill(status.device != nil ? theme.success : theme.warning)
                             .frame(width: 7, height: 7)
                         Text(status.device?.name ?? "No Nokia C7 connected")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .foregroundColor(theme.onSurface)
                             .lineLimit(1)
                         Spacer()
                         if let dev = status.device {
                             Text(dev.driveLetter)
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .monospaced))
                                 .foregroundColor(theme.primary)
                         }
                     }
@@ -206,11 +206,11 @@ public struct SymbianPopoutView: View {
 
                             HStack {
                                 Text("\(dev.formattedUsedSpace) used")
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(ThemeStore.shared.font(size: 9, design: .monospaced))
                                     .foregroundColor(theme.onSurfaceVariant)
                                 Spacer()
                                 Text("\(dev.formattedFreeSpace) free of \(dev.formattedTotalSpace)")
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(ThemeStore.shared.font(size: 9, design: .monospaced))
                                     .foregroundColor(theme.onSurfaceVariant)
                             }
                         }
@@ -225,17 +225,17 @@ public struct SymbianPopoutView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.up.forward.square")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .bold))
                             VStack(alignment: .leading, spacing: 1) {
                                 Text("Open Belle Sync plugin")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                 Text("symbian-belle-sync")
-                                    .font(.system(size: 8, design: .monospaced))
+                                    .font(ThemeStore.shared.font(size: 8, design: .monospaced))
                                     .foregroundColor(theme.onSurfaceVariant)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 9, weight: .bold))
                         }
                         .foregroundColor(theme.primary)
                         .frame(maxWidth: .infinity)

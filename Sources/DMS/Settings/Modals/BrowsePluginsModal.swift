@@ -33,15 +33,15 @@ public struct BrowsePluginsModal: View {
             HStack(spacing: 8) {
                 Image(systemName: "shippingbox.fill")
                     .foregroundColor(Color(hex: palette.primary.hex))
-                    .font(.system(size: 15))
+                    .font(ThemeStore.shared.font(size: 15))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Browse Plugins")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
 
                     Text("Install plugins from the DMS plugin registry")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                         .foregroundColor(Color(hex: palette.outline.hex))
                 }
 
@@ -55,7 +55,7 @@ public struct BrowsePluginsModal: View {
                         Image(systemName: hideThirdParty ? "eye.slash.fill" : "eye.slash")
                         Text("Hide 3rd Party")
                     }
-                    .font(.system(size: 10, weight: hideThirdParty ? .bold : .medium))
+                    .font(ThemeStore.shared.font(size: 10, weight: hideThirdParty ? .bold : .medium))
                     .foregroundColor(hideThirdParty ? Color(hex: palette.onPrimaryContainer.hex) : Color(hex: palette.onSurfaceVariant.hex))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -72,7 +72,7 @@ public struct BrowsePluginsModal: View {
                     ToastCenter.shared.show(icon: "arrow.clockwise", message: "Registry refreshed")
                 }) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                         .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                         .frame(width: 22, height: 22)
                         .background(Color(hex: palette.surfaceContainerLow.hex))
@@ -83,7 +83,7 @@ public struct BrowsePluginsModal: View {
                 // Close Button
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                         .frame(width: 22, height: 22)
                         .background(Color(hex: palette.surfaceContainerLow.hex))
@@ -96,10 +96,10 @@ public struct BrowsePluginsModal: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(Color(hex: palette.outline.hex))
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                 TextField("Search plugins, tags, or authors...", text: $searchQuery)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -112,7 +112,7 @@ public struct BrowsePluginsModal: View {
                     ForEach(filteredPlugins) { plugin in
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: plugin.icon)
-                                .font(.system(size: 14))
+                                .font(ThemeStore.shared.font(size: 14))
                                 .foregroundColor(Color(hex: palette.primary.hex))
                                 .frame(width: 28, height: 28)
                                 .background(Color(hex: palette.surfaceVariant.hex).opacity(0.6))
@@ -121,13 +121,13 @@ public struct BrowsePluginsModal: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 6) {
                                     Text(plugin.name)
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(ThemeStore.shared.font(size: 12, weight: .bold))
                                         .foregroundColor(Color(hex: palette.onSurface.hex))
 
                                     // Official / 3rd Party Badge
                                     if plugin.isOfficial {
                                         Text("official")
-                                            .font(.system(size: 8, weight: .semibold))
+                                            .font(ThemeStore.shared.font(size: 8, weight: .semibold))
                                             .padding(.horizontal, 5)
                                             .padding(.vertical, 1)
                                             .background(Color(hex: palette.secondaryContainer.hex))
@@ -135,7 +135,7 @@ public struct BrowsePluginsModal: View {
                                             .cornerRadius(4)
                                     } else {
                                         Text("3rd party")
-                                            .font(.system(size: 8, weight: .semibold))
+                                            .font(ThemeStore.shared.font(size: 8, weight: .semibold))
                                             .padding(.horizontal, 5)
                                             .padding(.vertical, 1)
                                             .background(Color.orange.opacity(0.2))
@@ -145,11 +145,11 @@ public struct BrowsePluginsModal: View {
                                 }
 
                                 Text("by \(plugin.author)")
-                                    .font(.system(size: 10))
+                                    .font(ThemeStore.shared.font(size: 10))
                                     .foregroundColor(Color(hex: palette.outline.hex))
 
                                 Text(plugin.description)
-                                    .font(.system(size: 10))
+                                    .font(ThemeStore.shared.font(size: 10))
                                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                                     .lineLimit(2)
 
@@ -158,7 +158,7 @@ public struct BrowsePluginsModal: View {
                                     HStack(spacing: 4) {
                                         ForEach(plugin.tags, id: \.self) { tag in
                                             Text(tag)
-                                                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                                .font(ThemeStore.shared.font(size: 8, weight: .medium, design: .monospaced))
                                                 .padding(.horizontal, 4)
                                                 .padding(.vertical, 1)
                                                 .background(Color(hex: palette.surfaceContainerLow.hex))
@@ -178,7 +178,7 @@ public struct BrowsePluginsModal: View {
                                     Image(systemName: "checkmark")
                                     Text("Installed")
                                 }
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                                 .foregroundColor(Color(hex: palette.outline.hex))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 5)
@@ -193,7 +193,7 @@ public struct BrowsePluginsModal: View {
                                         Image(systemName: "arrow.down")
                                         Text("Install")
                                     }
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                     .foregroundColor(Color(hex: palette.onPrimary.hex))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)

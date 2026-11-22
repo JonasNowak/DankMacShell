@@ -130,15 +130,15 @@ public struct SlantedWallpaperPickerView: View {
             // App / Feature Brand
             HStack(spacing: 8) {
                 Image(systemName: "photo.stack.fill")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 15, weight: .bold))
                     .foregroundColor(Color(hex: palette.primary.hex))
 
                 Text("Wallpaper Switcher")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 15, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
 
                 Text("\(count)")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .monospaced))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -152,13 +152,13 @@ public struct SlantedWallpaperPickerView: View {
             Button(action: toggleFolderRestriction) {
                 HStack(spacing: 6) {
                     Image(systemName: onlyFolder ? "folder.fill.badge.gearshape" : "folder.fill")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                     Text(onlyFolder ? "Folder: \(currentFolderDisplay)" : "All Folders")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
 
                     if onlyFolder {
                         Text("Active")
-                            .font(.system(size: 9, weight: .heavy))
+                            .font(ThemeStore.shared.font(size: 9, weight: .heavy))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(Color(hex: palette.primary.hex))
@@ -185,7 +185,7 @@ public struct SlantedWallpaperPickerView: View {
                         controller.searchQuery = ""
                     } label: {
                         Text(src.rawValue)
-                            .font(.system(size: 10, weight: isSel ? .bold : .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: isSel ? .bold : .medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(isSel ? Color(hex: palette.primary.hex) : Color(hex: palette.surfaceContainerLow.hex))
@@ -199,7 +199,7 @@ public struct SlantedWallpaperPickerView: View {
             // Shuffle Button
             Button(action: { shuffleWallpaper(count: count) }) {
                 Image(systemName: "dice.fill")
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     .frame(width: 28, height: 28)
                     .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -211,7 +211,7 @@ public struct SlantedWallpaperPickerView: View {
             // Close / Cancel Button
             Button(action: handleCloseOrCancel) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     .frame(width: 28, height: 28)
                     .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -275,16 +275,16 @@ public struct SlantedWallpaperPickerView: View {
     private func emptyStateView(palette: DMSPalette) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "photo.badge.exclamationmark")
-                .font(.system(size: 40))
+                .font(ThemeStore.shared.font(size: 40))
                 .foregroundColor(Color(hex: palette.outline.hex))
 
             Text("No Wallpapers Found")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
 
             if onlyFolder {
                 Text("Folder restriction is active (\(currentFolderDisplay)). Disable folder filtering or add wallpaper images to this directory.")
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
@@ -299,7 +299,7 @@ public struct SlantedWallpaperPickerView: View {
                 .padding(.top, 4)
             } else {
                 Text("Add folders containing images in DMS Settings > Wallpaper.")
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
             }
         }
@@ -317,7 +317,7 @@ public struct SlantedWallpaperPickerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(item.name)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(Color(hex: palette.onSurface.hex))
                             .lineLimit(1)
 
@@ -326,7 +326,7 @@ public struct SlantedWallpaperPickerView: View {
                                 Image(systemName: "eye.fill")
                                 Text("Testing Live")
                             }
-                            .font(.system(size: 10, weight: .heavy))
+                            .font(ThemeStore.shared.font(size: 10, weight: .heavy))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color(hex: palette.tertiaryContainer.hex))
@@ -339,19 +339,19 @@ public struct SlantedWallpaperPickerView: View {
                                 Image(systemName: "checkmark.circle.fill")
                                 Text("Current Desktop")
                             }
-                            .font(.system(size: 10, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
                             .foregroundColor(Color(hex: palette.primary.hex))
                         }
                     }
 
                     Text(item.path ?? "Preset Gradient Wallpaper")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                         .foregroundColor(Color(hex: palette.outline.hex))
                         .lineLimit(1)
                 }
             } else {
                 Text("Select a wallpaper to preview and apply")
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
                     .foregroundColor(Color(hex: palette.outline.hex))
             }
 
@@ -367,7 +367,7 @@ public struct SlantedWallpaperPickerView: View {
                 }
             ))
             .toggleStyle(.checkbox)
-            .font(.system(size: 11, weight: .medium))
+            .font(ThemeStore.shared.font(size: 11, weight: .medium))
             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
             // Navigation hints
@@ -378,13 +378,13 @@ public struct SlantedWallpaperPickerView: View {
                 Text("•")
                 Text("Esc Reset")
             }
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .font(ThemeStore.shared.font(size: 10, weight: .medium, design: .monospaced))
             .foregroundColor(Color(hex: palette.outline.hex))
 
             // Reset / Cancel Button
             Button(action: handleCloseOrCancel) {
                 Text("Reset")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -402,7 +402,7 @@ public struct SlantedWallpaperPickerView: View {
                         Image(systemName: "checkmark")
                         Text("Apply & Keep")
                     }
-                    .font(.system(size: 11, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color(hex: palette.primary.hex))
@@ -519,18 +519,18 @@ private struct SlantedWallpaperSlice: View {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.name.uppercased())
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .rounded))
                             .foregroundColor(Color.white)
                             .lineLimit(1)
 
                         Text(item.source.rawValue.uppercased())
-                            .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 9, weight: .heavy, design: .monospaced))
                             .foregroundColor(Color(hex: palette.primary.hex))
                     }
 
                     if item.isCurrentDesktop {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 12))
+                            .font(ThemeStore.shared.font(size: 12))
                             .foregroundColor(Color.green)
                     }
 
@@ -539,7 +539,7 @@ private struct SlantedWallpaperSlice: View {
                     if isSelected {
                         HStack(spacing: 4) {
                             Text("↵ Apply")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)

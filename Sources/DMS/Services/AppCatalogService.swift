@@ -95,9 +95,153 @@ public final class AppCatalogService {
             }
         }
 
+        // v0.9.5: built-in DMS Settings & DMS Actions are scored through LauncherScorer
+        // (type .setting / .action) so they rank alongside real apps; no legacy fallback.
+        for entry in Self.builtinEntries {
+            let app = AppItem(
+                id: entry.id,
+                name: entry.name,
+                bundleID: entry.id,
+                path: "/System/Library/CoreServices/Finder.app",
+                subtitle: entry.subtitle,
+                category: entry.type == .setting ? "DMS Setting" : "DMS Action"
+            )
+            let candidate = LauncherCandidate(
+                id: entry.id,
+                name: entry.name,
+                genericName: entry.subtitle,
+                identifier: entry.id,
+                type: entry.type,
+                tags: entry.tags
+            )
+            if let score = LauncherScorer.score(candidate: candidate, query: trimmed, now: now) {
+                matches.append(SearchResult(app: app, score: score))
+            }
+        }
+
         matches.sort { $0.score > $1.score }
         return (math, matches)
     }
+
+    /// A synthetic launcher entry for a built-in DMS Setting or DMS Action.
+    private struct BuiltinEntry {
+        let id: String
+        let name: String
+        let subtitle: String
+        let type: LauncherCandidateType
+        let tags: [String]
+    }
+
+    /// Built-in DMS Settings (`.setting`) and DMS Actions (`.action`) surfaced in search.
+    private static let builtinEntries: [BuiltinEntry] = [
+        // MARK: DMS Settings
+        BuiltinEntry(
+            id: "io.dms.setting.theme",
+            name: "Theme & Colors",
+            subtitle: "DMS Setting • Matugen palette, dark/light mode, and 32-target app sync",
+            type: .setting,
+            tags: ["theme", "color", "palette", "matugen", "dark", "light", "terminal", "nvim", "tmux", "obsidian"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.setting.bar",
+            name: "DankBar & Widgets",
+            subtitle: "DMS Setting • Bar position, height, multi-bar layout, and widget pills",
+            type: .setting,
+            tags: ["bar", "dankbar", "widgets", "top", "bottom", "dock"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.setting.typography",
+            name: "Typography & Fonts",
+            subtitle: "DMS Setting • Custom fonts, Nerd Fonts, global default font, and motion",
+            type: .setting,
+            tags: ["font", "typography", "nerdfont", "nerd", "monospace", "scale", "motion"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.setting.surfaces",
+            name: "Surfaces & Glass",
+            subtitle: "DMS Setting • Blur, opacity, corner radius, borders, and shadows",
+            type: .setting,
+            tags: ["glass", "blur", "opacity", "transparency", "corner", "border"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.setting.island",
+            name: "Dynamic Island",
+            subtitle: "DMS Setting • Notch pill sizing, media visualizer, and auto-expand",
+            type: .setting,
+            tags: ["island", "notch", "dynamic", "visualizer"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.setting.shortcuts",
+            name: "Keyboard Shortcuts",
+            subtitle: "DMS Setting • Global hotkeys for Launcher, Dash, Clipboard, and Notepad",
+            type: .setting,
+            tags: ["shortcuts", "keybinds", "hotkeys", "keys"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.setting.plugins",
+            name: "Plugins & Extensions",
+            subtitle: "DMS Setting • Manage enabled DankMacShell plugins",
+            type: .setting,
+            tags: ["plugins", "extensions", "addons"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.setting.system",
+            name: "System & Updates",
+            subtitle: "DMS Setting • Weather, updates, permissions wizard, and config backup",
+            type: .setting,
+            tags: ["system", "updates", "weather", "permissions", "onboarding"]
+        ),
+        // MARK: DMS Actions
+        BuiltinEntry(
+            id: "io.dms.action.clipboard",
+            name: "Toggle Clipboard History",
+            subtitle: "DMS Action • Open searchable clipboard manager",
+            type: .action,
+            tags: ["clipboard", "paste", "history", "copy"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.action.notepad",
+            name: "Toggle Scratchpad Notepad",
+            subtitle: "DMS Action • Open markdown scratchpad notepad",
+            type: .action,
+            tags: ["notepad", "notes", "scratchpad", "markdown"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.action.processes",
+            name: "Open Process Monitor",
+            subtitle: "DMS Action • Inspect CPU and memory usage in Dash",
+            type: .action,
+            tags: ["process", "cpu", "ram", "memory", "activity", "kill"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.action.controlcenter",
+            name: "Toggle Control Center",
+            subtitle: "DMS Action • Quick tiles, audio, network, and battery controls",
+            type: .action,
+            tags: ["control", "wifi", "bluetooth", "audio", "volume"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.action.onboard",
+            name: "Open Setup & Permissions Wizard",
+            subtitle: "DMS Action • Run the 5-step DankMacShell setup and permissions guide",
+            type: .action,
+            tags: ["onboard", "setup", "wizard", "permissions", "welcome"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.action.colorpicker",
+            name: "Pick Screen Color",
+            subtitle: "DMS Action • Sample any pixel on screen to clipboard as HEX",
+            type: .action,
+            tags: ["color", "picker", "eyedropper", "hex"]
+        ),
+        BuiltinEntry(
+            id: "io.dms.action.lock",
+            name: "Lock Mac Screen",
+            subtitle: "DMS Action • Immediately lock the macOS session",
+            type: .action,
+            tags: ["lock", "screen", "sleep", "security"]
+        )
+    ]
 
     nonisolated private static func scanApplications() -> [AppItem] {
         // /System/Applications is enumerated recursively, which already covers

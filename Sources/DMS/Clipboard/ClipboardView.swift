@@ -60,7 +60,7 @@ public struct ClipboardView: View {
                     .foregroundColor(Color(hex: p.primary.hex))
 
                 TextField("Search clipboard history...", text: $searchText)
-                    .font(.system(size: 14))
+                    .font(ThemeStore.shared.font(size: 14))
                     .textFieldStyle(.plain)
                     .foregroundColor(Color(hex: p.onSurface.hex))
 
@@ -77,7 +77,7 @@ public struct ClipboardView: View {
                 if !clipboard.items.isEmpty {
                     Button(action: { clipboard.clearAll() }) {
                         Label("Clear", systemImage: "trash")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: p.error.hex))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -89,7 +89,7 @@ public struct ClipboardView: View {
 
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 28, height: 28)
                         .background(Color(hex: p.surfaceVariant.hex))
@@ -108,10 +108,10 @@ public struct ClipboardView: View {
                 VStack(spacing: 12) {
                     Spacer()
                     Image(systemName: "clipboard")
-                        .font(.system(size: 40))
+                        .font(ThemeStore.shared.font(size: 40))
                         .foregroundColor(Color(hex: p.outline.hex))
                     Text(clipboard.items.isEmpty ? "Clipboard is empty" : "No matches found")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 14, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     Spacer()
                 }
@@ -127,7 +127,7 @@ public struct ClipboardView: View {
                                 }) {
                                 HStack(alignment: .top, spacing: 12) {
                                     Image(systemName: item.isURL ? "link" : (item.lineCount > 1 ? "doc.plaintext" : "text.quote"))
-                                        .font(.system(size: 14))
+                                        .font(ThemeStore.shared.font(size: 14))
                                         .foregroundColor(Color(hex: p.primary.hex))
                                         .frame(width: 28, height: 28)
                                         .background(Color(hex: p.primaryContainer.hex))
@@ -135,7 +135,7 @@ public struct ClipboardView: View {
 
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(item.preview)
-                                            .font(.system(size: 13, design: item.lineCount > 1 ? .monospaced : .default))
+                                            .font(ThemeStore.shared.font(size: 13, design: item.lineCount > 1 ? .monospaced : .default))
                                             .foregroundColor(Color(hex: p.onSurface.hex))
                                             .lineLimit(2)
                                             .multilineTextAlignment(.leading)
@@ -149,7 +149,7 @@ public struct ClipboardView: View {
                                                 Text("\(item.lineCount) lines")
                                             }
                                         }
-                                        .font(.system(size: 10))
+                                        .font(ThemeStore.shared.font(size: 10))
                                         .foregroundColor(Color(hex: p.outline.hex))
                                     }
 
@@ -157,7 +157,7 @@ public struct ClipboardView: View {
 
                                     Button(action: { clipboard.removeItem(id: item.id) }) {
                                         Image(systemName: "xmark")
-                                            .font(.system(size: 10))
+                                            .font(ThemeStore.shared.font(size: 10))
                                             .foregroundColor(Color(hex: p.outline.hex))
                                     }
                                     .buttonStyle(.plain)
@@ -188,7 +188,7 @@ public struct ClipboardView: View {
             // Footer
             HStack {
                 Text("\(filteredItems.count) items in history")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: p.outline.hex))
 
                 Spacer()
@@ -196,7 +196,7 @@ public struct ClipboardView: View {
                 Text(ConfigStore.shared.config.clipboardAutoPaste
                      ? "↑↓ Navigate • ↵ Copy & auto-paste • Esc to dismiss"
                      : "↑↓ Navigate • ↵ Copy • Esc to dismiss")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: p.outline.hex))
             }
             .padding(.horizontal, 16)

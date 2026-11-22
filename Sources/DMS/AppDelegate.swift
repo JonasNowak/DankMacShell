@@ -144,6 +144,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             UpdateCheckService.shared.checkNow(force: false)
         }
 
+        // Live FX rates for launcher currency conversion (12h disk cache + periodic refresh)
+        CurrencyRateService.shared.start()
+
         // First-run Welcome & Setup wizard (shown once, until onboardingCompleted is set)
         if !ConfigStore.shared.config.onboardingCompleted {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {

@@ -17,11 +17,11 @@ public struct DesktopWidgetsView: View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(clock.currentDate, format: .dateTime.hour().minute().second())
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 30, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                     .monospacedDigit()
                 Text(clock.currentDate, format: .dateTime.weekday(.wide).month(.wide).day())
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
             }
 
@@ -59,11 +59,11 @@ public struct DesktopWidgetsView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                 Spacer()
                 Text(detail)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
             }
             GeometryReader { geo in

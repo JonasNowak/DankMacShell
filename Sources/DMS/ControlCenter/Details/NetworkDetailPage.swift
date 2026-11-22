@@ -25,7 +25,7 @@ public struct NetworkDetailPage: View {
             HStack {
                 HStack(spacing: 10) {
                     Image(systemName: wifi.symbolName)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 16, weight: .bold))
                         .foregroundColor(wifi.isPowerOn ? theme.onPrimary : theme.onSurface)
                         .frame(width: 32, height: 32)
                         .background(wifi.isPowerOn ? theme.primary : theme.surfaceContainerHigh)
@@ -33,10 +33,10 @@ public struct NetworkDetailPage: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Wi-Fi")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                             .foregroundColor(theme.onSurface)
                         Text(wifi.subtitle)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
                 }
@@ -59,10 +59,10 @@ public struct NetworkDetailPage: View {
             if wifi.isPowerOn && !wifi.locationAuthorized {
                 HStack(spacing: 8) {
                     Image(systemName: "location.slash.fill")
-                        .font(.system(size: 12))
+                        .font(ThemeStore.shared.font(size: 12))
                         .foregroundColor(theme.secondary)
                     Text("Location Services is off — network names may be hidden")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .foregroundColor(theme.onSurfaceVariant)
                         .lineLimit(2)
                     Spacer()
@@ -72,7 +72,7 @@ public struct NetworkDetailPage: View {
                         }
                     } label: {
                         Text("Open Settings")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(theme.primaryContainer)
@@ -99,7 +99,7 @@ public struct NetworkDetailPage: View {
                                 .animation(isScanning ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isScanning)
                             Text("Scan Networks")
                         }
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                         .foregroundColor(theme.onSurface)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -118,7 +118,7 @@ public struct NetworkDetailPage: View {
                                 Image(systemName: "qrcode")
                                 Text("Share Wi-Fi")
                             }
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                             .foregroundColor(theme.primary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -132,14 +132,14 @@ public struct NetworkDetailPage: View {
                 // Networks list
                 VStack(alignment: .leading, spacing: 8) {
                     Text("AVAILABLE NETWORKS (\(networks.count))")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                         .foregroundColor(theme.outline)
 
                     if networks.isEmpty {
                         HStack {
                             Spacer()
                             Text(isScanning ? "Scanning for networks..." : "No networks found")
-                                .font(.system(size: 12))
+                                .font(ThemeStore.shared.font(size: 12))
                                 .foregroundColor(theme.onSurfaceVariant)
                                 .padding(24)
                             Spacer()
@@ -185,12 +185,12 @@ public struct NetworkDetailPage: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(net.ssid)
-                        .font(.system(size: 13, weight: net.isConnected ? .bold : .medium))
+                        .font(ThemeStore.shared.font(size: 13, weight: net.isConnected ? .bold : .medium))
                         .foregroundColor(theme.onSurface)
 
                     if net.isConnected {
                         Text("Connected")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                             .foregroundColor(theme.primary)
                     }
                 }
@@ -199,13 +199,13 @@ public struct NetworkDetailPage: View {
 
                 if net.isSecure {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                         .foregroundColor(theme.onSurfaceVariant.opacity(0.8))
                 }
 
                 if net.isConnected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(ThemeStore.shared.font(size: 14))
                         .foregroundColor(theme.primary)
                 }
             }
@@ -250,7 +250,7 @@ public struct NetworkDetailPage: View {
             Color.clear
                 .onAppear { ControlCenterController.shared.panel.makeKey() }
             Text("Connect to \(selectedNetwork?.ssid ?? "Network")")
-                .font(.headline)
+                .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                 .foregroundColor(theme.onSurface)
 
             SecureField("Enter Wi-Fi Password", text: $passwordInput)
@@ -284,12 +284,12 @@ public struct NetworkDetailPage: View {
     private var qrModalView: some View {
         VStack(spacing: 16) {
             Text("Wi-Fi Quick Share")
-                .font(.headline)
+                .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                 .foregroundColor(theme.onSurface)
 
             if let ssid = wifi.ssid {
                 Text(ssid)
-                    .font(.subheadline)
+                    .font(ThemeStore.shared.font(size: 12, weight: .medium))
                     .foregroundColor(theme.primary)
 
                 // Real scannable QR code (dark modules on a white card) encoding the
@@ -315,7 +315,7 @@ public struct NetworkDetailPage: View {
                 }
 
                 Text("Scan to connect to this Wi-Fi network")
-                    .font(.caption)
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(theme.onSurfaceVariant)
             }
 

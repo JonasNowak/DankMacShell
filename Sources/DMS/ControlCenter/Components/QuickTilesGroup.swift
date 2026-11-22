@@ -88,7 +88,7 @@ private struct QuickTileIconButton: View {
     var body: some View {
         Button(action: onTap) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                 .foregroundColor(isActive ? theme.onPrimary : theme.primary)
                 .frame(width: 30, height: 30)
                 .background(isActive ? theme.primary : theme.surfaceContainer)

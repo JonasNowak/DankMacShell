@@ -25,14 +25,14 @@ public struct QRGeneratorView: View {
             // Header
             HStack {
                 Label("QR Generator", systemImage: "qrcode")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: p.onSurface.hex))
 
                 Spacer()
 
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 28, height: 28)
                         .background(Color(hex: p.surfaceVariant.hex))
@@ -45,7 +45,7 @@ public struct QRGeneratorView: View {
             HStack {
                 TextField("Enter text, URL or message...", text: $inputText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(ThemeStore.shared.font(size: 13))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                     .onChange(of: inputText) {
                         generateQR()
@@ -57,7 +57,7 @@ public struct QRGeneratorView: View {
                         generateQR()
                     }) {
                         Label("WiFi", systemImage: "wifi")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold))
                             .foregroundColor(Color(hex: p.primary.hex))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -94,7 +94,7 @@ public struct QRGeneratorView: View {
             HStack(spacing: 8) {
                 Button(action: copyImage) {
                     Label("Copy", systemImage: "doc.on.doc.fill")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: p.onPrimary.hex))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
@@ -105,7 +105,7 @@ public struct QRGeneratorView: View {
 
                 Button(action: saveImage) {
                     Label("Save", systemImage: "square.and.arrow.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)

@@ -32,12 +32,12 @@ public struct GpuMonitorWidget: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "display")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .foregroundColor(gpuColor)
 
                 if !isVertical {
                     Text("\(Int(round(gpuPercent)))%")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(gpuColor)
                 }
             }

@@ -25,24 +25,24 @@ public struct WellbeingOverviewCard: View {
                 // Header
                 HStack(spacing: 6) {
                     Image(systemName: "hourglass")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(Color(hex: p.primary.hex))
 
                     Text("Digital Wellbeing")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     Spacer()
 
                     Text(WellbeingFormatter.formatDuration(seconds: totalSecs))
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: p.primary.hex))
                 }
 
                 // Mini app usage breakdown
                 if topApps.isEmpty {
                     Text("No focus activity recorded yet")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                         .foregroundColor(Color(hex: p.outline.hex))
                         .frame(maxHeight: .infinity, alignment: .center)
                 } else {
@@ -50,7 +50,7 @@ public struct WellbeingOverviewCard: View {
                         ForEach(topApps) { app in
                             HStack(spacing: 6) {
                                 Text(app.appName)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(ThemeStore.shared.font(size: 10, weight: .medium))
                                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                                     .lineLimit(1)
 
@@ -69,7 +69,7 @@ public struct WellbeingOverviewCard: View {
                                 .frame(width: 48, height: 4)
 
                                 Text(WellbeingFormatter.formatDuration(seconds: app.durationSeconds))
-                                    .font(.system(size: 9, design: .rounded))
+                                    .font(ThemeStore.shared.font(size: 9, design: .rounded))
                                     .foregroundColor(Color(hex: p.outline.hex))
                                     .frame(width: 32, alignment: .trailing)
                             }

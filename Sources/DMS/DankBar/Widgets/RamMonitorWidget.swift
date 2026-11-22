@@ -30,12 +30,12 @@ public struct RamMonitorWidget: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "memorychip")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .foregroundColor(ramColor)
 
                 if !isVertical {
                     Text("\(Int(round(telemetry.telemetry.ramPercent)))%")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(ramColor)
                 }
             }

@@ -36,11 +36,11 @@ public struct DashView: View {
                     }) {
                         VStack(spacing: 3) {
                             Image(systemName: tab.sfSymbol)
-                                .font(.system(size: 14, weight: .regular))
+                                .font(ThemeStore.shared.font(size: 14, weight: .regular))
                                 .foregroundColor(controller.activeTab == tab ? Color(hex: p.onSurface.hex) : Color(hex: p.onSurfaceVariant.hex))
 
                             Text(tab.title)
-                                .font(.system(size: 10, weight: controller.activeTab == tab ? .semibold : .medium))
+                                .font(ThemeStore.shared.font(size: 10, weight: controller.activeTab == tab ? .semibold : .medium))
                                 .foregroundColor(controller.activeTab == tab ? Color(hex: p.onSurface.hex) : Color(hex: p.onSurfaceVariant.hex))
 
                             // Active accent underline bar

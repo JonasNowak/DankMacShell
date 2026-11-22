@@ -20,7 +20,7 @@ public struct AudioDetailPage: View {
             // MARK: - Output Volume & Sinks
             VStack(alignment: .leading, spacing: 10) {
                 Text("OUTPUT DEVICE & VOLUME")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(theme.outline)
 
                 // Master Volume Slider
@@ -30,20 +30,20 @@ public struct AudioDetailPage: View {
                             audio.toggleMute()
                         } label: {
                             Image(systemName: audio.isMuted ? "speaker.slash.fill" : "speaker.wave.3.fill")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                                 .foregroundColor(theme.primary)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(audio.isMuted ? "Unmute output" : "Mute output")
 
                         Text("Master Volume")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                             .foregroundColor(theme.onSurface)
 
                         Spacer()
 
                         Text("\(Int(audio.volume * 100))%")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
 
@@ -69,12 +69,12 @@ public struct AudioDetailPage: View {
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: outputIcon(name: output.name))
-                                    .font(.system(size: 14))
+                                    .font(ThemeStore.shared.font(size: 14))
                                     .foregroundColor(output.isDefault ? theme.primary : theme.onSurface)
                                     .frame(width: 20)
 
                                 Text(output.name)
-                                    .font(.system(size: 12, weight: output.isDefault ? .bold : .medium))
+                                    .font(ThemeStore.shared.font(size: 12, weight: output.isDefault ? .bold : .medium))
                                     .foregroundColor(theme.onSurface)
 
                                 Spacer()
@@ -101,7 +101,7 @@ public struct AudioDetailPage: View {
             // MARK: - Input Device & Gain
             VStack(alignment: .leading, spacing: 10) {
                 Text("INPUT / MICROPHONE")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(theme.outline)
 
                 VStack(spacing: 6) {
@@ -110,20 +110,20 @@ public struct AudioDetailPage: View {
                             audio.toggleMicMute()
                         } label: {
                             Image(systemName: audio.isMicMuted ? "mic.slash.fill" : "mic.fill")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                                 .foregroundColor(audio.isMicMuted ? theme.error : theme.secondary)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(audio.isMicMuted ? "Unmute microphone" : "Mute microphone")
 
                         Text("Microphone Gain")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                             .foregroundColor(theme.onSurface)
 
                         Spacer()
 
                         Text("\(Int(audio.inputVolume * 100))%")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
 
@@ -149,12 +149,12 @@ public struct AudioDetailPage: View {
                             } label: {
                                 HStack(spacing: 10) {
                                     Image(systemName: inputIcon(name: input.name))
-                                        .font(.system(size: 13))
+                                        .font(ThemeStore.shared.font(size: 13))
                                         .foregroundColor(input.isDefault ? theme.secondary : theme.onSurface)
                                         .frame(width: 20)
 
                                     Text(input.name)
-                                        .font(.system(size: 12, weight: input.isDefault ? .bold : .medium))
+                                        .font(ThemeStore.shared.font(size: 12, weight: input.isDefault ? .bold : .medium))
                                         .foregroundColor(theme.onSurface)
 
                                     Spacer()
@@ -183,7 +183,7 @@ public struct AudioDetailPage: View {
             // MARK: - Per-App Audio Stream Mixer
             VStack(alignment: .leading, spacing: 10) {
                 Text("STREAM MIXER")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(theme.outline)
 
                 VStack(spacing: 10) {
@@ -197,11 +197,11 @@ public struct AudioDetailPage: View {
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(nowPlaying.currentTrack.title.isEmpty ? "System Media" : nowPlaying.currentTrack.title)
-                                .font(.system(size: 12, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 12, weight: .bold))
                                 .foregroundColor(theme.onSurface)
                                 .lineLimit(1)
                             Text(nowPlaying.currentTrack.artist.isEmpty ? "Active Stream" : nowPlaying.currentTrack.artist)
-                                .font(.system(size: 10))
+                                .font(ThemeStore.shared.font(size: 10))
                                 .foregroundColor(theme.onSurfaceVariant)
                                 .lineLimit(1)
                         }
@@ -212,7 +212,7 @@ public struct AudioDetailPage: View {
                             nowPlaying.playPause()
                         } label: {
                             Image(systemName: nowPlaying.currentTrack.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 12))
+                                .font(ThemeStore.shared.font(size: 12))
                                 .foregroundColor(theme.onPrimary)
                                 .frame(width: 26, height: 26)
                                 .background(theme.primary)

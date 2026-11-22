@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreText
 import DMSCore
 import DankThemeEngine
 
@@ -78,6 +79,13 @@ public final class ThemeStore: ObservableObject {
     @Published public var shadowTokens: M3ShadowTokens = M3ShadowTokens()
     @Published public private(set) var dank16Palette: [M3Color] = []
     @Published public private(set) var primaryTonalPalette: M3TonalPalette = M3TonalPalette(hue: 275, chroma: 48)
+
+    // MARK: - Font Catalog & Single-Font Mode
+    @Published public var useSingleFontEverywhere: Bool = false
+    @Published public var fontFamilyNerd: String = "Auto"
+    @Published public var customFontPaths: [String] = []
+    @Published public private(set) var installedFontFamilies: [String] = []
+    @Published public private(set) var detectedNerdFonts: [String] = []
 
     private var isBatchUpdating = false
     private var dynamicSeedColor: M3Color?
@@ -167,6 +175,9 @@ public final class ThemeStore: ObservableObject {
         setupWallpaperObserver()
         setupSystemAppearanceObserver()
         extractWallpaperSeed()
+        // Populate system/Nerd fonts without touching ConfigStore.shared (which calls
+        // ThemeStore.shared.sync(with:) during its own dispatch_once init).
+        refreshFontCatalog(customPaths: [])
     }
 
     private func rebuildCachedColors() {
@@ -266,6 +277,12 @@ public final class ThemeStore: ObservableObject {
         self.typographyTokens = config.typographyTokens
         self.surfaceTokens = config.surfaceTokens
         self.shadowTokens = config.shadowTokens
+        self.useSingleFontEverywhere = config.useSingleFontEverywhere
+        self.fontFamilyNerd = config.fontFamilyNerd
+        if customFontPaths != config.customFontPaths || installedFontFamilies.isEmpty {
+            refreshFontCatalog(customPaths: config.customFontPaths)
+        }
+        self.customFontPaths = config.customFontPaths
         isBatchUpdating = false
         refreshTheme()
     }
@@ -464,6 +481,51 @@ public final class ThemeStore: ObservableObject {
         CGFloat(shapeTokens.morphedRadius(base: Double(base), progress: Double(progress), targetScale: targetScale))
     }
 
+    // MARK: - Font Catalog
+
+    /// Registers user-imported font files with the process and rebuilds the installed /
+    /// detected Nerd Font family catalogs.
+    public func refreshFontCatalog(customPaths: [String] = []) {
+        for path in customPaths where FileManager.default.fileExists(atPath: path) {
+            CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: path) as CFURL, .process, nil)
+        }
+        installedFontFamilies = NSFontManager.shared.availableFontFamilies.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
+        detectedNerdFonts = installedFontFamilies.filter {
+            let l = $0.lowercased()
+            return l.contains("nerd") || l.hasSuffix(" nf") || l.hasSuffix(" nfm")
+                || l.contains("nerd font") || l.contains("powerline")
+        }
+    }
+
+    /// The font family actually used for Nerd Font icons and glyphs.
+    public var resolvedNerdFontFamily: String {
+        if useSingleFontEverywhere,
+           typographyTokens.fontFamilyUI.lowercased() != "system",
+           !typographyTokens.fontFamilyUI.isEmpty {
+            return typographyTokens.fontFamilyUI
+        }
+        if fontFamilyNerd != "Auto" && !fontFamilyNerd.isEmpty {
+            return fontFamilyNerd
+        }
+        if let firstNerd = detectedNerdFonts.first {
+            return firstNerd
+        }
+        return typographyTokens.fontFamilyMono
+    }
+
+    /// Font for Nerd Font icons/glyphs, scaled by the global font scale.
+    public func nerdFont(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let scaledSize = size * CGFloat(typographyTokens.fontScale)
+        let family = resolvedNerdFontFamily
+        let lower = family.lowercased()
+        if lower == "system" || lower == "sf pro" || lower == "sf mono" || lower.isEmpty {
+            return .system(size: scaledSize, weight: weight, design: .monospaced)
+        }
+        return .custom(family, size: scaledSize).weight(weight)
+    }
+
     public func font(for role: M3TypeScaleRole, emphasized: Bool = false) -> Font {
         let style = typographyTokens.style(for: role, emphasized: emphasized)
         let isDisplay = role == .displayLarge || role == .displayMedium || role == .displaySmall
@@ -475,15 +537,16 @@ public final class ThemeStore: ObservableObject {
         )
     }
 
-    public func font(size: CGFloat, weight: Font.Weight = .regular, mono: Bool = false, display: Bool = false) -> Font {
+    public func font(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default, mono: Bool = false, display: Bool = false) -> Font {
         let scaledSize = size * CGFloat(typographyTokens.fontScale)
-        let family = mono ? typographyTokens.fontFamilyMono : (display ? typographyTokens.fontFamilyDisplay : typographyTokens.fontFamilyUI)
+        let isMono = mono || (design == .monospaced && !useSingleFontEverywhere)
+        let family = useSingleFontEverywhere ? typographyTokens.fontFamilyUI : (isMono ? typographyTokens.fontFamilyMono : (display ? typographyTokens.fontFamilyDisplay : typographyTokens.fontFamilyUI))
         let lower = family.lowercased()
         if lower == "system" || lower == "sf pro" || lower.isEmpty {
-            return .system(size: scaledSize, weight: weight, design: mono ? .monospaced : .default)
-        } else if lower == "sf mono" && mono {
+            return .system(size: scaledSize, weight: weight, design: isMono ? .monospaced : design)
+        } else if lower == "sf mono" && isMono {
             return .system(size: scaledSize, weight: weight, design: .monospaced)
-        } else if lower == "New York".lowercased() || lower == "serif" {
+        } else if lower == "new york" || lower == "serif" {
             return .system(size: scaledSize, weight: weight, design: .serif)
         } else if lower == "sf pro rounded" || lower == "rounded" {
             return .system(size: scaledSize, weight: weight, design: .rounded)

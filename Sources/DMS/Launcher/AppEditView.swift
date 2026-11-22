@@ -34,10 +34,10 @@ public struct AppEditView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Edit Application")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(theme.onSurface)
                     Text(app.bundleID)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 11, design: .monospaced))
                         .foregroundColor(theme.onSurfaceVariant)
                         .lineLimit(1)
                 }
@@ -48,7 +48,7 @@ public struct AppEditView: View {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
                         .frame(width: 28, height: 28)
                         .background(theme.surfaceContainerHigh)
@@ -90,10 +90,10 @@ public struct AppEditView: View {
                     Toggle(isOn: $hidden) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Hidden from launcher")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(theme.onSurface)
                             Text("The app never appears in launcher results")
-                                .font(.system(size: 11))
+                                .font(ThemeStore.shared.font(size: 11))
                                 .foregroundColor(theme.onSurfaceVariant)
                         }
                     }
@@ -112,7 +112,7 @@ public struct AppEditView: View {
                     resetToDefaults()
                 } label: {
                     Text("Reset")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 12, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.error)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -127,7 +127,7 @@ public struct AppEditView: View {
                     dismiss()
                 } label: {
                     Text("Cancel")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 12, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.onSurfaceVariant)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -140,7 +140,7 @@ public struct AppEditView: View {
                     save()
                 } label: {
                     Text("Save")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(theme.onPrimary)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 8)
@@ -209,12 +209,12 @@ private struct AppEditField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title.uppercased())
-                .font(.system(size: 10, weight: .bold))
+                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                 .foregroundColor(theme.outline)
 
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13, design: .monospaced))
+                .font(ThemeStore.shared.font(size: 13, design: .monospaced))
                 .foregroundColor(theme.onSurface)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)

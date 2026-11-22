@@ -55,7 +55,7 @@ public struct CcEditChrome: View {
         let m3 = themeStore.materialTheme
         return Button(action: onUndo) {
             Image(systemName: "arrow.uturn.backward")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(canUndo ? m3.onSurface : m3.outline.opacity(0.4))
                 .frame(width: 26, height: 26)
                 .background(m3.surfaceContainerHighest.opacity(canUndo ? 1.0 : 0.5))
@@ -70,7 +70,7 @@ public struct CcEditChrome: View {
         let m3 = themeStore.materialTheme
         return Button(action: onRedo) {
             Image(systemName: "arrow.uturn.forward")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(canRedo ? m3.onSurface : m3.outline.opacity(0.4))
                 .frame(width: 26, height: 26)
                 .background(m3.surfaceContainerHighest.opacity(canRedo ? 1.0 : 0.5))

@@ -73,13 +73,13 @@ public struct GpuTemperatureWidget: View {
             HStack(spacing: 4) {
                 if style.showIcon {
                     Image(systemName: "display")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(tempColor)
                 }
 
                 if !isVertical && style.showLabel {
                     Text(formattedTemperature)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(tempColor)
                 }
             }

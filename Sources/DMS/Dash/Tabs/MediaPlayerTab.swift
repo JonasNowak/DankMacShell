@@ -79,9 +79,9 @@ public struct MediaPlayerTab: View {
             if !track.appName.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: track.appName == "Apple Music" ? "applelogo" : (track.appName == "Spotify" ? "waveform" : "hifispeaker.fill"))
-                        .font(.system(size: 9))
+                        .font(ThemeStore.shared.font(size: 9))
                     Text(track.appName)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -100,9 +100,9 @@ public struct MediaPlayerTab: View {
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: option == .bento ? "square.grid.2x2.fill" : "circle.circle.fill")
-                                .font(.system(size: 9))
+                                .font(ThemeStore.shared.font(size: 9))
                             Text(option.displayName)
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -124,7 +124,7 @@ public struct MediaPlayerTab: View {
                 }
             } label: {
                 Image(systemName: showLyrics ? "quote.bubble.fill" : "quote.bubble")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                     .foregroundColor(showLyrics ? Color(hex: p.onPrimary.hex) : Color(hex: p.onSurfaceVariant.hex))
                     .frame(width: 28, height: 24)
                     .background(Capsule().fill(showLyrics ? Color(hex: p.primary.hex) : Color(hex: p.surfaceContainerHigh.hex).opacity(0.8)))
@@ -235,7 +235,7 @@ public struct MediaPlayerTab: View {
                     .frame(width: size, height: size)
                     .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(Color(hex: p.outlineVariant.hex).opacity(0.3), lineWidth: 1))
                 Image(systemName: "music.note")
-                    .font(.system(size: size * 0.28))
+                    .font(ThemeStore.shared.font(size: size * 0.28))
                     .foregroundColor(Color(hex: p.primary.hex))
             }
         }
@@ -253,17 +253,17 @@ public struct MediaPlayerTab: View {
         let frameAlignment: Alignment = alignment == .center ? .center : .leading
         return VStack(alignment: alignment, spacing: 3) {
             Text(displayTitle)
-                .font(.system(size: compactTitle ? 13 : 17, weight: .bold))
+                .font(ThemeStore.shared.font(size: compactTitle ? 13 : 17, weight: .bold))
                 .foregroundColor(Color(hex: p.onSurface.hex))
                 .lineLimit(compactTitle ? 1 : 2)
                 .multilineTextAlignment(textAlignment)
             Text(displayArtist)
-                .font(.system(size: compactTitle ? 11 : 13, weight: .medium))
+                .font(ThemeStore.shared.font(size: compactTitle ? 11 : 13, weight: .medium))
                 .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                 .lineLimit(1)
             if !track.album.isEmpty && !compactTitle {
                 Text(track.album)
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                     .foregroundColor(Color(hex: p.outline.hex))
                     .lineLimit(1)
             }
@@ -291,7 +291,7 @@ public struct MediaPlayerTab: View {
                         Spacer()
                         Text(track.formattedDuration)
                     }
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                 }
             }
@@ -304,7 +304,7 @@ public struct MediaPlayerTab: View {
         return HStack(spacing: compact ? 12 : 22) {
             Button(action: { nowPlaying.previous() }) {
                 Image(systemName: "backward.fill")
-                    .font(.system(size: compact ? 12 : 15))
+                    .font(ThemeStore.shared.font(size: compact ? 12 : 15))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                     .frame(width: side, height: side)
                     .background(Color(hex: p.surfaceContainerHigh.hex))
@@ -319,7 +319,7 @@ public struct MediaPlayerTab: View {
                         .frame(width: main, height: main)
                         .shadow(color: Color(hex: p.primary.hex).opacity(0.4), radius: 8, x: 0, y: 3)
                     Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: compact ? 15 : 18, weight: .bold))
+                        .font(ThemeStore.shared.font(size: compact ? 15 : 18, weight: .bold))
                         .foregroundColor(Color(hex: p.onPrimary.hex))
                 }
             }
@@ -327,7 +327,7 @@ public struct MediaPlayerTab: View {
 
             Button(action: { nowPlaying.next() }) {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: compact ? 12 : 15))
+                    .font(ThemeStore.shared.font(size: compact ? 12 : 15))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                     .frame(width: side, height: side)
                     .background(Color(hex: p.surfaceContainerHigh.hex))
@@ -341,7 +341,7 @@ public struct MediaPlayerTab: View {
     private func volumeRow(_ p: ThemePalette) -> some View {
         HStack(spacing: 10) {
             Image(systemName: audioService.volume > 0.5 ? "speaker.wave.3.fill" : (audioService.volume > 0 ? "speaker.wave.1.fill" : "speaker.slash.fill"))
-                .font(.system(size: 12))
+                .font(ThemeStore.shared.font(size: 12))
                 .foregroundColor(Color(hex: p.primary.hex))
                 .frame(width: 16)
 
@@ -364,9 +364,9 @@ public struct MediaPlayerTab: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "hifispeaker.fill")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                     Text(audioService.currentOutputName)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 8)
@@ -508,7 +508,7 @@ private struct LyricsPanel: View {
             VStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text("Fetching lyrics…")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
             }
         } else if let current = lyrics.currentLyrics {
@@ -529,13 +529,13 @@ private struct LyricsPanel: View {
     private func stateView(icon: String, title: String, subtitle: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 26))
+                .font(ThemeStore.shared.font(size: 26))
                 .foregroundColor(Color(hex: palette.primary.hex).opacity(0.8))
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
             Text(subtitle)
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                 .multilineTextAlignment(.center)
         }
@@ -545,12 +545,12 @@ private struct LyricsPanel: View {
     private func plainView(_ text: String) -> some View {
         VStack(spacing: 4) {
             Text("Unsynced lyrics")
-                .font(.system(size: 9, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 9, weight: .semibold))
                 .foregroundColor(Color(hex: palette.outline.hex))
                 .padding(.top, 8)
             ScrollView(showsIndicators: false) {
                 Text(text)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 13, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -600,7 +600,7 @@ private struct LyricsPanel: View {
     private var footer: some View {
         HStack(spacing: 6) {
             Text(statusLabel)
-                .font(.system(size: 9, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 9, weight: .semibold))
                 .foregroundColor(Color(hex: palette.outline.hex))
                 .lineLimit(1)
 
@@ -613,7 +613,7 @@ private struct LyricsPanel: View {
                 lyrics.setOffset(ms: 0)
             } label: {
                 Text(String(format: "%+.1fs", Double(offsetMs) / 1000.0))
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundColor(offsetMs == 0 ? Color(hex: palette.onSurfaceVariant.hex) : Color(hex: palette.primary.hex))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
@@ -628,7 +628,7 @@ private struct LyricsPanel: View {
                 lyrics.refresh()
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     .frame(width: 22, height: 20)
             }
@@ -650,7 +650,7 @@ private struct LyricsPanel: View {
     private func footerButton(_ title: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 10, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
@@ -683,7 +683,7 @@ private struct LyricRow: View {
             Group {
                 if line.text.isEmpty {
                     Text("♪")
-                        .font(.system(size: 14, weight: .regular))
+                        .font(ThemeStore.shared.font(size: 14, weight: .regular))
                         .foregroundColor(Color(hex: palette.onSurfaceVariant.hex).opacity(isActive ? 0.9 : 0.3))
                 } else if isActive && !line.words.isEmpty {
                     TimelineView(.animation(minimumInterval: 0.1, paused: !track.isPlaying)) { ctx in
@@ -691,7 +691,7 @@ private struct LyricRow: View {
                     }
                 } else {
                     Text(line.text)
-                        .font(.system(size: 15, weight: isActive ? .bold : .medium))
+                        .font(ThemeStore.shared.font(size: 15, weight: isActive ? .bold : .medium))
                         .foregroundColor(isActive ? Color(hex: palette.primary.hex) : Color(hex: palette.onSurface.hex).opacity(distanceOpacity))
                 }
             }
@@ -718,6 +718,6 @@ private struct LyricRow: View {
             let suffix = i == line.words.count - 1 ? "" : " "
             result = result + Text(word.text + suffix).foregroundColor(color)
         }
-        return result.font(.system(size: 15, weight: .bold))
+        return result.font(ThemeStore.shared.font(size: 15, weight: .bold))
     }
 }

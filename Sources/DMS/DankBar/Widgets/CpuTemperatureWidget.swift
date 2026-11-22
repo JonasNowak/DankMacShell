@@ -73,13 +73,13 @@ public struct CpuTemperatureWidget: View {
             HStack(spacing: 4) {
                 if style.showIcon {
                     Image(systemName: "thermometer.medium")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(tempColor)
                 }
 
                 if !isVertical && style.showLabel {
                     Text(formattedTemperature)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(tempColor)
                 }
             }

@@ -23,11 +23,11 @@ public struct CapsLockIndicatorWidget: View {
                 if isCapsLockOn {
                     HStack(spacing: 3) {
                         Image(systemName: "arrow.capslock.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
                             .foregroundColor(theme.onPrimary)
                         if !isVertical {
                             Text("CAPS")
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                                 .foregroundColor(theme.onPrimary)
                         }
                     }

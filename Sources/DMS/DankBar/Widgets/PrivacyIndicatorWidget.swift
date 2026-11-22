@@ -35,13 +35,13 @@ public struct PrivacyIndicatorWidget: View {
                 HStack(spacing: 4) {
                     if privacy.isMicActive {
                         Image(systemName: "mic.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
                             .foregroundColor(theme.warning)
                             .accessibilityLabel("Microphone in use")
                     }
                     if privacy.isCameraActive {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
                             .foregroundColor(theme.success)
                             .accessibilityLabel("Camera in use")
                     }

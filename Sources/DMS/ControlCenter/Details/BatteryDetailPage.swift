@@ -41,11 +41,11 @@ public struct BatteryDetailPage: View {
 
                     VStack(spacing: 0) {
                         Text(hasBattery ? "\(detailedInfo.capacity)%" : "--")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                             .foregroundColor(theme.onSurface)
                         if hasBattery && detailedInfo.isCharging {
                             Image(systemName: "bolt.fill")
-                                .font(.system(size: 10))
+                                .font(ThemeStore.shared.font(size: 10))
                                 .foregroundColor(theme.primary)
                         }
                     }
@@ -54,29 +54,29 @@ public struct BatteryDetailPage: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if hasBattery {
                         Text(detailedInfo.isCharging ? "Charging" : (detailedInfo.onACPower ? "Power Adapter Connected" : "On Battery Power"))
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                             .foregroundColor(theme.onSurface)
 
                         if detailedInfo.timeToEmptyMinutes > 0 {
                             Text("\(detailedInfo.timeToEmptyMinutes / 60)h \(detailedInfo.timeToEmptyMinutes % 60)m remaining")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 12, weight: .medium))
                                 .foregroundColor(theme.onSurfaceVariant)
                         } else if detailedInfo.timeToFullMinutes > 0 {
                             Text("\(detailedInfo.timeToFullMinutes / 60)h \(detailedInfo.timeToFullMinutes % 60)m until full")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 12, weight: .medium))
                                 .foregroundColor(theme.onSurfaceVariant)
                         } else {
                             Text(detailedInfo.isCharged ? "Fully Charged" : "Calculating time...")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 12, weight: .medium))
                                 .foregroundColor(theme.onSurfaceVariant)
                         }
 
                         // Wattage draw
                         HStack(spacing: 4) {
                             Image(systemName: "bolt.badge.clock.fill")
-                                .font(.system(size: 11))
+                                .font(ThemeStore.shared.font(size: 11))
                             Text(String(format: "%.1f W Draw", detailedInfo.powerWatts))
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                         }
                         .foregroundColor(theme.primary)
                         .padding(.horizontal, 6)
@@ -85,19 +85,19 @@ public struct BatteryDetailPage: View {
                         .clipShape(Capsule())
                     } else {
                         Text("No internal battery")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                             .foregroundColor(theme.onSurface)
                         Text("This Mac has no smart battery (desktop or VM)")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 12, weight: .medium))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
 
                     // Live macOS Low Power Mode state
                     HStack(spacing: 4) {
                         Image(systemName: battery.isLowPowerModeEnabled ? "leaf.fill" : "gauge.open")
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
                         Text(battery.isLowPowerModeEnabled ? "Low Power Mode Active" : "Standard Power Mode")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold, design: .rounded))
                     }
                     .foregroundColor(battery.isLowPowerModeEnabled ? theme.secondary : theme.onSurfaceVariant)
                     .padding(.horizontal, 6)
@@ -114,7 +114,7 @@ public struct BatteryDetailPage: View {
             // MARK: - Hardware Health & Cycle Metrics
             VStack(alignment: .leading, spacing: 8) {
                 Text("BATTERY HEALTH & SPECS")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(theme.outline)
 
                 HStack(spacing: 10) {
@@ -127,7 +127,7 @@ public struct BatteryDetailPage: View {
             // MARK: - Power Mode Profiles
             VStack(alignment: .leading, spacing: 8) {
                 Text("POWER MODE")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(theme.outline)
 
                 HStack(spacing: 8) {
@@ -140,10 +140,10 @@ public struct BatteryDetailPage: View {
                 HStack(spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: battery.isLowPowerModeEnabled ? "leaf.fill" : "gauge.open")
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
                             .foregroundColor(battery.isLowPowerModeEnabled ? theme.secondary : theme.onSurfaceVariant)
                         Text(battery.isLowPowerModeEnabled ? "Low Power Mode Active" : "Standard Power Mode")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .foregroundColor(theme.onSurface)
                     }
                     Spacer()
@@ -154,9 +154,9 @@ public struct BatteryDetailPage: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.up.forward.app")
-                                .font(.system(size: 10))
+                                .font(ThemeStore.shared.font(size: 10))
                             Text("Battery Settings…")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -172,7 +172,7 @@ public struct BatteryDetailPage: View {
             // MARK: - 24-Hour Discharge Curve
             VStack(alignment: .leading, spacing: 8) {
                 Text("24-HOUR DISCHARGE HISTORY")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(theme.outline)
 
                 if hasBattery {
@@ -183,7 +183,7 @@ public struct BatteryDetailPage: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 } else {
                     Text("No battery telemetry available on this Mac")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(theme.onSurfaceVariant)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .frame(height: 80)
@@ -204,10 +204,10 @@ public struct BatteryDetailPage: View {
     private func metricTile(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                 .foregroundColor(theme.onSurface)
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(ThemeStore.shared.font(size: 10, weight: .medium))
                 .foregroundColor(theme.onSurfaceVariant)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -222,9 +222,9 @@ public struct BatteryDetailPage: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                 Text(label)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
             }
             .foregroundColor(selectedProfile == name ? theme.onPrimary : theme.onSurface)
             .padding(.horizontal, 10)

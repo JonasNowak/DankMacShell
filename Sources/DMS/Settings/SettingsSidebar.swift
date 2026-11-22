@@ -53,12 +53,12 @@ public struct SettingsSidebar: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(username)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                         .lineLimit(1)
 
                     Text(hostSubtitle)
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                         .foregroundColor(Color(hex: palette.outline.hex))
                         .lineLimit(1)
                 }
@@ -72,16 +72,16 @@ public struct SettingsSidebar: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(Color(hex: palette.outline.hex))
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
 
                 TextField("Search settings...", text: $searchQuery)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
 
                 if !searchQuery.isEmpty {
                     Button(action: { searchQuery = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
                             .foregroundColor(Color(hex: palette.outline.hex))
                     }
                     .buttonStyle(.plain)
@@ -124,18 +124,18 @@ public struct SettingsSidebar: View {
                                         }) {
                                             HStack(spacing: 8) {
                                                 Image(systemName: cat.icon)
-                                                    .font(.system(size: 12))
+                                                    .font(ThemeStore.shared.font(size: 12))
                                                 .foregroundColor(Color(hex: palette.outline.hex))
                                                 .frame(width: 16)
 
                                                 Text(cat.rawValue)
-                                                    .font(.system(size: 11, weight: .bold))
+                                                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
                                                     .foregroundColor(Color(hex: palette.outline.hex))
 
                                                 Spacer()
 
                                                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                                                    .font(.system(size: 9, weight: .bold))
+                                                    .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                                     .foregroundColor(Color(hex: palette.outline.hex))
                                             }
                                             .padding(.horizontal, 10)
@@ -192,12 +192,12 @@ public struct SettingsSidebar: View {
         }) {
             HStack(spacing: 10) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
                     .foregroundColor(iconColor)
                     .frame(width: 18)
 
                 Text(tab.rawValue)
-                    .font(.system(size: 12, weight: textWeight))
+                    .font(ThemeStore.shared.font(size: 12, weight: textWeight))
                     .foregroundColor(textColor)
                     .lineLimit(1)
 

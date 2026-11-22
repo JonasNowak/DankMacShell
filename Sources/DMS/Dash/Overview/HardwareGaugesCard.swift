@@ -80,7 +80,7 @@ private struct VerticalMeterColumn: View {
 
             // Icon below
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                 .foregroundColor(primaryColor)
                 .frame(width: 16, height: 16)
         }

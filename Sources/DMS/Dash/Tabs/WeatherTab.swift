@@ -40,11 +40,11 @@ public struct WeatherTab: View {
                     // Location Header & Quick Change Button
                     HStack(spacing: 6) {
                         Image(systemName: "mappin.and.ellipse")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold))
                             .foregroundColor(Color(hex: p.primary.hex))
 
                         Text(weatherService.locationName)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: p.onSurface.hex))
                             .lineLimit(1)
 
@@ -62,7 +62,7 @@ public struct WeatherTab: View {
                                 Image(systemName: isEditingLocation ? "xmark" : "magnifyingglass")
                                 Text(isEditingLocation ? "Cancel" : "Change")
                             }
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 9, weight: .semibold))
                             .foregroundColor(Color(hex: p.primary.hex))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2.5)
@@ -78,7 +78,7 @@ public struct WeatherTab: View {
                                 commitLocation()
                             })
                             .textFieldStyle(.plain)
-                            .font(.system(size: 10))
+                            .font(ThemeStore.shared.font(size: 10))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
                             .background(Color(hex: p.surfaceContainerLow.hex))
@@ -91,7 +91,7 @@ public struct WeatherTab: View {
                                         .frame(width: 12, height: 12)
                                 } else {
                                     Text("Set")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 3)
                                         .background(Color(hex: p.primary.hex))
@@ -106,7 +106,7 @@ public struct WeatherTab: View {
                                 commitLocation()
                             }) {
                                 Text("Auto")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
                                     .background(Color(hex: p.surfaceContainerHighest.hex))
@@ -119,7 +119,7 @@ public struct WeatherTab: View {
                     } else {
                         HStack(spacing: 10) {
                             Image(systemName: current.sfSymbol)
-                                .font(.system(size: 34))
+                                .font(ThemeStore.shared.font(size: 34))
                                 .foregroundColor(Color(hex: p.primary.hex))
                                 .frame(width: 40)
 
@@ -128,17 +128,17 @@ public struct WeatherTab: View {
                                 let feelsStr = isCelsius ? "\(Int(round(current.apparentTemperatureC)))°C" : "\(Int(round(current.apparentTemperatureF)))°F"
 
                                 Text(tempStr)
-                                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                                    .font(ThemeStore.shared.font(size: 26, weight: .bold, design: .rounded))
                                     .foregroundColor(Color(hex: p.onSurface.hex))
 
                                 HStack(spacing: 4) {
                                     Text(current.conditionDescription)
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(ThemeStore.shared.font(size: 12, weight: .medium))
                                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                                         .lineLimit(1)
 
                                     Text("• Feels \(feelsStr)")
-                                        .font(.system(size: 10))
+                                        .font(ThemeStore.shared.font(size: 10))
                                         .foregroundColor(Color(hex: p.outline.hex))
                                         .lineLimit(1)
                                 }
@@ -156,11 +156,11 @@ public struct WeatherTab: View {
                 VStack(spacing: 4) {
                     HStack {
                         Label("Solar Trajectory", systemImage: isDayTime ? "sun.max" : "moon.stars")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         Spacer()
                         Label(moon.name, systemImage: moon.sfSymbol)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: p.primary.hex))
                     }
 
@@ -217,7 +217,7 @@ public struct WeatherTab: View {
                         Spacer()
                         Text("Sunset \(Self.timeFormatter.string(from: sunset))")
                     }
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: p.outline.hex))
                 }
                 .padding(10)
@@ -231,12 +231,12 @@ public struct WeatherTab: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("24-Hour Forecast")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                     Spacer()
                     if let first = current.hourlyForecast.first {
                         Text("Rain chance: \(first.precipitationProbability)%")
-                            .font(.system(size: 10))
+                            .font(ThemeStore.shared.font(size: 10))
                             .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     }
                 }
@@ -332,10 +332,10 @@ public struct WeatherForecastChart: View {
         if points.isEmpty {
             VStack(spacing: 4) {
                 Image(systemName: "cloud.sun.rain")
-                    .font(.system(size: 16))
+                    .font(ThemeStore.shared.font(size: 16))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                 Text("No forecast data")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -352,25 +352,25 @@ public struct WeatherForecastChart: View {
                 ForEach(displayPoints) { pt in
                     VStack(spacing: 2) {
                         Text(pt.hourLabel)
-                            .font(.system(size: 9))
+                            .font(ThemeStore.shared.font(size: 9))
                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
                         Image(systemName: pt.sfSymbol)
-                            .font(.system(size: 13))
+                            .font(ThemeStore.shared.font(size: 13))
                             .foregroundColor(Color(hex: palette.primary.hex))
 
                         let tempVal = isCelsius ? Int(round(pt.temperatureC)) : Int(round(pt.temperatureF))
                         Text("\(tempVal)°")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                             .foregroundColor(Color(hex: palette.onSurface.hex))
 
                         if pt.precipitationProbability > 0 {
                             HStack(spacing: 2) {
                                 Image(systemName: "drop.fill")
-                                    .font(.system(size: 7))
+                                    .font(ThemeStore.shared.font(size: 7))
                                     .foregroundColor(Color(hex: palette.tertiary.hex))
                                 Text("\(pt.precipitationProbability)%")
-                                    .font(.system(size: 8, weight: .medium))
+                                    .font(ThemeStore.shared.font(size: 8, weight: .medium))
                                     .foregroundColor(Color(hex: palette.tertiary.hex))
                             }
                         } else {
@@ -397,19 +397,19 @@ private struct MetricSensorTile: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                 Spacer()
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
                     .foregroundColor(Color(hex: palette.primary.hex))
             }
             Spacer()
             Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .font(ThemeStore.shared.font(size: 18, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
             Text(subtext)
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 .foregroundColor(Color(hex: palette.outline.hex))
         }
         .padding(10)

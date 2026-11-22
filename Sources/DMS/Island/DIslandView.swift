@@ -265,7 +265,7 @@ private struct CompactIslandContent: View {
             HStack(spacing: 5) {
                 if activity == .osd, let payload = payload {
                     Image(systemName: payload.icon)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(theme.primary)
                     Text(payload.label)
                         .font(theme.font(size: 11, weight: .semibold))
@@ -274,7 +274,7 @@ private struct CompactIslandContent: View {
                         .fixedSize(horizontal: true, vertical: false)
                 } else if activity == .media || nowPlaying.currentTrack.isPlaying {
                     Image(systemName: "waveform")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(theme.primary)
                     Text(nowPlaying.currentTrack.title.isEmpty ? "Playing" : nowPlaying.currentTrack.title)
                         .font(theme.font(size: 11, weight: .semibold))
@@ -282,7 +282,7 @@ private struct CompactIslandContent: View {
                         .lineLimit(1)
                 } else {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(theme.primary)
                     Text("DMS")
                         .font(theme.font(size: 11, weight: .bold))
@@ -333,7 +333,7 @@ private struct CompactIslandContent: View {
                     let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
                     let temp = isCelsius ? weather.currentWeather.temperatureC : weather.currentWeather.temperatureF
                     Image(systemName: weather.currentWeather.sfSymbol)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .foregroundColor(theme.primary)
                     Text("\(Int(round(temp)))°")
                         .font(theme.font(size: 11, weight: .semibold, mono: true))
@@ -371,7 +371,7 @@ private struct ExpandedIslandContent: View {
                             controller.open(activity: act)
                         } label: {
                             Image(systemName: iconForActivity(act))
-                                .font(.system(size: 11, weight: activity == act ? .bold : .medium))
+                                .font(ThemeStore.shared.font(size: 11, weight: activity == act ? .bold : .medium))
                                 .foregroundColor(activity == act ? theme.onPrimary : theme.onSurfaceVariant)
                                 .frame(width: 24, height: 20)
                                 .background(activity == act ? theme.primary : theme.surfaceContainerHigh.opacity(0.6))
@@ -387,7 +387,7 @@ private struct ExpandedIslandContent: View {
                     controller.close()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 13))
+                        .font(ThemeStore.shared.font(size: 13))
                         .foregroundColor(theme.onSurfaceVariant)
                 }
                 .buttonStyle(.plain)
@@ -456,7 +456,7 @@ private struct ExpandedPanelContainer<Content: View>: View {
                     controller.close()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 13))
+                        .font(ThemeStore.shared.font(size: 13))
                         .foregroundColor(theme.onSurfaceVariant)
                 }
                 .buttonStyle(.plain)
@@ -549,7 +549,7 @@ private struct ExpandedMediaView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                     } else {
                         Image(systemName: "music.note")
-                            .font(.system(size: 20, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 20, weight: .bold))
                             .foregroundColor(theme.primary)
                     }
                 }
@@ -584,21 +584,21 @@ private struct ExpandedMediaView: View {
                 HStack(spacing: 10) {
                     Button(action: { nowPlaying.previous() }) {
                         Image(systemName: "backward.fill")
-                            .font(.system(size: 13))
+                            .font(ThemeStore.shared.font(size: 13))
                             .foregroundColor(theme.onSurface)
                     }
                     .buttonStyle(.plain)
 
                     Button(action: { nowPlaying.playPause() }) {
                         Image(systemName: track.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 24))
+                            .font(ThemeStore.shared.font(size: 24))
                             .foregroundColor(theme.primary)
                     }
                     .buttonStyle(.plain)
 
                     Button(action: { nowPlaying.next() }) {
                         Image(systemName: "forward.fill")
-                            .font(.system(size: 13))
+                            .font(ThemeStore.shared.font(size: 13))
                             .foregroundColor(theme.onSurface)
                     }
                     .buttonStyle(.plain)
@@ -621,11 +621,11 @@ private struct ExpandedMediaView: View {
 
                     HStack {
                         Text(track.formattedElapsed)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 9, weight: .medium, design: .monospaced))
                             .foregroundColor(theme.onSurfaceVariant)
                         Spacer()
                         Text(track.formattedDuration)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 9, weight: .medium, design: .monospaced))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
                 }
@@ -652,7 +652,7 @@ private struct ExpandedOSDView: View {
         let payload = controller.osdPayload ?? (icon: audio.currentOutputIcon, label: "Volume", progress: audio.volume)
         return HStack(spacing: 12) {
             Image(systemName: payload.icon)
-                .font(.system(size: 16, weight: .bold))
+                .font(ThemeStore.shared.font(size: 16, weight: .bold))
                 .foregroundColor(theme.primary)
                 .frame(width: 24)
 
@@ -694,7 +694,7 @@ private struct ExpandedNotificationView: View {
         let toast = controller.toastPayload ?? (title: "DMS Notification", body: "No unread notifications", level: "info")
         return HStack(spacing: 10) {
             Image(systemName: toast.level == "error" ? "exclamationmark.triangle.fill" : "bell.badge.fill")
-                .font(.system(size: 18))
+                .font(ThemeStore.shared.font(size: 18))
                 .foregroundColor(toast.level == "error" ? theme.error : theme.primary)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -743,7 +743,7 @@ private struct ExpandedControlCenterView: View {
 
             HStack(spacing: 8) {
                 Image(systemName: audio.currentOutputIcon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                     .foregroundColor(theme.primary)
                     .frame(width: 16)
                 GeometryReader { geo in
@@ -819,7 +819,7 @@ private struct ExpandedClipboardView: View {
                     } label: {
                         HStack {
                             Image(systemName: "doc.on.doc")
-                                .font(.system(size: 10))
+                                .font(ThemeStore.shared.font(size: 10))
                                 .foregroundColor(theme.primary)
                             Text(item.text.replacingOccurrences(of: "\n", with: " "))
                                 .font(theme.font(size: 11, mono: true))
@@ -855,7 +855,7 @@ private struct ExpandedWeatherView: View {
         return VStack(spacing: 10) {
             HStack(spacing: 12) {
                 Image(systemName: w.sfSymbol)
-                    .font(.system(size: 28))
+                    .font(ThemeStore.shared.font(size: 28))
                     .foregroundColor(theme.primary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(Int(round(temp)))\(unit) • \(w.conditionDescription)")
@@ -923,14 +923,14 @@ private struct IslandMetricPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(tint)
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 9, weight: .medium))
                     .foregroundColor(theme.onSurfaceVariant)
                 Text(value)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(theme.onSurface)
             }
         }
@@ -952,10 +952,10 @@ private struct IslandActionButton: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                     .foregroundColor(theme.primary)
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                     .foregroundColor(theme.onSurface)
                     .lineLimit(1)
             }

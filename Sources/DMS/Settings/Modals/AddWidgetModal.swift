@@ -9,6 +9,7 @@ public struct AddWidgetModal: View {
     public let onAdd: (String) -> Void
     public let onClose: () -> Void
 
+    @ObservedObject private var theme = ThemeStore.shared
     @State private var searchQuery: String = ""
 
     public init(
@@ -41,15 +42,15 @@ public struct AddWidgetModal: View {
             HStack(spacing: 8) {
                 Image(systemName: "plus.circle.fill")
                     .foregroundColor(Color(hex: palette.primary.hex))
-                    .font(.system(size: 15))
+                    .font(ThemeStore.shared.font(size: 15))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Add Widget to \(section.capitalized) Section")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
 
                     Text("Select a widget to add to the \(section) section of the bar.")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                         .foregroundColor(Color(hex: palette.outline.hex))
                 }
 
@@ -57,7 +58,7 @@ public struct AddWidgetModal: View {
 
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                         .frame(width: 22, height: 22)
                         .background(Color(hex: palette.surfaceContainerLow.hex))
@@ -70,10 +71,10 @@ public struct AddWidgetModal: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(Color(hex: palette.outline.hex))
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                 TextField("Search widgets...", text: $searchQuery)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -86,7 +87,7 @@ public struct AddWidgetModal: View {
                     ForEach(filteredWidgets) { meta in
                         HStack(spacing: 10) {
                             Image(systemName: meta.icon)
-                                .font(.system(size: 13))
+                                .font(ThemeStore.shared.font(size: 13))
                                 .foregroundColor(Color(hex: palette.primary.hex))
                                 .frame(width: 26, height: 26)
                                 .background(Color(hex: palette.surfaceVariant.hex).opacity(0.6))
@@ -94,10 +95,10 @@ public struct AddWidgetModal: View {
 
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(meta.name)
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                                     .foregroundColor(Color(hex: palette.onSurface.hex))
                                 Text(meta.description)
-                                    .font(.system(size: 10))
+                                    .font(ThemeStore.shared.font(size: 10))
                                     .foregroundColor(Color(hex: palette.outline.hex))
                                     .lineLimit(1)
                             }
@@ -108,7 +109,7 @@ public struct AddWidgetModal: View {
                                 onAdd(meta.id)
                             }) {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
                                     .foregroundColor(Color(hex: palette.primary.hex))
                                     .frame(width: 24, height: 24)
                                     .background(Color(hex: palette.primaryContainer.hex))

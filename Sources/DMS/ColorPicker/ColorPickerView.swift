@@ -19,12 +19,12 @@ public struct ColorPickerView: View {
             // Header
             HStack {
                 Label("Color Picker", systemImage: "eyedropper.halffull")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 28, height: 28)
                         .background(Color(hex: p.surfaceVariant.hex))
@@ -46,12 +46,12 @@ public struct ColorPickerView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(colorPicker.hexCode)
-                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 24, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     Button(action: { colorPicker.sampleColor() }) {
                         Label("Pick from Screen", systemImage: "eyedropper")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                             .foregroundColor(Color(hex: p.onPrimary.hex))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
@@ -78,7 +78,7 @@ public struct ColorPickerView: View {
             if !colorPicker.recentColors.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("RECENT COLORS")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(Color(hex: p.outline.hex))
 
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -127,12 +127,12 @@ private struct ColorFormatRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 11, weight: .bold))
+                .font(ThemeStore.shared.font(size: 11, weight: .bold))
                 .foregroundColor(Color(hex: palette.outline.hex))
                 .frame(width: 40, alignment: .leading)
 
             Text(value)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .font(ThemeStore.shared.font(size: 13, weight: .medium, design: .monospaced))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
 
             Spacer()
@@ -144,7 +144,7 @@ private struct ColorFormatRow: View {
                 ToastCenter.shared.show(icon: "doc.on.doc.fill", message: "Copied \(value)")
             }) {
                 Image(systemName: "doc.on.doc")
-                    .font(.system(size: 12))
+                    .font(ThemeStore.shared.font(size: 12))
                     .foregroundColor(Color(hex: palette.primary.hex))
                     .frame(width: 26, height: 26)
                     .background(Color(hex: palette.primaryContainer.hex))

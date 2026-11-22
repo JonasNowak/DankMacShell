@@ -52,27 +52,27 @@ public struct UserInfoCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(userName)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: p.onSurface.hex))
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
                     Image(systemName: "apple.logo")
-                        .font(.system(size: 9.5, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 9.5, weight: .semibold))
                         .foregroundColor(Color(hex: p.primary.hex))
 
                     Text("on macOS")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                 }
 
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 9, weight: .semibold))
                         .foregroundColor(Color(hex: p.primary.hex))
 
                     Text(uptimeString)
-                        .font(.system(size: 9.5, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 9.5, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .lineLimit(1)
                 }

@@ -33,7 +33,7 @@ public struct WallpapersTab: View {
                         ForEach(WallpaperSource.allCases) { src in
                             Button(action: { selectedSource = src }) {
                                 Text(src.rawValue)
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 5)
                                     .background(selectedSource == src ? Color(hex: p.primary.hex) : Color(hex: p.surfaceContainerHigh.hex))
@@ -53,7 +53,7 @@ public struct WallpapersTab: View {
                         Image(systemName: "folder.badge.plus")
                         Text("Add Folder…")
                     }
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(Color(hex: p.surfaceContainerHighest.hex))
@@ -70,7 +70,7 @@ public struct WallpapersTab: View {
                         Image(systemName: "checkmark.circle.fill")
                         Text("Apply Wallpaper")
                     }
-                    .font(.system(size: 11, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
                     .background(Color(hex: p.primary.hex))
@@ -84,11 +84,11 @@ public struct WallpapersTab: View {
             HStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                         .foregroundColor(Color(hex: p.outline.hex))
                     TextField("Search wallpapers…", text: $searchQuery)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
@@ -102,7 +102,7 @@ public struct WallpapersTab: View {
                 }
 
                 Text("\(filtered.count) wallpapers")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
             }
 
@@ -125,9 +125,9 @@ public struct WallpapersTab: View {
                                     if isActiveDesktop {
                                         HStack(spacing: 3) {
                                             Image(systemName: "desktopcomputer")
-                                                .font(.system(size: 8, weight: .bold))
+                                                .font(ThemeStore.shared.font(size: 8, weight: .bold))
                                             Text("Active")
-                                                .font(.system(size: 8, weight: .bold))
+                                                .font(ThemeStore.shared.font(size: 8, weight: .bold))
                                         }
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2.5)
@@ -144,12 +144,12 @@ public struct WallpapersTab: View {
 
                                 HStack {
                                     Text(wp.name)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                                         .foregroundColor(Color(hex: p.onSurface.hex))
                                         .lineLimit(1)
                                     Spacer()
                                     Text(wp.source.rawValue)
-                                        .font(.system(size: 9))
+                                        .font(ThemeStore.shared.font(size: 9))
                                         .foregroundColor(Color(hex: p.outline.hex))
                                 }
                                 .padding(.horizontal, 2)

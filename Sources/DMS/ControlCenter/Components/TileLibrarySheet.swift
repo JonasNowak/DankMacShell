@@ -61,11 +61,11 @@ public struct TileLibrarySheet: View {
             HStack {
                 HStack(spacing: 6) {
                     Image(systemName: "plus.square.fill.on.square.fill")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold))
                         .foregroundColor(Color(hex: p.primary.hex))
 
                     Text("Tile Library")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                 }
 
@@ -73,7 +73,7 @@ public struct TileLibrarySheet: View {
 
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .font(ThemeStore.shared.font(size: 15))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                 }
                 .buttonStyle(.plain)
@@ -82,11 +82,11 @@ public struct TileLibrarySheet: View {
             // Search Bar
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                     .foregroundColor(Color(hex: p.outline.hex))
                 TextField("Search available tiles…", text: $searchQuery)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -99,7 +99,7 @@ public struct TileLibrarySheet: View {
                     ForEach(categories, id: \.self) { cat in
                         Button(action: { selectedCategory = cat }) {
                             Text(cat)
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
                                 .background(selectedCategory == cat ? Color(hex: p.primary.hex) : Color(hex: p.surfaceContainerHigh.hex))
@@ -115,10 +115,10 @@ public struct TileLibrarySheet: View {
             if availableCatalog.isEmpty {
                 VStack(spacing: 6) {
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 22))
+                        .font(ThemeStore.shared.font(size: 22))
                         .foregroundColor(Color(hex: p.primary.hex))
                     Text("All catalog tiles are currently in your Control Center!")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -128,7 +128,7 @@ public struct TileLibrarySheet: View {
                         ForEach(availableCatalog) { tile in
                             HStack(spacing: 8) {
                                 Image(systemName: ControlCenterUtils.icon(for: tile.id))
-                                    .font(.system(size: 14))
+                                    .font(ThemeStore.shared.font(size: 14))
                                     .foregroundColor(Color(hex: p.primary.hex))
                                     .frame(width: 24, height: 24)
                                     .background(Color(hex: p.primaryContainer.hex).opacity(0.4))
@@ -137,10 +137,10 @@ public struct TileLibrarySheet: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 4) {
                                         Text(ControlCenterUtils.title(for: tile.id))
-                                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                            .font(ThemeStore.shared.font(size: 11, weight: .semibold, design: .rounded))
                                             .foregroundColor(Color(hex: p.onSurface.hex))
                                         Text("\(tile.w)×\(tile.h)")
-                                            .font(.system(size: 8, weight: .semibold, design: .rounded))
+                                            .font(ThemeStore.shared.font(size: 8, weight: .semibold, design: .rounded))
                                             .foregroundColor(Color(hex: p.outline.hex))
                                             .padding(.horizontal, 4)
                                             .padding(.vertical, 1)
@@ -148,7 +148,7 @@ public struct TileLibrarySheet: View {
                                             .clipShape(Capsule())
                                     }
                                     Text(ControlCenterUtils.subtitle(for: tile.id))
-                                        .font(.system(size: 9))
+                                        .font(ThemeStore.shared.font(size: 9))
                                         .foregroundColor(Color(hex: p.outline.hex))
                                         .lineLimit(1)
                                 }
@@ -162,7 +162,7 @@ public struct TileLibrarySheet: View {
                                         Image(systemName: "plus")
                                         Text("Add")
                                     }
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
                                     .background(Color(hex: p.primary.hex))

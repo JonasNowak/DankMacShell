@@ -29,12 +29,12 @@ public struct DiskGaugeWidget: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "internaldrive")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .foregroundColor(diskColor)
 
                 if !isVertical {
                     Text("\(Int(round(usedPercent)))%")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(diskColor)
                 }
             }

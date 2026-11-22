@@ -18,7 +18,7 @@ public struct BluetoothDetailPage: View {
             HStack {
                 HStack(spacing: 10) {
                     Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 16, weight: .bold))
                         .foregroundColor(bluetooth.isOn ? theme.onPrimary : theme.onSurface)
                         .frame(width: 32, height: 32)
                         .background(bluetooth.isOn ? theme.primary : theme.surfaceContainerHigh)
@@ -26,10 +26,10 @@ public struct BluetoothDetailPage: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Bluetooth")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                             .foregroundColor(theme.onSurface)
                         Text(bluetooth.isOn ? "On" : "Off")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
                 }
@@ -58,7 +58,7 @@ public struct BluetoothDetailPage: View {
                             Image(systemName: "arrow.clockwise")
                             Text("Refresh Devices")
                         }
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                         .foregroundColor(theme.onSurface)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -73,14 +73,14 @@ public struct BluetoothDetailPage: View {
                 // Paired devices list
                 VStack(alignment: .leading, spacing: 8) {
                     Text("PAIRED DEVICES (\(devices.count))")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .rounded))
                         .foregroundColor(theme.outline)
 
                     if devices.isEmpty {
                         HStack {
                             Spacer()
                             Text("No paired Bluetooth devices")
-                                .font(.system(size: 12))
+                                .font(ThemeStore.shared.font(size: 12))
                                 .foregroundColor(theme.onSurfaceVariant)
                                 .padding(24)
                             Spacer()
@@ -101,17 +101,17 @@ public struct BluetoothDetailPage: View {
     private func deviceRow(_ dev: BluetoothDeviceInfo) -> some View {
         HStack(spacing: 12) {
             Image(systemName: iconForDevice(name: dev.name))
-                .font(.system(size: 15))
+                .font(ThemeStore.shared.font(size: 15))
                 .foregroundColor(dev.isConnected ? theme.primary : theme.onSurface)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(dev.name)
-                    .font(.system(size: 13, weight: dev.isConnected ? .bold : .medium))
+                    .font(ThemeStore.shared.font(size: 13, weight: dev.isConnected ? .bold : .medium))
                     .foregroundColor(theme.onSurface)
 
                 Text(dev.isConnected ? "Connected" : "Not Connected")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                     .foregroundColor(dev.isConnected ? theme.primary : theme.onSurfaceVariant)
             }
 
@@ -120,9 +120,9 @@ public struct BluetoothDetailPage: View {
             if let battery = dev.batteryLevel {
                 HStack(spacing: 3) {
                     Image(systemName: "battery.100")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                     Text("\(battery)%")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .monospaced))
                 }
                 .foregroundColor(theme.primary)
                 .padding(.horizontal, 6)
@@ -142,7 +142,7 @@ public struct BluetoothDetailPage: View {
                     refreshDevices()
                 }
             }
-            .font(.system(size: 11, weight: .semibold))
+            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
             .buttonStyle(.bordered)
         }
         .padding(.horizontal, 12)

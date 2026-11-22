@@ -102,7 +102,7 @@ public struct NotepadView: View {
 
                 Button(action: { showingList.toggle() }) {
                     Image(systemName: "sidebar.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(Color(hex: p.primary.hex))
                         .frame(width: 32, height: 32)
                         .background(Color(hex: p.primaryContainer.hex))
@@ -114,7 +114,7 @@ public struct NotepadView: View {
                     get: { notepad.activeNote.title },
                     set: { notepad.updateActiveNote(title: $0) }
                 ))
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                 .textFieldStyle(.plain)
                 .foregroundColor(Color(hex: p.onSurface.hex))
 
@@ -123,7 +123,7 @@ public struct NotepadView: View {
                 // New Note button
                 Button(action: { notepad.createNewNote() }) {
                     Image(systemName: "square.and.pencil")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 32, height: 32)
                         .background(Color(hex: p.surfaceVariant.hex).opacity(0.6))
@@ -139,7 +139,7 @@ public struct NotepadView: View {
                     ToastCenter.shared.show(icon: "doc.on.doc.fill", message: "Note Copied to Clipboard")
                 }) {
                     Image(systemName: "doc.on.doc")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 32, height: 32)
                         .background(Color(hex: p.surfaceVariant.hex).opacity(0.6))
@@ -150,7 +150,7 @@ public struct NotepadView: View {
                 // Markdown preview toggle (cycles none → split → full)
                 Button(action: cyclePreviewMode) {
                     Image(systemName: previewMode == "none" ? "eye" : (previewMode == "split" ? "rectangle.split.2x1.fill" : "eye.fill"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(previewMode == "none" ? Color(hex: p.onSurfaceVariant.hex) : Color(hex: p.primary.hex))
                         .frame(width: 32, height: 32)
                         .background((previewMode == "none" ? Color(hex: p.surfaceVariant.hex) : Color(hex: p.primaryContainer.hex)).opacity(0.6))
@@ -162,7 +162,7 @@ public struct NotepadView: View {
                 // Find & Replace toggle (⌘F)
                 Button(action: { showFindBar.toggle() }) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(showFindBar ? Color(hex: p.primary.hex) : Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 32, height: 32)
                         .background((showFindBar ? Color(hex: p.primaryContainer.hex) : Color(hex: p.surfaceVariant.hex)).opacity(0.6))
@@ -174,7 +174,7 @@ public struct NotepadView: View {
                 // Close button
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 32, height: 32)
                         .background(Color(hex: p.surfaceVariant.hex).opacity(0.6))
@@ -193,22 +193,22 @@ public struct NotepadView: View {
                 VStack(spacing: 6) {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 12))
+                            .font(ThemeStore.shared.font(size: 12))
                             .foregroundColor(Color(hex: p.outline.hex))
 
                         TextField("Find", text: $findText)
-                            .font(.system(size: 12))
+                            .font(ThemeStore.shared.font(size: 12))
                             .textFieldStyle(.plain)
                             .foregroundColor(Color(hex: p.onSurface.hex))
 
                         Text(matches.isEmpty ? (findText.isEmpty ? "" : "No matches") : "\(safeMatchIndex + 1) of \(matches.count)")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: p.outline.hex))
                             .frame(minWidth: 52, alignment: .trailing)
 
                         Button(action: { caseSensitive.toggle() }) {
                             Text("Aa")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                 .foregroundColor(caseSensitive ? Color(hex: p.onPrimary.hex) : Color(hex: p.outline.hex))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
@@ -219,7 +219,7 @@ public struct NotepadView: View {
 
                         Button(action: { goToMatch(delta: -1) }) {
                             Image(systemName: "chevron.up")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                 .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                                 .frame(width: 22, height: 22)
                                 .background(Color(hex: p.surfaceContainerHigh.hex))
@@ -229,7 +229,7 @@ public struct NotepadView: View {
 
                         Button(action: { goToMatch(delta: 1) }) {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                 .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                                 .frame(width: 22, height: 22)
                                 .background(Color(hex: p.surfaceContainerHigh.hex))
@@ -239,7 +239,7 @@ public struct NotepadView: View {
 
                         Button(action: { showFindBar = false }) {
                             Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                 .foregroundColor(Color(hex: p.outline.hex))
                                 .frame(width: 22, height: 22)
                                 .background(Color(hex: p.surfaceContainerHigh.hex))
@@ -250,17 +250,17 @@ public struct NotepadView: View {
 
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.2.circlepath")
-                            .font(.system(size: 12))
+                            .font(ThemeStore.shared.font(size: 12))
                             .foregroundColor(Color(hex: p.outline.hex))
 
                         TextField("Replace", text: $replaceText)
-                            .font(.system(size: 12))
+                            .font(ThemeStore.shared.font(size: 12))
                             .textFieldStyle(.plain)
                             .foregroundColor(Color(hex: p.onSurface.hex))
 
                         Button(action: replaceCurrent) {
                             Text("Replace")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                                 .foregroundColor(Color(hex: p.primary.hex))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -271,7 +271,7 @@ public struct NotepadView: View {
 
                         Button(action: replaceAllMatches) {
                             Text("All")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                                 .foregroundColor(Color(hex: p.onPrimary.hex))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -293,7 +293,7 @@ public struct NotepadView: View {
                 if showingList {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("SAVED NOTES")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
                             .foregroundColor(Color(hex: p.outline.hex))
                             .padding(.horizontal, 12)
                             .padding(.top, 10)
@@ -305,18 +305,18 @@ public struct NotepadView: View {
                                         HStack {
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text(note.title.isEmpty ? "Untitled Note" : note.title)
-                                                    .font(.system(size: 12, weight: note.id == notepad.activeNote.id ? .bold : .medium))
+                                                    .font(ThemeStore.shared.font(size: 12, weight: note.id == notepad.activeNote.id ? .bold : .medium))
                                                     .foregroundColor(note.id == notepad.activeNote.id ? Color(hex: p.primary.hex) : Color(hex: p.onSurface.hex))
                                                     .lineLimit(1)
                                                 Text(note.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                                                    .font(.system(size: 10))
+                                                    .font(ThemeStore.shared.font(size: 10))
                                                     .foregroundColor(Color(hex: p.outline.hex))
                                             }
                                             Spacer()
                                             if notepad.notes.count > 1 {
                                                 Button(action: { notepad.deleteNote(id: note.id) }) {
                                                     Image(systemName: "trash")
-                                                        .font(.system(size: 10))
+                                                        .font(ThemeStore.shared.font(size: 10))
                                                         .foregroundColor(Color(hex: p.error.hex))
                                                 }
                                                 .buttonStyle(.plain)
@@ -363,13 +363,13 @@ public struct NotepadView: View {
             // Footer Status Bar
             HStack {
                 Text("\(notepad.activeNote.wordCount) words, \(notepad.activeNote.charCount) characters")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: p.outline.hex))
 
                 Spacer()
 
                 Text("⌘F Find & Replace • Saved \(notepad.activeNote.updatedAt.formatted(date: .omitted, time: .standard))")
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                     .foregroundColor(Color(hex: p.outline.hex))
             }
             .padding(.horizontal, 18)

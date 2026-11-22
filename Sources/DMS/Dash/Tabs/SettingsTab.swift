@@ -20,7 +20,7 @@ public struct SettingsTab: View {
                 // Theme Palettes Card
                 VStack(alignment: .leading, spacing: 14) {
                     Label("Theme & Appearance", systemImage: "paintpalette.fill")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .bold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     HStack(spacing: 12) {
@@ -38,7 +38,7 @@ public struct SettingsTab: View {
                                         )
 
                                     Text(tName.capitalized)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                                         .foregroundColor(Color(hex: p.onSurface.hex))
                                 }
                                 .padding(8)
@@ -54,14 +54,14 @@ public struct SettingsTab: View {
                         }) {
                             VStack(spacing: 6) {
                                 Image(systemName: "wand.and.stars")
-                                    .font(.system(size: 16))
+                                    .font(ThemeStore.shared.font(size: 16))
                                     .frame(width: 32, height: 32)
                                     .background(Color(hex: p.primaryContainer.hex))
                                     .foregroundColor(Color(hex: p.primary.hex))
                                     .clipShape(Circle())
 
                                 Text("Dynamic")
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                                     .foregroundColor(Color(hex: p.onSurface.hex))
                             }
                             .padding(8)
@@ -86,7 +86,7 @@ public struct SettingsTab: View {
                             Image(systemName: themeStore.isLightMode ? "sun.max.fill" : "moon.stars.fill")
                                 .foregroundColor(Color(hex: p.primary.hex))
                             Text("Dark Surface Mode")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 13, weight: .medium))
                                 .foregroundColor(Color(hex: p.onSurface.hex))
                         }
                     }
@@ -99,7 +99,7 @@ public struct SettingsTab: View {
                 // Units & Formats Card
                 VStack(alignment: .leading, spacing: 14) {
                     Label("Clock & Meteorological Units", systemImage: "slider.horizontal.3")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .bold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     Toggle(isOn: Binding(
@@ -112,7 +112,7 @@ public struct SettingsTab: View {
                             Image(systemName: "clock")
                                 .foregroundColor(Color(hex: p.primary.hex))
                             Text("Use 24-Hour Digital Clock Format")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 13, weight: .medium))
                                 .foregroundColor(Color(hex: p.onSurface.hex))
                         }
                     }
@@ -131,7 +131,7 @@ public struct SettingsTab: View {
                             Image(systemName: "thermometer")
                                 .foregroundColor(Color(hex: p.primary.hex))
                             Text("Display Temperature in Celsius (°C)")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 13, weight: .medium))
                                 .foregroundColor(Color(hex: p.onSurface.hex))
                         }
                     }
@@ -146,7 +146,7 @@ public struct SettingsTab: View {
                             Image(systemName: "mappin.and.ellipse")
                                 .foregroundColor(Color(hex: p.primary.hex))
                             Text("Weather Location")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 13, weight: .medium))
                                 .foregroundColor(Color(hex: p.onSurface.hex))
                         }
 
@@ -155,7 +155,7 @@ public struct SettingsTab: View {
                                 updateWeatherLocation()
                             })
                             .textFieldStyle(.plain)
-                            .font(.system(size: 12))
+                            .font(ThemeStore.shared.font(size: 12))
                             .padding(8)
                             .background(Color(hex: p.surfaceVariant.hex))
                             .cornerRadius(8)
@@ -164,7 +164,7 @@ public struct SettingsTab: View {
                                 updateWeatherLocation()
                             }
                             .buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .bold))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
                             .background(Color(hex: p.primary.hex))
@@ -176,7 +176,7 @@ public struct SettingsTab: View {
                                 updateWeatherLocation()
                             }
                             .buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 12, weight: .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(Color(hex: p.surfaceVariant.hex))
@@ -184,7 +184,7 @@ public struct SettingsTab: View {
                         }
 
                         Text("Current: \(weatherService.locationName) (\(String(format: "%.2f", weatherService.latitude)), \(String(format: "%.2f", weatherService.longitude)))")
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
                             .foregroundColor(Color(hex: p.outline.hex))
                     }
                 }
@@ -199,14 +199,14 @@ public struct SettingsTab: View {
                 }) {
                     HStack(spacing: 10) {
                         Image(systemName: "gearshape.fill")
-                            .font(.system(size: 14))
+                            .font(ThemeStore.shared.font(size: 14))
                             .foregroundColor(Color(hex: p.primary.hex))
                         Text("Open Full Settings…")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                             .foregroundColor(Color(hex: p.onSurface.hex))
                         Spacer()
                         Image(systemName: "arrow.up.right.square")
-                            .font(.system(size: 12))
+                            .font(ThemeStore.shared.font(size: 12))
                             .foregroundColor(Color(hex: p.outline.hex))
                     }
                     .padding(14)

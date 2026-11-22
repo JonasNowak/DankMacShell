@@ -44,7 +44,7 @@ public struct ProcessListView: View {
                     .foregroundColor(Color(hex: p.primary.hex))
 
                 Text(sortByMemory ? "Memory & Services" : "Process Manager")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: p.onSurface.hex))
 
                 Spacer()
@@ -55,7 +55,7 @@ public struct ProcessListView: View {
                     telemetry.refresh()
                 }) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 28, height: 28)
                         .background(Color(hex: p.surfaceVariant.hex))
@@ -66,7 +66,7 @@ public struct ProcessListView: View {
                 // Close button
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 28, height: 28)
                         .background(Color(hex: p.surfaceVariant.hex))
@@ -90,7 +90,7 @@ public struct ProcessListView: View {
                         .foregroundColor(Color(hex: p.outline.hex))
                     TextField("Filter processes or PID...", text: $searchText)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13))
+                        .font(ThemeStore.shared.font(size: 13))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                 }
                 .padding(.horizontal, 10)
@@ -103,7 +103,7 @@ public struct ProcessListView: View {
                 HStack(spacing: 6) {
                     Button(action: { sortByMemory = false }) {
                         Text("Sort CPU")
-                            .font(.system(size: 11, weight: !sortByMemory ? .bold : .medium))
+                            .font(ThemeStore.shared.font(size: 11, weight: !sortByMemory ? .bold : .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(!sortByMemory ? Color(hex: p.primaryContainer.hex) : Color.clear)
@@ -114,7 +114,7 @@ public struct ProcessListView: View {
 
                     Button(action: { sortByMemory = true }) {
                         Text("Sort RAM")
-                            .font(.system(size: 11, weight: sortByMemory ? .bold : .medium))
+                            .font(ThemeStore.shared.font(size: 11, weight: sortByMemory ? .bold : .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(sortByMemory ? Color(hex: p.primaryContainer.hex) : Color.clear)
@@ -141,7 +141,7 @@ public struct ProcessListView: View {
                 Text("ACTION")
                     .frame(width: 40, alignment: .center)
             }
-            .font(.system(size: 9.5, weight: .bold))
+            .font(ThemeStore.shared.font(size: 9.5, weight: .bold))
             .foregroundColor(Color(hex: p.outline.hex))
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
@@ -155,23 +155,23 @@ public struct ProcessListView: View {
                     ForEach(displayedProcesses.prefix(80)) { proc in
                         HStack(spacing: 8) {
                             Text(proc.name)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 11, weight: .medium))
                                 .foregroundColor(Color(hex: p.onSurface.hex))
                                 .lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
                             Text("\(proc.pid)")
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                                 .foregroundColor(Color(hex: p.outline.hex))
                                 .frame(width: 45, alignment: .trailing)
 
                             Text(String(format: "%.1f%%", proc.cpuPercent))
-                                .font(.system(size: 10, weight: proc.cpuPercent > 10.0 ? .bold : .regular, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 10, weight: proc.cpuPercent > 10.0 ? .bold : .regular, design: .monospaced))
                                 .foregroundColor(proc.cpuPercent > 10.0 ? Color(hex: p.error.hex) : Color(hex: p.onSurface.hex))
                                 .frame(width: 50, alignment: .trailing)
 
                             Text(String(format: "%.1f", proc.memoryMB))
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                                 .foregroundColor(Color(hex: p.onSurface.hex))
                                 .frame(width: 60, alignment: .trailing)
 
@@ -188,7 +188,7 @@ public struct ProcessListView: View {
                                 }
                             }) {
                                 Text(confirmKillPID == proc.pid ? "Sure?" : "End")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                     .foregroundColor(Color(hex: p.error.hex))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
@@ -213,11 +213,11 @@ public struct ProcessListView: View {
             // Footer
             HStack {
                 Text("Showing \(min(80, displayedProcesses.count)) of \(displayedProcesses.count) processes")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: p.outline.hex))
                 Spacer()
                 Text("Sorted by \(sortByMemory ? "RAM" : "CPU") descending")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: p.outline.hex))
             }
             .padding(.horizontal, 12)
@@ -247,18 +247,18 @@ public struct ProcessListView: View {
                             .rotationEffect(.degrees(-90))
                             .frame(width: 44, height: 44)
                         Image(systemName: "memorychip")
-                            .font(.system(size: 15))
+                            .font(ThemeStore.shared.font(size: 15))
                             .foregroundColor(Color(hex: p.primary.hex))
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text("Memory Utilization")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                                 .foregroundColor(Color(hex: p.onSurface.hex))
                             Spacer()
                             Text(String(format: "%.1f GB / %.1f GB (%.0f%%)", t.ramUsedGB, t.ramTotalGB, t.ramPercent))
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 12, weight: .bold, design: .monospaced))
                                 .foregroundColor(t.ramPercent > 85.0 ? Color(hex: p.error.hex) : Color(hex: p.primary.hex))
                         }
 
@@ -284,7 +284,7 @@ public struct ProcessListView: View {
                             Spacer()
                             Text("Active Services: \(displayedProcesses.count)")
                         }
-                        .font(.system(size: 10, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     }
                 }
@@ -310,18 +310,18 @@ public struct ProcessListView: View {
                             .rotationEffect(.degrees(-90))
                             .frame(width: 44, height: 44)
                         Image(systemName: "cpu")
-                            .font(.system(size: 15))
+                            .font(ThemeStore.shared.font(size: 15))
                             .foregroundColor(Color(hex: p.primary.hex))
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text("CPU Aggregate Load")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                                 .foregroundColor(Color(hex: p.onSurface.hex))
                             Spacer()
                             Text(String(format: "%.1f%% Load", t.cpuPercent))
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 12, weight: .bold, design: .monospaced))
                                 .foregroundColor(t.cpuPercent > 85.0 ? Color(hex: p.error.hex) : Color(hex: p.primary.hex))
                         }
 
@@ -347,7 +347,7 @@ public struct ProcessListView: View {
                             Spacer()
                             Text(t.cpuPercent > 85.0 ? "Heavy Load" : (t.cpuPercent > 50.0 ? "Moderate" : "Normal Load"))
                         }
-                        .font(.system(size: 10, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     }
                 }

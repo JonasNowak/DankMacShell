@@ -24,7 +24,7 @@ public struct WeatherOverviewCard: View {
             HStack(spacing: 10) {
                 // Weather Condition Icon on the left
                 Image(systemName: current.sfSymbol)
-                    .font(.system(size: 28, weight: .regular))
+                    .font(ThemeStore.shared.font(size: 28, weight: .regular))
                     .foregroundColor(Color(hex: p.primary.hex))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: 32, height: 32)
@@ -32,12 +32,12 @@ public struct WeatherOverviewCard: View {
                 // Temperature and Condition description stacked on the right
                 VStack(alignment: .leading, spacing: 1) {
                     Text(tempStr)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                         .lineLimit(1)
 
                     Text(current.conditionDescription.isEmpty ? "Clear" : current.conditionDescription)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .lineLimit(1)
                 }

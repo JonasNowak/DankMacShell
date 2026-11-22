@@ -785,7 +785,7 @@ public struct DankBarView: View {
             HStack(spacing: 5) {
                 if style.showIcon {
                     Image(systemName: "circle.grid.3x3.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .bold))
                         .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onPrimary))
                 }
                 if !isVertical && style.showLabel && !style.compactMode {
@@ -806,7 +806,7 @@ public struct DankBarView: View {
     private func networkMonitorPill(style: BarWidgetStyleOptions) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "arrow.up.arrow.down.circle.fill")
-                .font(.system(size: 11, weight: .medium))
+                .font(ThemeStore.shared.font(size: 11, weight: .medium))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
             if !isVertical && style.showLabel && !style.compactMode {
                 Text(wifi.isConnected ? "Online" : "Offline")
@@ -824,7 +824,7 @@ public struct DankBarView: View {
         return HStack(spacing: 4) {
             if style.showIcon {
                 Image(systemName: "keyboard")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 10, weight: .medium))
                     .foregroundColor(resolveWidgetTint(style, defaultColor: theme.primary))
             }
             if !isVertical && style.showLabel {
@@ -867,7 +867,7 @@ public struct DankBarView: View {
                     HStack(spacing: 4) {
                         if style.showIcon {
                             Image(systemName: Self.batterySymbol(capacity: bat.capacity, isCharging: bat.isCharging))
-                                .font(.system(size: 11, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 11, weight: .medium))
                                 .foregroundColor(bat.isCharging ? theme.success : (lowBattery ? theme.warning : resolveWidgetTint(style, defaultColor: theme.onSurface)))
                         }
                         if !isVertical && style.showLabel && !style.compactMode {
@@ -888,7 +888,7 @@ public struct DankBarView: View {
     private func micPill(style: BarWidgetStyleOptions) -> some View {
         Button(action: { audio.toggleMicMute() }) {
             Image(systemName: audio.isMicMuted ? "mic.slash.fill" : "mic.fill")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(audio.isMicMuted ? theme.error : resolveWidgetTint(style, defaultColor: theme.primary))
                 .frame(width: 28, height: 28)
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
@@ -903,7 +903,7 @@ public struct DankBarView: View {
         } label: {
             HStack(spacing: 0) {
                 Image(systemName: wifi.symbolName)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(wifi.isConnected ? resolveWidgetTint(style, defaultColor: theme.primary) : theme.outline)
             }
             .frame(width: 28, height: 28)
@@ -922,7 +922,7 @@ public struct DankBarView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onPrimary))
                         if !isVertical && style.showLabel && !style.compactMode {
                             Text(updateCheckService.latestVersion ?? "Update")
@@ -943,7 +943,7 @@ public struct DankBarView: View {
                     SettingsController.shared.show(tab: "about")
                 } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.circle")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                         .frame(width: 28, height: 28)
                         .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
@@ -960,7 +960,7 @@ public struct DankBarView: View {
         } label: {
             HStack(spacing: 0) {
                 Image(systemName: audio.currentOutputIcon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(audio.isMuted ? theme.outline : resolveWidgetTint(style, defaultColor: theme.primary))
             }
             .frame(width: 28, height: 28)
@@ -976,7 +976,7 @@ public struct DankBarView: View {
             ControlCenterController.shared.toggle(fromBar: true)
         } label: {
             Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 12, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
@@ -990,7 +990,7 @@ public struct DankBarView: View {
             PowerPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x)
         } label: {
             Image(systemName: "power")
-                .font(.system(size: 12, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
@@ -1003,7 +1003,7 @@ public struct DankBarView: View {
     private func notepadButton(style: BarWidgetStyleOptions) -> some View {
         Button(action: { NotepadController.shared.toggle() }) {
             Image(systemName: "square.and.pencil")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
@@ -1015,7 +1015,7 @@ public struct DankBarView: View {
     private func clipboardButton(style: BarWidgetStyleOptions) -> some View {
         Button(action: { ClipboardController.shared.toggle() }) {
             Image(systemName: "doc.on.clipboard")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
@@ -1027,7 +1027,7 @@ public struct DankBarView: View {
     private func colorPickerButton(style: BarWidgetStyleOptions) -> some View {
         Button(action: { ColorPickerPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x) }) {
             Image(systemName: "eyedropper")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(resolveWidgetTint(style, defaultColor: theme.onSurface))
                 .frame(width: 28, height: 28)
                 .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
@@ -1120,7 +1120,7 @@ private struct BarClockWidgetView: View {
                 HStack(spacing: 5) {
                     if style.showIcon {
                         Image(systemName: "clock.fill")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
                             .foregroundColor(style.customTintHex.map { Color(hex: $0) } ?? theme.primary)
                     }
                     if style.showLabel {
@@ -1498,7 +1498,7 @@ private struct WeatherPillView: View {
             HStack(spacing: 5) {
                 if style.showIcon {
                     Image(systemName: weather.currentWeather.sfSymbol)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(tintColor)
                 }
                 if !isVertical && style.showLabel && !style.compactMode {
@@ -1542,7 +1542,7 @@ private struct TelemetryPillView: View {
             HStack(spacing: 4) {
                 if style.showIcon {
                     Image(systemName: "cpu")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(tintColor)
                 }
                 if !isVertical && style.showLabel && !style.compactMode {
@@ -1580,13 +1580,13 @@ private struct InhibitPillView: View {
         Button(action: { DurationPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x) }) {
             HStack(spacing: 3) {
                 Image(systemName: inhibit.isInhibited ? "cup.and.saucer.fill" : "cup.and.saucer")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .foregroundColor(inhibit.isInhibited ? theme.onPrimary : tintColor)
 
                 if !isVertical && style.showLabel && inhibit.isInhibited,
                    let remaining = inhibit.formattedRemainingTimeShort {
                     Text(remaining)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(theme.onPrimary)
                 }
             }
@@ -1627,7 +1627,7 @@ private struct VpnPillView: View {
         } label: {
             HStack(spacing: 0) {
                 Image(systemName: "network.badge.shield.half.filled")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(vpn.isConnected ? theme.primary : theme.onSurfaceVariant)
             }
             .frame(width: 28, height: 28)
@@ -1661,7 +1661,7 @@ private struct MonitorPillView: View {
         HStack(spacing: 4) {
             if style.showIcon {
                 Image(systemName: "display")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(tintColor)
             }
             if !isVertical && style.showLabel && !style.compactMode {

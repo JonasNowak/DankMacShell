@@ -139,12 +139,12 @@ public struct ColorPickerPopoutView: View {
                 Image(systemName: "eyedropper.halffull")
                     .foregroundColor(theme.primary)
                 Text("Color Picker")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
                         .frame(width: 22, height: 22)
                         .background(theme.surfaceContainerHigh)
@@ -165,9 +165,9 @@ public struct ColorPickerPopoutView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "eyedropper")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .bold))
                         Text("Pick Screen Color")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .bold))
                     }
                     .foregroundColor(theme.onPrimary)
                     .frame(maxWidth: .infinity)
@@ -189,13 +189,13 @@ public struct ColorPickerPopoutView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(colorPicker.hexCode)
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .monospaced))
                             .foregroundColor(theme.onSurface)
                         Text(colorPicker.rgbString)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 9, weight: .medium, design: .monospaced))
                             .foregroundColor(theme.onSurfaceVariant)
                         Text(colorPicker.hslString)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(ThemeStore.shared.font(size: 9, weight: .medium, design: .monospaced))
                             .foregroundColor(theme.onSurfaceVariant)
                     }
 
@@ -205,7 +205,7 @@ public struct ColorPickerPopoutView: View {
                         colorPicker.copyColorToClipboard(colorPicker.hexCode)
                     } label: {
                         Image(systemName: "doc.on.clipboard")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                             .foregroundColor(theme.primary)
                             .frame(width: 28, height: 28)
                             .background(theme.surfaceContainerHigh)
@@ -221,7 +221,7 @@ public struct ColorPickerPopoutView: View {
                 // Recent Swatches Section
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Recent Colors (Click to Copy)")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
 
                     let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)

@@ -154,7 +154,7 @@ public struct SymbianBarWidget: View {
                 VStack(spacing: 2) {
                     deviceImage(size: 16)
                     Text(status.device?.driveLetter ?? "—")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 8, weight: .bold))
                         .foregroundColor(tintColor)
                         .lineLimit(1)
                 }
@@ -165,7 +165,7 @@ public struct SymbianBarWidget: View {
                     deviceImage(size: 16)
                     if style.showLabel && !style.compactMode {
                         Text(statusLabel)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                             .foregroundColor(tintColor)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
@@ -194,7 +194,7 @@ public struct SymbianBarWidget: View {
                 .clipShape(RoundedRectangle(cornerRadius: size / 4))
         } else if style.showIcon {
             Image(systemName: "phone.and.waveform")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                 .foregroundColor(tintColor)
         }
     }

@@ -1293,6 +1293,24 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         set { rawSettings["fontScale"] = AnyCodable(min(1.5, max(0.75, newValue))) }
     }
 
+    /// When true, applies `fontFamily` across UI/body, display/headlines, monospace, and Nerd Font glyphs.
+    public var useSingleFontEverywhere: Bool {
+        get { rawSettings["useSingleFontEverywhere"]?.boolValue ?? false }
+        set { rawSettings["useSingleFontEverywhere"] = AnyCodable(newValue) }
+    }
+
+    /// Nerd Font family for icons and glyphs (`"Auto"` or font family name).
+    public var fontFamilyNerd: String {
+        get { rawSettings["fontFamilyNerd"]?.stringValue ?? "Auto" }
+        set { rawSettings["fontFamilyNerd"] = AnyCodable(newValue) }
+    }
+
+    /// User-imported custom font file paths (.ttf / .otf / .ttc).
+    public var customFontPaths: [String] {
+        get { rawSettings["customFontPaths"]?.arrayValue?.compactMap(\.stringValue) ?? [] }
+        set { rawSettings["customFontPaths"] = AnyCodable(newValue) }
+    }
+
     /// Animation speed multiplier (`0.25` to `2.0`, default `1.0`).
     public var animationSpeed: Double {
         get { rawSettings["animationSpeed"]?.doubleValue ?? 1.0 }
@@ -1328,8 +1346,8 @@ public struct DMSConfig: Sendable, Codable, Equatable {
     public var typographyTokens: M3TypographyTokens {
         M3TypographyTokens(
             fontFamilyUI: fontFamily,
-            fontFamilyMono: fontFamilyMono,
-            fontFamilyDisplay: fontFamilyDisplay,
+            fontFamilyMono: useSingleFontEverywhere ? fontFamily : fontFamilyMono,
+            fontFamilyDisplay: useSingleFontEverywhere ? fontFamily : fontFamilyDisplay,
             fontScale: fontScale
         )
     }

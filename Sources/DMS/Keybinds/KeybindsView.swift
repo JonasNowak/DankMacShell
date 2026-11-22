@@ -107,14 +107,14 @@ public struct KeybindsView: View {
                     .foregroundColor(Color(hex: p.primary.hex))
 
                 Text("Keyboard Shortcuts")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: p.onSurface.hex))
 
                 Spacer()
 
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 28, height: 28)
                         .background(Color(hex: p.surfaceVariant.hex))
@@ -134,7 +134,7 @@ public struct KeybindsView: View {
                     .foregroundColor(Color(hex: p.outline.hex))
                 TextField("Search shortcuts...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(ThemeStore.shared.font(size: 13))
                     .foregroundColor(Color(hex: p.onSurface.hex))
             }
             .padding(.horizontal, 12)
@@ -152,7 +152,7 @@ public struct KeybindsView: View {
                     ForEach(filteredCategories, id: \.self) { cat in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(cat.uppercased())
-                                .font(.system(size: 11, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .bold))
                                 .foregroundColor(Color(hex: p.primary.hex))
                                 .padding(.horizontal, 4)
 
@@ -161,11 +161,11 @@ public struct KeybindsView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack {
                                             Text(entry.title)
-                                                .font(.system(size: 13, weight: .medium))
+                                                .font(ThemeStore.shared.font(size: 13, weight: .medium))
                                                 .foregroundColor(Color(hex: p.onSurface.hex))
                                             Spacer()
                                             Text(entry.keys)
-                                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                                .font(ThemeStore.shared.font(size: 12, weight: .bold, design: .monospaced))
                                                 .foregroundColor(Color(hex: p.primary.hex))
                                                 .padding(.horizontal, 8)
                                                 .padding(.vertical, 4)
@@ -174,7 +174,7 @@ public struct KeybindsView: View {
                                         }
                                         if !entry.description.isEmpty {
                                             Text(entry.description)
-                                                .font(.system(size: 11))
+                                                .font(ThemeStore.shared.font(size: 11))
                                                 .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                                         }
                                     }
@@ -195,7 +195,7 @@ public struct KeybindsView: View {
             // Footer
             HStack(spacing: 8) {
                 Text("\(shortcuts.count) shortcuts available")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: p.outline.hex))
                 Spacer()
                 Button(action: {
@@ -204,9 +204,9 @@ public struct KeybindsView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "gearshape.fill")
-                            .font(.system(size: 10))
+                            .font(ThemeStore.shared.font(size: 10))
                         Text("Configure Shortcuts")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: p.primary.hex))
                     .padding(.horizontal, 8)
@@ -217,7 +217,7 @@ public struct KeybindsView: View {
                 .buttonStyle(.plain)
 
                 Text("• Press Esc to close")
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                     .foregroundColor(Color(hex: p.outline.hex))
             }
             .padding(.horizontal, 18)

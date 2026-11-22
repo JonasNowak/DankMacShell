@@ -27,9 +27,9 @@ public struct WellbeingTab: View {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.orange)
-                        .font(.system(size: 12))
+                        .font(ThemeStore.shared.font(size: 12))
                     Text(wellbeingService.isMacOSScreenTimeActive ? "Focus tracking is disabled in DMS Settings." : "Focus tracking paused: macOS Screen Time is turned off or inactive.")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                         .lineLimit(1)
                     Spacer()
@@ -51,19 +51,19 @@ public struct WellbeingTab: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Image(systemName: "hourglass")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 13, weight: .bold))
                             .foregroundColor(Color(hex: p.primary.hex))
                         Text(activeKey == todayKey ? "Today's Focus" : "Screen Time")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     }
 
                     Text(WellbeingFormatter.formatDuration(seconds: dayTotal))
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 26, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     Text("Active: \(wellbeingService.currentFrontmostApp)")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                         .foregroundColor(Color(hex: p.outline.hex))
                         .lineLimit(1)
                 }
@@ -76,7 +76,7 @@ public struct WellbeingTab: View {
                 // 7-Day Weekly Bar Chart
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Last 7 Days")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     let maxDailySecs = max(3600.0, weeklySummaries.map(\.totalSeconds).max() ?? 3600.0)
@@ -100,7 +100,7 @@ public struct WellbeingTab: View {
                                     }
 
                                     Text(day.dayLabel)
-                                        .font(.system(size: 9, weight: isSelected ? .bold : .medium))
+                                        .font(ThemeStore.shared.font(size: 9, weight: isSelected ? .bold : .medium))
                                         .foregroundColor(isSelected ? Color(hex: p.primary.hex) : Color(hex: p.outline.hex))
                                 }
                             }
@@ -120,7 +120,7 @@ public struct WellbeingTab: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Top Applications")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                         .foregroundColor(Color(hex: p.onSurface.hex))
                     Spacer()
                     Button(action: {
@@ -131,9 +131,9 @@ public struct WellbeingTab: View {
                                 .fill(wellbeingService.isMacOSScreenTimeActive ? Color.green : Color.orange)
                                 .frame(width: 6, height: 6)
                             Text("macOS Screen Time")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             Image(systemName: "arrow.up.forward.app")
-                                .font(.system(size: 8))
+                                .font(ThemeStore.shared.font(size: 8))
                         }
                         .foregroundColor(Color(hex: p.outline.hex))
                     }
@@ -144,10 +144,10 @@ public struct WellbeingTab: View {
                 if apps.isEmpty {
                     VStack(spacing: 6) {
                         Image(systemName: "app.badge.checkmark")
-                            .font(.system(size: 24))
+                            .font(ThemeStore.shared.font(size: 24))
                             .foregroundColor(Color(hex: p.outline.hex))
                         Text("No application focus recorded for this day.")
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
                             .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -227,7 +227,7 @@ private struct AppUsageRow: View {
                     .frame(width: 22, height: 22)
             } else {
                 Image(systemName: "app.fill")
-                    .font(.system(size: 16))
+                    .font(ThemeStore.shared.font(size: 16))
                     .foregroundColor(Color(hex: palette.primary.hex))
                     .frame(width: 22, height: 22)
             }
@@ -236,19 +236,19 @@ private struct AppUsageRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
                     Text(app.appName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                         .lineLimit(1)
 
                     if isExceeded {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 9))
+                            .font(ThemeStore.shared.font(size: 9))
                             .foregroundColor(Color(hex: palette.error.hex))
                     }
                 }
 
                 Text("\(percent)% of screen time")
-                    .font(.system(size: 9))
+                    .font(ThemeStore.shared.font(size: 9))
                     .foregroundColor(Color(hex: palette.outline.hex))
             }
 
@@ -269,14 +269,14 @@ private struct AppUsageRow: View {
 
             // Duration
             Text(WellbeingFormatter.formatDuration(seconds: app.durationSeconds))
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
                 .frame(width: 44, alignment: .trailing)
 
             // Limit Config Button
             Button(action: onEditLimit) {
                 Image(systemName: limit != nil ? "hourglass.circle.fill" : "hourglass.badge.plus")
-                    .font(.system(size: 13))
+                    .font(ThemeStore.shared.font(size: 13))
                     .foregroundColor(limit != nil ? (isExceeded ? Color(hex: palette.error.hex) : Color(hex: palette.primary.hex)) : Color(hex: palette.outline.hex))
                     .frame(width: 22, height: 22)
             }
@@ -333,12 +333,12 @@ private struct LimitEditSheet: View {
     var body: some View {
         VStack(spacing: 14) {
             Text("Set Daily Limit for \(appName)")
-                .font(.system(size: 13, weight: .bold))
+                .font(ThemeStore.shared.font(size: 13, weight: .bold))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
 
             VStack(spacing: 6) {
                 Text("\(Int(minutes)) minutes per day")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: palette.primary.hex))
 
                 Slider(value: $minutes, in: 5...360, step: 5)
@@ -348,18 +348,18 @@ private struct LimitEditSheet: View {
 
             HStack(spacing: 8) {
                 Button("Remove Limit", action: onRemove)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.error.hex))
 
                 Spacer()
 
                 Button("Cancel", action: onCancel)
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
 
                 Button("Save") {
                     onSave(Int(minutes))
                 }
-                .font(.system(size: 11, weight: .bold))
+                .font(ThemeStore.shared.font(size: 11, weight: .bold))
                 .buttonStyle(.borderedProminent)
             }
         }

@@ -46,6 +46,7 @@ public struct LauncherView: View {
     @State private var query: String
     @State private var selectedIndex: Int = 0
     @State private var selectedFileIndex: Int = 0
+    @State private var selectedEmojiIndex: Int = 0
     @State private var viewMode: LauncherViewMode = .list
     @State private var showActionPanel: Bool = false
     @State private var asyncFileResults: [FileItem] = []
@@ -137,8 +138,29 @@ public struct LauncherView: View {
         AppSearch.extractFileQuery(query)
     }
 
+    /// v0.9.5: emoji / Nerd Font picker mode (`:emoji`, `nf:icon`).
+    private var isEmojiSearch: Bool {
+        !isDMenuMode && AppSearch.isEmojiQuery(query)
+    }
+
+    private var emojiResults: [EmojiItem] {
+        isEmojiSearch ? AppSearch.searchEmojis(query: query) : []
+    }
+
+    private var safeSelectedEmojiIndex: Int {
+        let items = emojiResults
+        guard !items.isEmpty else { return 0 }
+        return min(max(0, selectedEmojiIndex), items.count - 1)
+    }
+
+    private var selectedEmoji: EmojiItem? {
+        let items = emojiResults
+        guard !items.isEmpty else { return nil }
+        return items[safeSelectedEmojiIndex]
+    }
+
     private var appSearchResult: (math: MathResult?, results: [SearchResult]) {
-        if isDMenuMode || isFileSearch {
+        if isDMenuMode || isFileSearch || isEmojiSearch {
             return (nil, [])
         }
         return appCatalog.search(query: query)
@@ -246,10 +268,10 @@ public struct LauncherView: View {
                     // Search Pill Input
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 16, weight: .bold))
                             .foregroundColor(theme.primary)
 
-                        TextField(isDMenuMode ? (dmenuPrompt ?? "Filter...") : "Search apps, calculate, or 'file: <name>'...", text: $query)
+                        TextField(isDMenuMode ? (dmenuPrompt ?? "Filter...") : "Search apps, calculate, convert, ':emoji', 'nf:icon', or 'file: <name>'...", text: $query)
                             .textFieldStyle(.plain)
                             .font(theme.font(size: 15, weight: .medium))
                             .foregroundColor(theme.onSurface)
@@ -260,6 +282,7 @@ public struct LauncherView: View {
                             .onChange(of: query) { _, newQuery in
                                 selectedIndex = 0
                                 selectedFileIndex = 0
+                                selectedEmojiIndex = 0
                                 triggerDebouncedFileSearch(for: newQuery)
                             }
 
@@ -274,11 +297,12 @@ public struct LauncherView: View {
                                 query = ""
                                 selectedIndex = 0
                                 selectedFileIndex = 0
+                                selectedEmojiIndex = 0
                                 asyncFileResults = []
                                 searchWarning = nil
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 14))
+                                    .font(ThemeStore.shared.font(size: 14))
                                     .foregroundColor(theme.onSurfaceVariant)
                             }
                             .buttonStyle(.plain)
@@ -304,7 +328,7 @@ public struct LauncherView: View {
                             }
                         } label: {
                             Image(systemName: "list.bullet")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                                 .foregroundColor(viewMode == .list ? theme.onSurface : theme.onSurfaceVariant.opacity(0.6))
                                 .frame(width: 36, height: 36)
                                 .background(viewMode == .list ? theme.surfaceContainerHighest : Color.clear)
@@ -320,7 +344,7 @@ public struct LauncherView: View {
                             }
                         } label: {
                             Image(systemName: "square.grid.2x2")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                                 .foregroundColor(viewMode == .tile ? theme.onSurface : theme.onSurfaceVariant.opacity(0.6))
                                 .frame(width: 36, height: 36)
                                 .background(viewMode == .tile ? theme.surfaceContainerHighest : Color.clear)
@@ -342,7 +366,7 @@ public struct LauncherView: View {
                 if let warning = searchWarning {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.shield.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                             .foregroundColor(theme.warning)
 
                         Text(warning)
@@ -359,7 +383,7 @@ public struct LauncherView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                 Text("Retry")
                                     .font(theme.font(size: 10, weight: .bold))
                             }
@@ -391,23 +415,23 @@ public struct LauncherView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "equal.circle.fill")
-                                .font(.system(size: 26, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 26, weight: .bold))
                                 .foregroundColor(theme.primary)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(math.expression)
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .font(ThemeStore.shared.font(size: 12, weight: .medium, design: .rounded))
                                     .foregroundColor(theme.onSurfaceVariant)
 
                                 Text(math.result)
-                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .font(ThemeStore.shared.font(size: 20, weight: .bold, design: .rounded))
                                     .foregroundColor(theme.primary)
                             }
 
                             Spacer()
 
                             Text("Press ↵ to copy")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 11, weight: .medium, design: .rounded))
                                 .foregroundColor(theme.outline)
                         }
                         .padding(.horizontal, 16)
@@ -429,13 +453,13 @@ public struct LauncherView: View {
                             if rows.isEmpty {
                                 VStack(spacing: 8) {
                                     Image(systemName: "line.3.horizontal.decrease.circle")
-                                        .font(.system(size: 32))
+                                        .font(ThemeStore.shared.font(size: 32))
                                         .foregroundColor(theme.outline)
                                         .padding(.top, 24)
                                     Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                          ? "Type to filter..."
                                          : "No entries matching '\(query)'")
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .font(ThemeStore.shared.font(size: 13, weight: .medium, design: .rounded))
                                         .foregroundColor(theme.onSurfaceVariant)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -460,14 +484,14 @@ public struct LauncherView: View {
                             if curFiles.isEmpty {
                                 VStack(spacing: 8) {
                                     Image(systemName: "doc.text.magnifyingglass")
-                                        .font(.system(size: 32))
+                                        .font(ThemeStore.shared.font(size: 32))
                                         .foregroundColor(theme.outline)
                                         .padding(.top, 24)
 
                                     Text(fileQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                          ? "Type a filename or path to search..."
                                          : (isSearchingFiles ? "Searching files..." : "No files matching '\(fileQuery)'"))
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .font(ThemeStore.shared.font(size: 13, weight: .medium, design: .rounded))
                                         .foregroundColor(theme.onSurfaceVariant)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -488,61 +512,103 @@ public struct LauncherView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.top, 12)
                             }
-                        } else if curApps.isEmpty && math == nil && !query.isEmpty {
-                            webSearchFallbackRow
-                                .padding(.horizontal, 16)
-                                .padding(.top, 10)
-                        } else {
-                            if viewMode == .list {
-                                // MARK: - List Mode (matches launcher_dark.png)
-                                LazyVStack(spacing: 6) {
-                                    ForEach(curApps) { app in
-                                        LauncherItemRow(
-                                            item: app,
-                                            isSelected: app.id == curSelectedApp?.id,
-                                            onSelect: { launchApp(app) },
-                                            onShowInFinder: { showInFinder(app) },
-                                            onUnhideInBackground: { runningApps.unhide(app: app, inBackground: true) },
-                                            onHide: { runningApps.hide(app: app) },
-                                            onQuit: { runningApps.quit(app: app) },
-                                            onCopyID: { copyToClipboard(text: app.bundleID) },
-                                            onCopyPath: { copyToClipboard(text: app.path) },
-                                            onEdit: { editingApp = app }
-                                        )
-                                        .id(app.id)
-                                    }
+                        } else if isEmojiSearch {
+                            // MARK: - Emoji & Nerd Font Picker (v0.9.5: ':emoji' / 'nf:icon')
+                            let emojis = emojiResults
+                            if emojis.isEmpty {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "face.smiling")
+                                        .font(ThemeStore.shared.font(size: 32))
+                                        .foregroundColor(theme.outline)
+                                        .padding(.top, 24)
+
+                                    Text("No emojis or Nerd Font glyphs matching '\(query)'")
+                                        .font(ThemeStore.shared.font(size: 13, weight: .medium, design: .rounded))
+                                        .foregroundColor(theme.onSurfaceVariant)
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.top, 12)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 20)
                             } else {
-                                // MARK: - Grid / Tile Mode (LAUNCH-002)
-                                LazyVGrid(
-                                    columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
-                                    spacing: 10
-                                ) {
-                                    ForEach(curApps) { app in
-                                        LauncherTileItem(
-                                            item: app,
-                                            isSelected: app.id == curSelectedApp?.id,
-                                            onSelect: { launchApp(app) },
-                                            onShowInFinder: { showInFinder(app) },
-                                            onUnhideInBackground: { runningApps.unhide(app: app, inBackground: true) },
-                                            onHide: { runningApps.hide(app: app) },
-                                            onQuit: { runningApps.quit(app: app) },
-                                            onCopyID: { copyToClipboard(text: app.bundleID) },
-                                            onCopyPath: { copyToClipboard(text: app.path) },
-                                            onEdit: { editingApp = app }
-                                        )
-                                        .id(app.id)
+                                LazyVStack(spacing: 6) {
+                                    ForEach(emojis) { item in
+                                        EmojiItemRow(
+                                            item: item,
+                                            isSelected: item.id == selectedEmoji?.id
+                                        ) {
+                                            selectEmoji(item)
+                                        }
+                                        .id(item.id)
                                     }
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.top, 12)
                             }
+                        } else if curApps.isEmpty && math == nil && !query.isEmpty {
+                            webSearchFallbackRow
+                                .padding(.horizontal, 16)
+                                .padding(.top, 10)
+                        } else {
+                            // v0.9.5: a bang query (e.g. "!gh foo") pins the web-search row
+                            // at the top of the app results.
+                            let webTarget = AppSearch.resolveWebSearch(query: query, defaultProvider: configStore.config.webSearchProvider)
+                            VStack(spacing: 0) {
+                                if let target = webTarget, target.isBang {
+                                    webSearchFallbackRow
+                                        .padding(.horizontal, 16)
+                                        .padding(.top, 10)
+                                        .padding(.bottom, 4)
+                                }
+                                if viewMode == .list {
+                                    // MARK: - List Mode (matches launcher_dark.png)
+                                    LazyVStack(spacing: 6) {
+                                        ForEach(curApps) { app in
+                                            LauncherItemRow(
+                                                item: app,
+                                                isSelected: app.id == curSelectedApp?.id,
+                                                onSelect: { launchApp(app) },
+                                                onShowInFinder: { showInFinder(app) },
+                                                onUnhideInBackground: { runningApps.unhide(app: app, inBackground: true) },
+                                                onHide: { runningApps.hide(app: app) },
+                                                onQuit: { runningApps.quit(app: app) },
+                                                onCopyID: { copyToClipboard(text: app.bundleID) },
+                                                onCopyPath: { copyToClipboard(text: app.path) },
+                                                onEdit: { editingApp = app }
+                                            )
+                                            .id(app.id)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 12)
+                                } else {
+                                    // MARK: - Grid / Tile Mode (LAUNCH-002)
+                                    LazyVGrid(
+                                        columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
+                                        spacing: 10
+                                    ) {
+                                        ForEach(curApps) { app in
+                                            LauncherTileItem(
+                                                item: app,
+                                                isSelected: app.id == curSelectedApp?.id,
+                                                onSelect: { launchApp(app) },
+                                                onShowInFinder: { showInFinder(app) },
+                                                onUnhideInBackground: { runningApps.unhide(app: app, inBackground: true) },
+                                                onHide: { runningApps.hide(app: app) },
+                                                onQuit: { runningApps.quit(app: app) },
+                                                onCopyID: { copyToClipboard(text: app.bundleID) },
+                                                onCopyPath: { copyToClipboard(text: app.path) },
+                                                onEdit: { editingApp = app }
+                                            )
+                                            .id(app.id)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 12)
+                                }
+                            }
                         }
                     }
                     .frame(maxHeight: 410)
-                    .onChange(of: isDMenuMode ? "dmenu-\(safeSelectedDMenuIndex)" : (isFileSearch ? curSelectedFile?.id : curSelectedApp?.id)) { _, targetID in
+                    .onChange(of: isDMenuMode ? "dmenu-\(safeSelectedDMenuIndex)" : (isFileSearch ? curSelectedFile?.id : (isEmojiSearch ? selectedEmoji?.id : curSelectedApp?.id))) { _, targetID in
                         if let id = targetID {
                             withAnimation(.easeOut(duration: 0.1)) {
                                 proxy.scrollTo(id, anchor: .center)
@@ -568,7 +634,7 @@ public struct LauncherView: View {
                             Text("Esc Dismiss")
                         }
                     }
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(theme.outline)
 
                     Spacer()
@@ -582,9 +648,9 @@ public struct LauncherView: View {
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "slider.horizontal.3")
-                                        .font(.system(size: 10))
+                                        .font(ThemeStore.shared.font(size: 10))
                                     Text(showActionPanel ? "Hide Actions" : "Actions")
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                        .font(ThemeStore.shared.font(size: 11, weight: .semibold, design: .rounded))
                                 }
                                 .foregroundColor(theme.primary)
                                 .padding(.horizontal, 8)
@@ -596,7 +662,7 @@ public struct LauncherView: View {
                         }
 
                         Text(isDMenuMode ? "dms dmenu" : "DLauncherV2")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .rounded))
                             .foregroundColor(theme.primary)
                     }
                 }
@@ -616,11 +682,11 @@ public struct LauncherView: View {
                         AppIconImage(path: app.path, size: 40)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(app.name)
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 14, weight: .bold, design: .rounded))
                                 .foregroundColor(theme.onSurface)
                                 .lineLimit(1)
                             Text(app.subtitle)
-                                .font(.system(size: 11, design: .rounded))
+                                .font(ThemeStore.shared.font(size: 11, design: .rounded))
                                 .foregroundColor(theme.onSurfaceVariant)
                                 .lineLimit(2)
                         }
@@ -629,7 +695,7 @@ public struct LauncherView: View {
 
                     if !app.category.isEmpty {
                         Text(app.category.uppercased())
-                            .font(.system(size: 9, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 9, weight: .bold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(theme.primaryContainer.opacity(0.5))
@@ -758,6 +824,7 @@ public struct LauncherView: View {
             isFieldFocused = true
             selectedIndex = 0
             selectedFileIndex = 0
+            selectedEmojiIndex = 0
             if !query.isEmpty {
                 triggerDebouncedFileSearch(for: query, immediate: true)
             }
@@ -766,11 +833,11 @@ public struct LauncherView: View {
             fileSearchTask?.cancel()
         }
         .onKeyPress(.downArrow) {
-            navigate(delta: (!isFileSearch && viewMode == .tile) ? 5 : 1)
+            navigate(delta: (!isFileSearch && !isEmojiSearch && viewMode == .tile) ? 5 : 1)
             return .handled
         }
         .onKeyPress(.upArrow) {
-            navigate(delta: (!isFileSearch && viewMode == .tile) ? -5 : -1)
+            navigate(delta: (!isFileSearch && !isEmojiSearch && viewMode == .tile) ? -5 : -1)
             return .handled
         }
         .onKeyPress(.rightArrow) {
@@ -790,7 +857,7 @@ public struct LauncherView: View {
             return .ignored
         }
         .onKeyPress(.tab) {
-            if isDMenuMode {
+            if isDMenuMode || curSelectedApp == nil {
                 return .ignored
             }
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -826,6 +893,11 @@ public struct LauncherView: View {
             guard !files.isEmpty else { return }
             let next = max(0, min(files.count - 1, safeSelectedFileIndex + delta))
             selectedFileIndex = next
+        } else if isEmojiSearch {
+            let items = emojiResults
+            guard !items.isEmpty else { return }
+            let next = max(0, min(items.count - 1, safeSelectedEmojiIndex + delta))
+            selectedEmojiIndex = next
         } else {
             let apps = currentApps
             guard !apps.isEmpty else { return }
@@ -854,22 +926,31 @@ public struct LauncherView: View {
 
     @ViewBuilder
     private var webSearchFallbackRow: some View {
+        // v0.9.5: resolve through AppSearch so bangs (!gh, !wiki, ...) target their provider.
+        let target = AppSearch.resolveWebSearch(query: query, defaultProvider: configStore.config.webSearchProvider)
+        let title: String = {
+            if let target, target.isBang {
+                return "Search \(Self.webSearchDisplayName(for: target.providerName)) for '\(target.query)'"
+            } else {
+                return "Search the Web for '\(query)'"
+            }
+        }()
         Button {
             openWebSearch(query: query)
             onClose()
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "globe")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 20, weight: .semibold))
                     .foregroundColor(theme.primary)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Search the Web for '\(query)'")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    Text(title)
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.onSurface)
 
                     Text("Opens in default browser")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(theme.onSurfaceVariant)
                 }
 
@@ -907,6 +988,13 @@ public struct LauncherView: View {
             return
         }
 
+        if isEmojiSearch {
+            if let emoji = selectedEmoji {
+                selectEmoji(emoji)
+            }
+            return
+        }
+
         if let app = selectedApp {
             launchApp(app)
             return
@@ -914,12 +1002,63 @@ public struct LauncherView: View {
 
         let clean = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !clean.isEmpty {
+            // v0.9.5: bang queries open their provider URL immediately.
+            if let target = AppSearch.resolveWebSearch(query: clean, defaultProvider: configStore.config.webSearchProvider), target.isBang {
+                NSWorkspace.shared.open(target.url)
+                onClose()
+                return
+            }
             openWebSearch(query: clean)
             onClose()
         }
     }
 
+    /// v0.9.5: copies the emoji/glyph, or auto-pastes it into the previous app when
+    /// `clipboardAutoPaste` is on and Accessibility (key-event posting) is trusted.
+    private func selectEmoji(_ item: EmojiItem) {
+        if configStore.config.clipboardAutoPaste && AutoPasteService.shared.canPostKeyEvents {
+            onClose()
+            copyToClipboard(text: item.emoji)
+            _ = AutoPasteService.shared.pasteIntoPreviousApp()
+        } else {
+            copyToClipboard(text: item.emoji)
+            onClose()
+        }
+    }
+
     private func launchApp(_ app: AppItem) {
+        // v0.9.5: built-in DMS Settings open the settings window on the matching tab.
+        if app.bundleID.hasPrefix("io.dms.setting.") {
+            let suffix = String(app.bundleID.dropFirst("io.dms.setting.".count))
+            // "surfaces" has no dedicated tab; bar appearance owns blur/opacity/corners.
+            let targetTab = suffix == "surfaces" ? "bar" : suffix
+            onClose()
+            SettingsController.shared.show(tab: targetTab)
+            return
+        }
+        // v0.9.5: built-in DMS Actions dispatch to their controllers/services.
+        if app.bundleID.hasPrefix("io.dms.action.") {
+            onClose()
+            switch app.bundleID {
+            case "io.dms.action.clipboard":
+                ClipboardController.shared.toggle()
+            case "io.dms.action.notepad":
+                NotepadController.shared.toggle()
+            case "io.dms.action.processes":
+                ProcessListController.shared.toggle()
+            case "io.dms.action.controlcenter":
+                ControlCenterController.shared.toggle()
+            case "io.dms.action.onboard":
+                OnboardingController.shared.show()
+            case "io.dms.action.colorpicker":
+                ColorPickerService.shared.sampleColor()
+            case "io.dms.action.lock":
+                PowerMenuView.lockScreen()
+            default:
+                break
+            }
+            return
+        }
         if app.bundleID == "io.dms.plugin.symbian-belle-sync" {
             _ = SymbianClient.shared.launchCompanion()
             onClose()
@@ -967,8 +1106,26 @@ public struct LauncherView: View {
     }
 
     private func openWebSearch(query: String) {
-        if let url = AppSearch.webSearchURL(query: query, provider: configStore.config.webSearchProvider) {
-            NSWorkspace.shared.open(url)
+        // v0.9.5: resolveWebSearch handles bangs and the configured default provider.
+        if let target = AppSearch.resolveWebSearch(query: query, defaultProvider: configStore.config.webSearchProvider) {
+            NSWorkspace.shared.open(target.url)
+        }
+    }
+
+    private static func webSearchDisplayName(for provider: String) -> String {
+        switch provider.lowercased() {
+        case "github": return "GitHub"
+        case "duckduckgo": return "DuckDuckGo"
+        case "youtube": return "YouTube"
+        case "wikipedia": return "Wikipedia"
+        case "stackoverflow": return "Stack Overflow"
+        case "homebrew": return "Homebrew"
+        case "crates": return "crates.io"
+        case "npm": return "npm"
+        case "apple": return "Apple Developer"
+        case "kagi": return "Kagi"
+        case "bing": return "Bing"
+        default: return "Google"
         }
     }
 }
@@ -977,19 +1134,19 @@ public struct LauncherView: View {
 private struct ActionPanelButton: View {
     let title: String
     let icon: String
-    let theme: ThemeStore
+    @ObservedObject var theme: ThemeStore
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 13))
+                    .font(ThemeStore.shared.font(size: 13))
                     .foregroundColor(theme.primary)
                     .frame(width: 20)
 
                 Text(title)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 12, weight: .medium, design: .rounded))
                     .foregroundColor(theme.onSurface)
 
                 Spacer()
@@ -1022,23 +1179,52 @@ public struct LauncherItemRow: View {
     public var body: some View {
         let isRunning = RunningAppsService.shared.isRunning(bundleID: item.bundleID)
         let isHidden = RunningAppsService.shared.isHidden(bundleID: item.bundleID)
+        let isDMSSetting = item.bundleID.hasPrefix("io.dms.setting.")
+        let isDMSAction = item.bundleID.hasPrefix("io.dms.action.")
 
         Button {
             onSelect()
         } label: {
             HStack(spacing: 14) {
-                AppIconImage(path: item.path, size: 36)
-                    .opacity(isRunning && isHidden ? 0.6 : 1.0)
+                if isDMSSetting || isDMSAction {
+                    // v0.9.5: built-in DMS entries get a themed SF Symbol badge
+                    // instead of the Finder file icon.
+                    Image(systemName: isDMSSetting ? "gearshape.fill" : "bolt.fill")
+                        .font(ThemeStore.shared.font(size: 16, weight: .semibold))
+                        .foregroundColor(theme.primary)
+                        .frame(width: 36, height: 36)
+                        .background(theme.primaryContainer.opacity(0.4))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                } else {
+                    AppIconImage(path: item.path, size: 36)
+                        .opacity(isRunning && isHidden ? 0.6 : 1.0)
+                }
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(item.name)
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(ThemeStore.shared.font(size: 14, weight: .semibold, design: .rounded))
                             .foregroundColor(theme.onSurface)
 
-                        if isRunning && isHidden {
+                        if isDMSSetting {
+                            Text("DMS SETTING")
+                                .font(ThemeStore.shared.font(size: 9, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(theme.primaryContainer.opacity(0.5))
+                                .foregroundColor(theme.primary)
+                                .clipShape(Capsule())
+                        } else if isDMSAction {
+                            Text("DMS ACTION")
+                                .font(ThemeStore.shared.font(size: 9, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(theme.primaryContainer.opacity(0.5))
+                                .foregroundColor(theme.primary)
+                                .clipShape(Capsule())
+                        } else if isRunning && isHidden {
                             Text("HIDDEN")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
                                 .background(theme.surfaceContainerHighest)
@@ -1052,7 +1238,7 @@ public struct LauncherItemRow: View {
                     }
 
                     Text(item.subtitle)
-                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 12, weight: .regular, design: .rounded))
                         .foregroundColor(theme.onSurfaceVariant)
                         .lineLimit(1)
                 }
@@ -1061,7 +1247,7 @@ public struct LauncherItemRow: View {
 
                 if isSelected {
                     Image(systemName: "return")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(theme.primary.opacity(0.85))
                         .padding(.trailing, 4)
                 }
@@ -1163,7 +1349,7 @@ public struct LauncherTileItem: View {
 
                     if isRunning && isHidden {
                         Image(systemName: "eye.slash.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
                             .foregroundColor(theme.onSurfaceVariant)
                             .padding(2)
                             .background(theme.surfaceContainerHighest)
@@ -1177,7 +1363,7 @@ public struct LauncherTileItem: View {
                 }
 
                 Text(item.name)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 12, weight: .medium, design: .rounded))
                     .foregroundColor(theme.onSurface)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -1282,7 +1468,7 @@ public struct FileItemRow: View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
                 Image(systemName: file.sfSymbol)
-                    .font(.system(size: 16))
+                    .font(ThemeStore.shared.font(size: 16))
                     .foregroundColor(theme.primary)
                     .frame(width: 28, height: 28)
                     .background(theme.primaryContainer.opacity(0.4))
@@ -1290,11 +1476,11 @@ public struct FileItemRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.name)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.onSurface)
 
                     Text(file.path)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                         .foregroundColor(theme.onSurfaceVariant)
                         .lineLimit(1)
                 }
@@ -1303,12 +1489,12 @@ public struct FileItemRow: View {
 
                 if isSelected {
                     Image(systemName: "return")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(theme.primary.opacity(0.85))
                         .padding(.trailing, 4)
                 } else {
                     Image(systemName: "arrow.right.circle")
-                        .font(.system(size: 12))
+                        .font(ThemeStore.shared.font(size: 12))
                         .foregroundColor(theme.outline)
                 }
             }
@@ -1350,14 +1536,14 @@ public struct DMenuRow: View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                     .foregroundColor(theme.primary)
                     .frame(width: 28, height: 28)
                     .background(theme.primaryContainer.opacity(0.4))
                     .cornerRadius(8)
 
                 Text(text)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 13, weight: .medium, design: .rounded))
                     .foregroundColor(theme.onSurface)
                     .lineLimit(1)
 
@@ -1365,7 +1551,86 @@ public struct DMenuRow: View {
 
                 if isSelected {
                     Image(systemName: "return")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
+                        .foregroundColor(theme.primary.opacity(0.85))
+                        .padding(.trailing, 4)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                isSelected
+                    ? theme.surfaceContainerHighest.opacity(0.85)
+                    : theme.surfaceContainerHigh.opacity(0.6)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        isSelected ? theme.primary.opacity(0.35) : Color.clear,
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Row representing an emoji or Nerd Font glyph in the `:emoji` / `nf:` picker (v0.9.5).
+public struct EmojiItemRow: View {
+    public let item: EmojiItem
+    public var isSelected: Bool = false
+    public let onSelect: () -> Void
+
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var configStore = ConfigStore.shared
+
+    public init(item: EmojiItem, isSelected: Bool = false, onSelect: @escaping () -> Void) {
+        self.item = item
+        self.isSelected = isSelected
+        self.onSelect = onSelect
+    }
+
+    public var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                Text(item.emoji)
+                    .font(item.isNerdFont ? theme.nerdFont(size: 22) : theme.font(size: 22))
+                    .frame(width: 36, height: 36)
+                    .background(theme.surfaceContainerHighest.opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.name)
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.onSurface)
+                        .lineLimit(1)
+
+                    if !item.shortcode.isEmpty {
+                        Text(":\(item.shortcode):")
+                            .font(ThemeStore.shared.font(size: 11, design: .monospaced))
+                            .foregroundColor(theme.onSurfaceVariant)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                Text(item.isNerdFont ? "NERD FONT" : "EMOJI")
+                    .font(ThemeStore.shared.font(size: 9, weight: .bold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(theme.primaryContainer.opacity(0.5))
+                    .foregroundColor(theme.primary)
+                    .clipShape(Capsule())
+
+                Text((configStore.config.clipboardAutoPaste && AutoPasteService.shared.canPostKeyEvents) ? "Press ↵ to paste" : "Press ↵ to copy")
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium, design: .rounded))
+                    .foregroundColor(theme.outline)
+
+                if isSelected {
+                    Image(systemName: "return")
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                         .foregroundColor(theme.primary.opacity(0.85))
                         .padding(.trailing, 4)
                 }

@@ -16,11 +16,11 @@ public struct PowerMenuView: View {
         VStack(spacing: 14) {
             VStack(spacing: 4) {
                 Text("Power & Session")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
 
                 Text(pendingAction == nil ? "Choose an action" : "Click \"Sure?\" again to confirm")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 12, weight: .medium, design: .rounded))
                     .foregroundColor(pendingAction == nil ? theme.onSurfaceVariant : theme.error)
             }
 
@@ -90,7 +90,7 @@ public struct PowerMenuView: View {
                 onClose()
             } label: {
                 Text("Cancel")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.onSurfaceVariant)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 5)
@@ -182,7 +182,7 @@ public struct PowerOptionButton: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 14, weight: .semibold))
                     .foregroundColor(color)
                     .frame(width: 36, height: 36)
                     .background(isHovered ? color.opacity(0.2) : theme.surfaceContainerHigh)
@@ -192,7 +192,7 @@ public struct PowerOptionButton: View {
                     )
 
                 Text(label)
-                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 9.5, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
             }
         }

@@ -174,7 +174,7 @@ public struct KeyboardLayoutWidget: View {
             HStack(spacing: 4) {
                 if style.showIcon {
                     Image(systemName: "keyboard")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .foregroundColor(tintColor)
                 }
 

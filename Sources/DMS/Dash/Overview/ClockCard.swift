@@ -41,19 +41,19 @@ public struct ClockCard: View {
 
         VStack(alignment: .center, spacing: 0) {
             Text(hourStr)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(ThemeStore.shared.font(size: 30, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: p.primary.hex))
                 .lineLimit(1)
 
             Text(minStr)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(ThemeStore.shared.font(size: 30, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: p.primary.hex))
                 .lineLimit(1)
 
             Spacer()
 
             Text(dateStr)
-                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                .font(ThemeStore.shared.font(size: 10.5, weight: .medium, design: .rounded))
                 .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
         }
         .padding(8)

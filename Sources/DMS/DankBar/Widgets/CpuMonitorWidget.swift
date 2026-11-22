@@ -29,12 +29,12 @@ public struct CpuMonitorWidget: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "cpu")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .foregroundColor(cpuColor)
 
                 if !isVertical {
                     Text("\(Int(round(telemetry.telemetry.cpuPercent)))%")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(cpuColor)
                 }
             }

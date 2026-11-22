@@ -38,7 +38,7 @@ public struct CalendarOverviewCard: View {
                     }
                 }) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
@@ -48,7 +48,7 @@ public struct CalendarOverviewCard: View {
                 Spacer()
 
                 Text(currentMonth.title)
-                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 11.5, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: p.onSurface.hex))
 
                 Spacer()
@@ -60,7 +60,7 @@ public struct CalendarOverviewCard: View {
                     }
                 }) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
@@ -73,7 +73,7 @@ public struct CalendarOverviewCard: View {
             HStack(spacing: 0) {
                 ForEach(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], id: \.self) { dayHeader in
                     Text(dayHeader)
-                        .font(.system(size: 8.5, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 8.5, weight: .medium))
                         .foregroundColor(Color(hex: p.onSurfaceVariant.hex))
                         .frame(maxWidth: .infinity)
                 }
@@ -102,7 +102,7 @@ public struct CalendarOverviewCard: View {
                     }
                 }) {
                     Text(calendarService.authorizationStatus == .notDetermined ? "Connect Calendar" : "Open Calendar Privacy Settings")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                         .foregroundColor(Color(hex: p.onPrimary.hex))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
@@ -132,7 +132,7 @@ private struct CalendarDayCell: View {
         Button(action: onSelect) {
             VStack(spacing: 1) {
                 Text("\(day.dayNumber)")
-                    .font(.system(size: 9.0, weight: day.isSelected ? .bold : .regular))
+                    .font(ThemeStore.shared.font(size: 9.0, weight: day.isSelected ? .bold : .regular))
                     .foregroundColor(textColor)
                     .frame(width: 20, height: 15)
                     .background(

@@ -151,12 +151,12 @@ public struct PowerPopoutView: View {
                 Image(systemName: "power")
                     .foregroundColor(theme.primary)
                 Text("Power & Session")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(theme.onSurface)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(theme.onSurfaceVariant)
                         .frame(width: 22, height: 22)
                         .background(theme.surfaceContainerHigh)
@@ -199,7 +199,7 @@ public struct PowerPopoutView: View {
                     .padding(.vertical, 2)
 
                 Text("Hold 1s to Confirm")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 9, weight: .bold))
                     .foregroundColor(theme.onSurfaceVariant.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
@@ -254,10 +254,10 @@ private struct PowerInstantActionButton: View {
         Button(action: action) {
             VStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 15, weight: .semibold))
                     .foregroundColor(tint)
                 Text(label)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.onSurface)
             }
             .frame(maxWidth: .infinity)
@@ -300,12 +300,12 @@ private struct PowerHoldActionButton: View {
                     .frame(width: 22, height: 22)
 
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .bold))
                     .foregroundColor(isHolding ? tint : theme.onSurface)
             }
 
             Text(label)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(ThemeStore.shared.font(size: 11, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.onSurface)
 
             Spacer()

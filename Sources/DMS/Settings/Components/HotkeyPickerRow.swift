@@ -13,6 +13,7 @@ public struct HotkeyPickerRow: View {
     public let palette: DMSPalette
     public var onTest: (() -> Void)? = nil
 
+    @ObservedObject private var theme = ThemeStore.shared
     @State private var justTriggered: Bool = false
 
     public init(
@@ -41,7 +42,7 @@ public struct HotkeyPickerRow: View {
             HStack(spacing: 10) {
                 if let icon = icon {
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 13, weight: .semibold))
                         .foregroundColor(isEnabled ? Color(hex: palette.primary.hex) : Color(hex: palette.outline.hex))
                         .frame(width: 28, height: 28)
                         .background(
@@ -54,12 +55,12 @@ public struct HotkeyPickerRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 12.5, weight: .semibold, design: .rounded))
                         .foregroundColor(isEnabled ? Color(hex: palette.onSurface.hex) : Color(hex: palette.outline.hex))
 
                     if let subtitle = subtitle {
                         Text(subtitle)
-                            .font(.system(size: 10.5))
+                            .font(ThemeStore.shared.font(size: 10.5))
                             .foregroundColor(Color(hex: palette.outline.hex))
                             .lineLimit(1)
                     }
@@ -70,7 +71,7 @@ public struct HotkeyPickerRow: View {
                 // Active shortcut preview badge
                 if isEnabled {
                     Text(HotkeyHelper.displayString(key: key, modifiers: modifiers))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
                         .background(Color(hex: palette.primaryContainer.hex))
@@ -78,7 +79,7 @@ public struct HotkeyPickerRow: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 } else {
                     Text("Disabled")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -100,7 +101,7 @@ public struct HotkeyPickerRow: View {
                     // Modifier picker
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Modifiers")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
                         Picker("", selection: Binding(
@@ -118,7 +119,7 @@ public struct HotkeyPickerRow: View {
                     // Key picker
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Key")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
                         Picker("", selection: Binding(
@@ -146,9 +147,9 @@ public struct HotkeyPickerRow: View {
                         }) {
                             HStack(spacing: 5) {
                                 Image(systemName: justTriggered ? "checkmark.circle.fill" : "play.fill")
-                                    .font(.system(size: 9))
+                                    .font(ThemeStore.shared.font(size: 9))
                                 Text(justTriggered ? "Triggered" : "Test")
-                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .font(ThemeStore.shared.font(size: 10.5, weight: .semibold))
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)

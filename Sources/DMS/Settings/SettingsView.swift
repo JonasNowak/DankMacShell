@@ -1,5 +1,7 @@
 import SwiftUI
 import ApplicationServices
+import UniformTypeIdentifiers
+import CoreText
 import DMSCore
 
 /// Material 3 comprehensive Settings modal view for DMS on macOS.
@@ -70,11 +72,11 @@ public struct SettingsView: View {
                     Spacer().frame(width: 68)
 
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 14, weight: .bold))
                         .foregroundColor(Color(hex: p.primary.hex))
 
                     Text("Settings")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(ThemeStore.shared.font(size: 15, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: p.onSurface.hex))
 
                     Spacer()
@@ -111,12 +113,12 @@ public struct SettingsView: View {
                 // Footer Bar
                 HStack {
                     Text("Config: ~/Library/Application Support/DMS/settings.json")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                         .foregroundColor(Color(hex: p.outline.hex))
                         .lineLimit(1)
                     Spacer()
                     Text("All changes saved automatically")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                         .foregroundColor(Color(hex: p.outline.hex))
                     if let selPath = selectedWallpaperPath, selPath != configStore.config.wallpaperPath {
                         Button(action: {
@@ -129,7 +131,7 @@ public struct SettingsView: View {
                             ToastCenter.shared.show(icon: "checkmark.circle.fill", message: "Wallpaper Applied")
                         }) {
                             Text("Apply Selected Wallpaper")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 12, weight: .bold))
                                 .foregroundColor(Color(hex: p.onPrimary.hex))
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 6)
@@ -263,7 +265,7 @@ public struct SettingsView: View {
                     Image(systemName: "sparkles")
                         .foregroundColor(Color(hex: palette.primary.hex))
                     Text("Sample Desktop Wallpaper (Dynamic)")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
                     Spacer()
                     if themeStore.themeName.lowercased() == "dynamic" {
                         Image(systemName: "checkmark.circle.fill")
@@ -286,7 +288,7 @@ public struct SettingsView: View {
 
                 TextField("#D0BCFF", text: $customSeedHexInput)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 11, design: .monospaced))
                     .padding(6)
                     .background(Color(hex: palette.surfaceContainerLow.hex))
                     .cornerRadius(6)
@@ -304,7 +306,7 @@ public struct SettingsView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 10, weight: .bold))
+                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(Color(hex: palette.primary.hex))
@@ -316,7 +318,7 @@ public struct SettingsView: View {
 
             HStack {
                 Text("Matugen Scheme")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                 Spacer()
                 SettingsSegmentedControl(
@@ -361,13 +363,13 @@ public struct SettingsView: View {
                                 .fill(themeColor(for: name))
                                 .frame(width: 12, height: 12)
                             Text(name.replacingOccurrences(of: "-", with: " ").capitalized)
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                                 .foregroundColor(Color(hex: palette.onSurface.hex))
                                 .lineLimit(1)
                             Spacer()
                             if themeStore.themeName.lowercased() == name {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                     .foregroundColor(Color(hex: palette.primary.hex))
                             }
                         }
@@ -410,7 +412,7 @@ public struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Gradient Harmony Strategy")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
@@ -421,15 +423,15 @@ public struct SettingsView: View {
                             }) {
                                 HStack(spacing: 6) {
                                     Image(systemName: configStore.config.omniwmGradientMode == mode ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 10))
+                                        .font(ThemeStore.shared.font(size: 10))
                                         .foregroundColor(configStore.config.omniwmGradientMode == mode ? Color(hex: palette.primary.hex) : Color(hex: palette.outline.hex))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(mode.displayName)
-                                            .font(.system(size: 10, weight: .semibold))
+                                            .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                                             .foregroundColor(Color(hex: palette.onSurface.hex))
                                             .lineLimit(1)
                                         Text(mode.subtitle)
-                                            .font(.system(size: 8.5))
+                                            .font(ThemeStore.shared.font(size: 8.5))
                                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                                             .lineLimit(1)
                                     }
@@ -452,7 +454,7 @@ public struct SettingsView: View {
 
                 HStack {
                     Text("Gradient Direction")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                     Spacer()
                     SettingsSegmentedControl(
@@ -502,7 +504,7 @@ public struct SettingsView: View {
                 HStack {
                     if let lastSync = omniWMThemeSync.lastSyncDate {
                         Text("Last synced: \(lastSync.formatted(date: .omitted, time: .standard))")
-                            .font(.system(size: 9.5))
+                            .font(ThemeStore.shared.font(size: 9.5))
                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     }
                     Spacer()
@@ -511,9 +513,9 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 5) {
                             Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 10))
+                                .font(ThemeStore.shared.font(size: 10))
                             Text("Sync to OmniWM Now")
-                                .font(.system(size: 10.5, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10.5, weight: .bold))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -558,10 +560,10 @@ public struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 6) {
                                 Image(systemName: category.icon)
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                     .foregroundColor(Color(hex: palette.primary.hex))
                                 Text(category.displayName)
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                     .foregroundColor(Color(hex: palette.onSurface.hex))
                             }
                             ForEach(ThemeSyncTarget.targets(in: category)) { target in
@@ -569,11 +571,11 @@ public struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack(spacing: 6) {
                                             Text(target.displayName)
-                                                .font(.system(size: 11, weight: .medium))
+                                                .font(ThemeStore.shared.font(size: 11, weight: .medium))
                                                 .foregroundColor(Color(hex: palette.onSurface.hex))
                                             if terminalThemeExporter.detectedTargetIds.contains(target.dteTargetId) {
                                                 Text("Detected")
-                                                    .font(.system(size: 8.5, weight: .bold))
+                                                    .font(ThemeStore.shared.font(size: 8.5, weight: .bold))
                                                     .foregroundColor(Color(hex: palette.onPrimary.hex))
                                                     .padding(.horizontal, 5)
                                                     .padding(.vertical, 2)
@@ -582,14 +584,14 @@ public struct SettingsView: View {
                                             }
                                         }
                                         Text(themeTargetSubtitle(target))
-                                            .font(.system(size: 9))
+                                            .font(ThemeStore.shared.font(size: 9))
                                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                                         if target == .obsidian && configStore.config.isThemeTargetConfiguredOn(.obsidian, detected: detectedSet) {
                                             HStack(spacing: 4) {
                                                 Image(systemName: "info.circle.fill")
-                                                    .font(.system(size: 8.5))
+                                                    .font(ThemeStore.shared.font(size: 8.5))
                                                 Text("Remember to activate the 'dms' CSS snippet in Obsidian → Settings → Appearance → CSS snippets")
-                                                    .font(.system(size: 8.5, weight: .medium))
+                                                    .font(ThemeStore.shared.font(size: 8.5, weight: .medium))
                                             }
                                             .foregroundColor(Color(hex: palette.primary.hex))
                                             .padding(.top, 2)
@@ -599,14 +601,14 @@ public struct SettingsView: View {
                                     if target == .obsidian {
                                         Button(action: { addObsidianVault() }) {
                                             Text("Add Vault…")
-                                                .font(.system(size: 9, weight: .medium))
+                                                .font(ThemeStore.shared.font(size: 9, weight: .medium))
                                                 .foregroundColor(Color(hex: palette.primary.hex))
                                         }
                                         .buttonStyle(.plain)
                                         if !configStore.config.obsidianVaultPaths.isEmpty {
                                             Button(action: { resetObsidianVaults() }) {
                                                 Text("Reset Vaults")
-                                                    .font(.system(size: 9, weight: .medium))
+                                                    .font(ThemeStore.shared.font(size: 9, weight: .medium))
                                                     .foregroundColor(Color(hex: palette.warning.hex))
                                             }
                                             .buttonStyle(.plain)
@@ -620,7 +622,7 @@ public struct SettingsView: View {
                                             ToastCenter.shared.show(icon: "doc.on.clipboard", message: "Copied \(target.displayName) setup snippet")
                                         }) {
                                             Text("Copy Snippet")
-                                                .font(.system(size: 9, weight: .medium))
+                                                .font(ThemeStore.shared.font(size: 9, weight: .medium))
                                                 .foregroundColor(Color(hex: palette.primary.hex))
                                         }
                                         .buttonStyle(.plain)
@@ -655,12 +657,12 @@ public struct SettingsView: View {
                 HStack {
                     if let lastExport = terminalThemeExporter.lastExportDate {
                         Text("Last exported: \(lastExport.formatted(date: .omitted, time: .standard))")
-                            .font(.system(size: 9.5))
+                            .font(ThemeStore.shared.font(size: 9.5))
                             .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     }
                     if !terminalThemeExporter.lastSkippedManaged.isEmpty {
                         Text("Skipped (nix-managed): \(terminalThemeExporter.lastSkippedManaged.joined(separator: ", "))")
-                            .font(.system(size: 9.5))
+                            .font(ThemeStore.shared.font(size: 9.5))
                             .foregroundColor(Color(hex: palette.warning.hex))
                     }
                     Spacer()
@@ -673,9 +675,9 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 5) {
                             Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 10))
+                                .font(ThemeStore.shared.font(size: 10))
                             Text("Export Now")
-                                .font(.system(size: 10.5, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10.5, weight: .bold))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -694,7 +696,7 @@ public struct SettingsView: View {
         SettingsCard(icon: "sun.max.fill", title: "Appearance Mode, Opacity, Blur & Shadows", palette: palette) {
             HStack {
                 Text("Theme Mode")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                 Spacer()
                 SettingsSegmentedControl(
@@ -771,7 +773,7 @@ public struct SettingsView: View {
 
             HStack {
                 Text("Surface Corner Style")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                 Spacer()
                 SettingsSegmentedControl(
@@ -832,7 +834,7 @@ public struct SettingsView: View {
                 )
             } else {
                 Text("Square 0 px corners applied to all shell surfaces and popouts.")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
             }
 
@@ -946,13 +948,13 @@ public struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
                                 Text(currentPath.isEmpty ? "Default System Wallpaper" : (currentPath as NSString).lastPathComponent)
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .font(ThemeStore.shared.font(size: 13, weight: .bold, design: .rounded))
                                     .foregroundColor(Color(hex: palette.onSurface.hex))
                                     .lineLimit(1)
 
                                 if configStore.config.theme == "dynamic" {
                                     Text("Dynamic Theme Active")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(Color(hex: palette.primaryContainer.hex))
@@ -962,7 +964,7 @@ public struct SettingsView: View {
                             }
 
                             Text(currentPath.isEmpty ? "No custom wallpaper path stored" : currentPath)
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                                 .foregroundColor(Color(hex: palette.outline.hex))
                                 .lineLimit(1)
                         }
@@ -975,7 +977,7 @@ public struct SettingsView: View {
                                     NSWorkspace.shared.selectFile(currentPath, inFileViewerRootedAtPath: "")
                                 } label: {
                                     Image(systemName: "folder")
-                                        .font(.system(size: 11))
+                                        .font(ThemeStore.shared.font(size: 11))
                                         .foregroundColor(Color(hex: palette.onSurface.hex))
                                         .frame(width: 28, height: 28)
                                         .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -997,7 +999,7 @@ public struct SettingsView: View {
                                     Image(systemName: "arrow.clockwise")
                                     Text("Resample Colors")
                                 }
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                 .foregroundColor(Color(hex: palette.onPrimary.hex))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
@@ -1011,7 +1013,7 @@ public struct SettingsView: View {
                     // Live M3 Tonal Palette Swatches
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Current Theme Palette Swatches (click to copy hex)")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: palette.outline.hex))
 
                         HStack(spacing: 6) {
@@ -1063,7 +1065,7 @@ public struct SettingsView: View {
                                 Text("Configure All System Keybinds in One Place")
                                 Image(systemName: "arrow.right")
                             }
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .foregroundColor(Color(hex: palette.primary.hex))
                         }
                         .buttonStyle(.plain)
@@ -1085,7 +1087,7 @@ public struct SettingsView: View {
                     if configStore.config.wallpaperPickerOnlyFolder {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Target Wallpaper Folder:")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                 .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
                             HStack(spacing: 8) {
@@ -1093,7 +1095,7 @@ public struct SettingsView: View {
                                     .foregroundColor(Color(hex: palette.primary.hex))
 
                                 Text(configStore.config.wallpaperPickerFolder.isEmpty ? "No specific folder chosen (Using all)" : configStore.config.wallpaperPickerFolder)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(ThemeStore.shared.font(size: 11, design: .monospaced))
                                     .lineLimit(1)
                                     .foregroundColor(Color(hex: palette.onSurface.hex))
 
@@ -1124,7 +1126,7 @@ public struct SettingsView: View {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 6) {
                                         Text("Quick Select:")
-                                            .font(.system(size: 10, weight: .medium))
+                                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                                             .foregroundColor(Color(hex: palette.outline.hex))
 
                                         ForEach(configStore.config.wallpaperFolders, id: \.self) { folder in
@@ -1133,7 +1135,7 @@ public struct SettingsView: View {
                                                 configStore.update { $0.wallpaperPickerFolder = folder }
                                             } label: {
                                                 Text((folder as NSString).lastPathComponent)
-                                                    .font(.system(size: 10, weight: isSel ? .bold : .regular))
+                                                    .font(ThemeStore.shared.font(size: 10, weight: isSel ? .bold : .regular))
                                                     .padding(.horizontal, 8)
                                                     .padding(.vertical, 3)
                                                     .background(isSel ? Color(hex: palette.primaryContainer.hex) : Color(hex: palette.surfaceContainerLow.hex))
@@ -1155,11 +1157,11 @@ public struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text("Slant Skew Offset")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                 .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                             Spacer()
                             Text("\(Int(configStore.config.wallpaperPickerSkew)) px")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .font(ThemeStore.shared.font(size: 11, weight: .bold, design: .monospaced))
                                 .foregroundColor(Color(hex: palette.primary.hex))
                         }
 
@@ -1185,7 +1187,7 @@ public struct SettingsView: View {
                                 Image(systemName: "photo.stack.fill")
                                 Text("Launch Slanted Wallpaper Picker")
                             }
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 12, weight: .semibold))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
                             .background(Color(hex: palette.primary.hex))
@@ -1201,7 +1203,7 @@ public struct SettingsView: View {
                                 Image(systemName: "arrow.forward.circle")
                                 Text("Next Wallpaper")
                             }
-                            .font(.system(size: 11, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -1217,7 +1219,7 @@ public struct SettingsView: View {
                                 Image(systemName: "dice.fill")
                                 Text("Random Wallpaper")
                             }
-                            .font(.system(size: 11, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -1246,7 +1248,7 @@ public struct SettingsView: View {
                                 ForEach(WallpaperSource.allCases) { src in
                                     Button(action: { wallpaperSelectedSource = src }) {
                                         Text(src.rawValue)
-                                            .font(.system(size: 11, weight: .semibold))
+                                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 4)
                                             .background(wallpaperSelectedSource == src ? Color(hex: palette.primary.hex) : Color(hex: palette.surfaceContainerHigh.hex))
@@ -1266,7 +1268,7 @@ public struct SettingsView: View {
                                 Image(systemName: "folder.badge.plus")
                                 Text("Add Folder…")
                             }
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .padding(.horizontal, 9)
                             .padding(.vertical, 4.5)
                             .background(Color(hex: palette.surfaceContainerHighest.hex))
@@ -1278,7 +1280,7 @@ public struct SettingsView: View {
                         // Rescan Button
                         Button(action: { wallpaperService.scan() }) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11))
+                                .font(ThemeStore.shared.font(size: 11))
                                 .foregroundColor(Color(hex: palette.onSurface.hex))
                                 .frame(width: 26, height: 26)
                                 .background(Color(hex: palette.surfaceContainerHigh.hex))
@@ -1291,17 +1293,17 @@ public struct SettingsView: View {
                     // Search Field & Counter
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
                             .foregroundColor(Color(hex: palette.outline.hex))
 
                         TextField("Search wallpapers…", text: $wallpaperSearchQuery)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
 
                         if !wallpaperSearchQuery.isEmpty {
                             Button(action: { wallpaperSearchQuery = "" }) {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 11))
+                                    .font(ThemeStore.shared.font(size: 11))
                                     .foregroundColor(Color(hex: palette.outline.hex))
                             }
                             .buttonStyle(.plain)
@@ -1314,7 +1316,7 @@ public struct SettingsView: View {
                         }
 
                         Text("\(filtered.count) wallpapers")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: palette.outline.hex))
                     }
                     .padding(.horizontal, 8)
@@ -1343,9 +1345,9 @@ public struct SettingsView: View {
                                             if isActiveDesktop {
                                                 HStack(spacing: 3) {
                                                     Image(systemName: "desktopcomputer")
-                                                        .font(.system(size: 8, weight: .bold))
+                                                        .font(ThemeStore.shared.font(size: 8, weight: .bold))
                                                     Text("Active")
-                                                        .font(.system(size: 8, weight: .bold))
+                                                        .font(ThemeStore.shared.font(size: 8, weight: .bold))
                                                 }
                                                 .padding(.horizontal, 6)
                                                 .padding(.vertical, 2.5)
@@ -1362,12 +1364,12 @@ public struct SettingsView: View {
 
                                         HStack {
                                             Text(wp.name)
-                                                .font(.system(size: 11, weight: .medium))
+                                                .font(ThemeStore.shared.font(size: 11, weight: .medium))
                                                 .foregroundColor(Color(hex: palette.onSurface.hex))
                                                 .lineLimit(1)
                                             Spacer()
                                             Text(wp.source.rawValue)
-                                                .font(.system(size: 9))
+                                                .font(ThemeStore.shared.font(size: 9))
                                                 .foregroundColor(Color(hex: palette.outline.hex))
                                         }
                                         .padding(.horizontal, 2)
@@ -1394,11 +1396,11 @@ public struct SettingsView: View {
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Selected: \(sel.name)")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 12, weight: .bold))
                                     .foregroundColor(Color(hex: palette.onSurface.hex))
                                     .lineLimit(1)
                                 Text(sel.path ?? "Built-in Gradient Preset")
-                                    .font(.system(size: 10))
+                                    .font(ThemeStore.shared.font(size: 10))
                                     .foregroundColor(Color(hex: palette.outline.hex))
                                     .lineLimit(1)
                             }
@@ -1415,7 +1417,7 @@ public struct SettingsView: View {
                                     Image(systemName: "sparkles")
                                     Text("Apply Wallpaper & Generate Colors")
                                 }
-                                .font(.system(size: 11, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .bold))
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 7)
                                 .background(Color(hex: palette.primary.hex))
@@ -1539,69 +1541,183 @@ public struct SettingsView: View {
     // MARK: - 3. Typography & Motion Tab
     @ViewBuilder
     private func typographyTab(palette: DMSPalette) -> some View {
-        SettingsCard(icon: "textformat", title: "Typography & Font Families", subtitle: "Customize body, display, and monospace fonts", palette: palette) {
+        SettingsCard(icon: "textformat", title: "Typography & Font Families", subtitle: "Choose custom fonts, Nerd Fonts, or set one default font for everything displayed", palette: palette) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Body Font Family")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: palette.onSurface.hex))
-                    Spacer()
-                    SettingsSegmentedControl(
-                        options: [
-                            ("SF Pro", "System"),
-                            ("Rounded", "SF Pro Rounded"),
-                            ("Serif", "New York"),
-                            ("Avenir", "Avenir Next")
-                        ],
-                        selection: Binding(
-                            get: { configStore.config.fontFamily },
-                            set: { val in configStore.update { $0.fontFamily = val } }
-                        ),
-                        palette: palette
-                    )
+                SettingsToggleRow(
+                    title: "Use One Font for Everything",
+                    subtitle: "Apply the Default / Body font family to all UI text, headlines, monospace readouts, and widgets across DankMacShell",
+                    isOn: Binding(
+                        get: { configStore.config.useSingleFontEverywhere },
+                        set: { val in configStore.update { $0.useSingleFontEverywhere = val } }
+                    ),
+                    palette: palette
+                )
+
+                Button(action: {
+                    configStore.update {
+                        $0.useSingleFontEverywhere = true
+                        $0.fontFamilyMono = $0.fontFamily
+                        $0.fontFamilyDisplay = $0.fontFamily
+                        if $0.fontFamily != "System" { $0.fontFamilyNerd = $0.fontFamily }
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "textformat")
+                            .foregroundColor(Color(hex: palette.primary.hex))
+                        Text("Make Current Font Default for Everything")
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold))
+                        Spacer()
+                    }
+                    .padding(8)
+                    .background(Color(hex: palette.surfaceContainerLow.hex))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                Divider().opacity(0.3)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Default / Body Font Family")
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                        Spacer()
+                        SettingsSegmentedControl(
+                            options: [
+                                ("SF Pro", "System"),
+                                ("Rounded", "SF Pro Rounded"),
+                                ("Serif", "New York"),
+                                ("Avenir", "Avenir Next")
+                            ],
+                            selection: Binding(
+                                get: { configStore.config.fontFamily },
+                                set: { val in configStore.update { $0.fontFamily = val } }
+                            ),
+                            palette: palette
+                        )
+                    }
+                    HStack {
+                        Spacer()
+                        installedFontMenu(
+                            current: configStore.config.fontFamily,
+                            presets: ["System", "SF Pro Rounded", "New York", "Avenir Next"],
+                            palette: palette
+                        ) { family in
+                            configStore.update { $0.fontFamily = family }
+                        }
+                    }
                 }
 
                 Divider().opacity(0.3)
 
-                HStack {
-                    Text("Monospace Font Family")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: palette.onSurface.hex))
-                    Spacer()
-                    SettingsSegmentedControl(
-                        options: [
-                            ("SF Mono", "SF Mono"),
-                            ("Menlo", "Menlo"),
-                            ("Monaco", "Monaco")
-                        ],
-                        selection: Binding(
-                            get: { configStore.config.fontFamilyMono },
-                            set: { val in configStore.update { $0.fontFamilyMono = val } }
-                        ),
-                        palette: palette
-                    )
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Monospace Font Family")
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                        Spacer()
+                        SettingsSegmentedControl(
+                            options: [
+                                ("SF Mono", "SF Mono"),
+                                ("Menlo", "Menlo"),
+                                ("Monaco", "Monaco")
+                            ],
+                            selection: Binding(
+                                get: { configStore.config.fontFamilyMono },
+                                set: { val in configStore.update { $0.fontFamilyMono = val } }
+                            ),
+                            palette: palette
+                        )
+                    }
+                    HStack {
+                        Spacer()
+                        installedFontMenu(
+                            current: configStore.config.fontFamilyMono,
+                            presets: ["SF Mono", "Menlo", "Monaco"],
+                            palette: palette,
+                            disabled: configStore.config.useSingleFontEverywhere
+                        ) { family in
+                            configStore.update { $0.fontFamilyMono = family }
+                        }
+                    }
                 }
 
                 Divider().opacity(0.3)
 
-                HStack {
-                    Text("Display / Headline Font Family")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: palette.onSurface.hex))
-                    Spacer()
-                    SettingsSegmentedControl(
-                        options: [
-                            ("SF Pro", "System"),
-                            ("Rounded", "SF Pro Rounded"),
-                            ("Serif", "New York"),
-                            ("Avenir", "Avenir Next")
-                        ],
-                        selection: Binding(
-                            get: { configStore.config.fontFamilyDisplay },
-                            set: { val in configStore.update { $0.fontFamilyDisplay = val } }
-                        ),
-                        palette: palette
-                    )
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Display / Headline Font Family")
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                        Spacer()
+                        SettingsSegmentedControl(
+                            options: [
+                                ("SF Pro", "System"),
+                                ("Rounded", "SF Pro Rounded"),
+                                ("Serif", "New York"),
+                                ("Avenir", "Avenir Next")
+                            ],
+                            selection: Binding(
+                                get: { configStore.config.fontFamilyDisplay },
+                                set: { val in configStore.update { $0.fontFamilyDisplay = val } }
+                            ),
+                            palette: palette
+                        )
+                    }
+                    HStack {
+                        Spacer()
+                        installedFontMenu(
+                            current: configStore.config.fontFamilyDisplay,
+                            presets: ["System", "SF Pro Rounded", "New York", "Avenir Next"],
+                            palette: palette,
+                            disabled: configStore.config.useSingleFontEverywhere
+                        ) { family in
+                            configStore.update { $0.fontFamilyDisplay = family }
+                        }
+                    }
+                }
+
+                Divider().opacity(0.3)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Nerd Font Family (Icons & Glyphs)")
+                            .font(ThemeStore.shared.font(size: 11, weight: .medium))
+                            .foregroundColor(Color(hex: palette.onSurface.hex))
+                        Spacer()
+                        Menu {
+                            Button("Auto-Detect Nerd Font") {
+                                configStore.update { $0.fontFamilyNerd = "Auto" }
+                            }
+                            Section("Detected Nerd Fonts") {
+                                ForEach(themeStore.detectedNerdFonts, id: \.self) { family in
+                                    Button(family) {
+                                        configStore.update { $0.fontFamilyNerd = family }
+                                    }
+                                }
+                            }
+                            Section("All Installed Fonts") {
+                                ForEach(themeStore.installedFontFamilies, id: \.self) { family in
+                                    Button(family) {
+                                        configStore.update { $0.fontFamilyNerd = family }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Text(configStore.config.fontFamilyNerd == "Auto" ? "Auto-Detect Nerd Font" : configStore.config.fontFamilyNerd)
+                                .font(ThemeStore.shared.font(size: 11))
+                                .foregroundColor(Color(hex: palette.onSurface.hex))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color(hex: palette.surfaceContainerLow.hex))
+                                .cornerRadius(6)
+                        }
+                    }
+                    Text(!themeStore.detectedNerdFonts.isEmpty || configStore.config.fontFamilyNerd != "Auto"
+                         ? "Active Nerd Font: \(themeStore.resolvedNerdFontFamily)"
+                         : "No Nerd Font detected — falls back to Monospace font")
+                        .font(ThemeStore.shared.font(size: 10))
+                        .foregroundColor(Color(hex: palette.outline.hex))
                 }
 
                 Divider().opacity(0.3)
@@ -1618,6 +1734,53 @@ public struct SettingsView: View {
                     helper: "Scales all bar, launcher, and island typography proportionally.",
                     palette: palette
                 )
+            }
+        }
+
+        SettingsCard(icon: "doc.text", title: "Custom Font Files (.ttf / .otf)", subtitle: "Load font files directly from disk without installing them in Font Book", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                Button(action: { importFontFile() }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.doc")
+                            .foregroundColor(Color(hex: palette.primary.hex))
+                        Text("Import Font File…")
+                            .font(ThemeStore.shared.font(size: 11, weight: .bold))
+                        Spacer()
+                    }
+                    .padding(8)
+                    .background(Color(hex: palette.surfaceContainerLow.hex))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                if !configStore.config.customFontPaths.isEmpty {
+                    Divider().opacity(0.3)
+
+                    ForEach(configStore.config.customFontPaths, id: \.self) { path in
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.text")
+                                .foregroundColor(Color(hex: palette.outline.hex))
+                            Text((path as NSString).lastPathComponent)
+                                .font(ThemeStore.shared.font(size: 10, design: .monospaced))
+                                .foregroundColor(Color(hex: palette.onSurface.hex))
+                            Spacer()
+                        }
+                    }
+
+                    Button(action: {
+                        configStore.update { $0.customFontPaths = [] }
+                        themeStore.refreshFontCatalog(customPaths: [])
+                    }) {
+                        Text("Clear Imported Fonts")
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: palette.error.hex))
+                            .foregroundColor(Color(hex: palette.onError.hex))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
 
@@ -1648,6 +1811,72 @@ public struct SettingsView: View {
         }
     }
 
+    /// Menu listing detected Nerd Fonts and every installed font family. The label shows the
+    /// current custom family, or a generic "Custom / Installed Font…" prompt when a quick
+    /// preset is active. Dimmed via `disabled` (e.g. while Use One Font for Everything is on).
+    private func installedFontMenu(
+        current: String,
+        presets: Set<String>,
+        palette: DMSPalette,
+        disabled: Bool = false,
+        onSelect: @escaping (String) -> Void
+    ) -> some View {
+        Menu {
+            Section("Detected Nerd Fonts") {
+                ForEach(themeStore.detectedNerdFonts, id: \.self) { family in
+                    Button(family) { onSelect(family) }
+                }
+            }
+            Section("All Installed Fonts") {
+                ForEach(themeStore.installedFontFamilies, id: \.self) { family in
+                    Button(family) { onSelect(family) }
+                }
+            }
+        } label: {
+            Text(presets.contains(current) ? "Custom / Installed Font…" : current)
+                .font(ThemeStore.shared.font(size: 10, weight: .medium))
+                .foregroundColor(Color(hex: disabled ? palette.outline.hex : palette.onSurface.hex))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color(hex: palette.surfaceContainerLow.hex))
+                .cornerRadius(6)
+        }
+        .disabled(disabled)
+    }
+
+    /// Opens a font file picker (.ttf / .otf / .ttc), appends the chosen paths to
+    /// `customFontPaths`, re-registers the font catalog, and auto-selects the first
+    /// extracted font family as the Default / Body font.
+    private func importFontFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.font]
+        panel.prompt = "Import"
+        panel.message = "Choose font files (.ttf, .otf, .ttc) to load without installing them in Font Book"
+
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        var paths = configStore.config.customFontPaths
+        var extractedFamily: String?
+        for url in panel.urls {
+            if !paths.contains(url.path) {
+                paths.append(url.path)
+            }
+            if extractedFamily == nil,
+               let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor],
+               let first = descriptors.first,
+               let family = CTFontDescriptorCopyAttribute(first, kCTFontFamilyNameAttribute) as? String {
+                extractedFamily = family
+            }
+        }
+        configStore.update { $0.customFontPaths = paths }
+        themeStore.refreshFontCatalog(customPaths: paths)
+        if let family = extractedFamily {
+            configStore.update { $0.fontFamily = family }
+        }
+    }
+
     // MARK: - 4. Time & Weather Tab
     @ViewBuilder
     private func timeWeatherTab(palette: DMSPalette) -> some View {
@@ -1666,7 +1895,7 @@ public struct SettingsView: View {
             HStack(spacing: 6) {
                 TextField("Location", text: $weatherLocationInput)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                     .padding(6)
                     .background(Color(hex: palette.surfaceContainerLow.hex))
                     .cornerRadius(6)
@@ -1679,7 +1908,7 @@ public struct SettingsView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .bold))
+                .font(ThemeStore.shared.font(size: 11, weight: .bold))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(Color(hex: palette.primary.hex))
@@ -1692,7 +1921,7 @@ public struct SettingsView: View {
                     ToastCenter.shared.show(icon: "location.fill", message: "Weather Auto GPS Enabled")
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11))
+                .font(ThemeStore.shared.font(size: 11))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(Color(hex: palette.surfaceContainerLow.hex))
@@ -1700,7 +1929,7 @@ public struct SettingsView: View {
             }
 
             Text("Current: \(weatherService.locationName)")
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 .foregroundColor(Color(hex: palette.outline.hex))
         }
     }
@@ -1755,7 +1984,7 @@ public struct SettingsView: View {
                         selectedBarIndex = max(0, configStore.config.barConfigs.count - 1)
                     }) {
                         Label("+ Add Bar", systemImage: "plus")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                             .foregroundColor(Color(hex: palette.primary.hex))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
@@ -1774,7 +2003,7 @@ public struct SettingsView: View {
                             selectedBarIndex = 0
                         }) {
                             Label("Remove Bar", systemImage: "trash")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                                 .foregroundColor(Color(hex: palette.error.hex))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
@@ -1789,7 +2018,7 @@ public struct SettingsView: View {
 
                 HStack(spacing: 8) {
                     Text("Name")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                         .foregroundColor(Color(hex: palette.outline.hex))
                     TextField("Bar name", text: Binding(
                         get: { bars.indices.contains(idx) ? bars[idx].name : "" },
@@ -1800,13 +2029,13 @@ public struct SettingsView: View {
                         }
                     ))
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                     .padding(6)
                     .background(Color(hex: palette.surfaceContainerLow.hex))
                     .cornerRadius(6)
 
                     Text("Displays")
-                        .font(.system(size: 11))
+                        .font(ThemeStore.shared.font(size: 11))
                         .foregroundColor(Color(hex: palette.outline.hex))
                     Menu {
                         Button("All Displays") {
@@ -1825,7 +2054,7 @@ public struct SettingsView: View {
                     } label: {
                         let prefs = bars.indices.contains(idx) ? bars[idx].screenPreferences : ["all"]
                         Label(prefs == ["all"] ? "All Displays" : prefs.joined(separator: ", "), systemImage: "display")
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
                             .foregroundColor(Color(hex: palette.onSurface.hex))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
@@ -1949,7 +2178,7 @@ public struct SettingsView: View {
         SettingsCard(icon: "paintbrush.pointed.fill", title: "Background & Border Style", palette: palette) {
             HStack {
                 Text("Background Style")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                 Spacer()
                 SettingsSegmentedControl(
@@ -2024,7 +2253,7 @@ public struct SettingsView: View {
 
                 HStack(spacing: 8) {
                     Text("Border Color")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
 
                     TextField("#CBA6F7 (empty = theme default)", text: Binding(
@@ -2039,7 +2268,7 @@ public struct SettingsView: View {
                         }
                     ))
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 11, design: .monospaced))
                     .padding(6)
                     .background(Color(hex: palette.surfaceContainerLow.hex))
                     .cornerRadius(6)
@@ -2068,7 +2297,7 @@ public struct SettingsView: View {
                         }
                     }) {
                         Text("Clear")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: palette.outline.hex))
                     }
                     .buttonStyle(.plain)
@@ -2080,7 +2309,7 @@ public struct SettingsView: View {
         SettingsCard(icon: "rectangle.roundedtop", title: "Corner Styling & Geometry", subtitle: "Configure pill capsule, concave Gothic fillets, rounded, or square corners", palette: palette) {
             HStack {
                 Text("Corner Style")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                 Spacer()
                 SettingsSegmentedControl(
@@ -2106,7 +2335,7 @@ public struct SettingsView: View {
             }
 
             Text(barCfg.cornerStyle.subtitle)
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
             if barCfg.cornerStyle == .gothic {
@@ -2345,7 +2574,7 @@ public struct SettingsView: View {
             activeBarSelectorCard(palette: palette)
 
             Text("Reorder widgets with ↑/↓, move between sections, toggle visibility, or click the Edit Layout button for per-widget styling.")
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 .foregroundColor(Color(hex: palette.outline.hex))
 
             ForEach([
@@ -2362,12 +2591,12 @@ public struct SettingsView: View {
                             VStack(spacing: 6) {
                                 HStack(spacing: 6) {
                                     Image(systemName: meta?.icon ?? "square.grid.2x2")
-                                        .font(.system(size: 11))
+                                        .font(ThemeStore.shared.font(size: 11))
                                         .foregroundColor(item.enabled ? Color(hex: palette.primary.hex) : Color(hex: palette.outline.hex))
                                         .frame(width: 16)
 
                                     Text(meta?.name ?? item.widgetId)
-                                        .font(.system(size: 11, weight: item.enabled ? .semibold : .regular))
+                                        .font(ThemeStore.shared.font(size: 11, weight: item.enabled ? .semibold : .regular))
                                         .foregroundColor(item.enabled ? Color(hex: palette.onSurface.hex) : Color(hex: palette.outline.hex))
 
                                     Spacer()
@@ -2380,7 +2609,7 @@ public struct SettingsView: View {
                                         configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                                     }) {
                                         Image(systemName: "chevron.up")
-                                            .font(.system(size: 9, weight: .bold))
+                                            .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                             .foregroundColor(index > 0 ? Color(hex: palette.onSurfaceVariant.hex) : Color(hex: palette.outline.hex).opacity(0.3))
                                     }
                                     .buttonStyle(.plain)
@@ -2394,7 +2623,7 @@ public struct SettingsView: View {
                                         configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                                     }) {
                                         Image(systemName: "chevron.down")
-                                            .font(.system(size: 9, weight: .bold))
+                                            .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                             .foregroundColor(index + 1 < items.count ? Color(hex: palette.onSurfaceVariant.hex) : Color(hex: palette.outline.hex).opacity(0.3))
                                     }
                                     .buttonStyle(.plain)
@@ -2405,7 +2634,7 @@ public struct SettingsView: View {
                                         expandedWidgetStyleId = isExpanded ? nil : item.id
                                     }) {
                                         Image(systemName: "slider.horizontal.3")
-                                            .font(.system(size: 10))
+                                            .font(ThemeStore.shared.font(size: 10))
                                             .foregroundColor(isExpanded ? Color(hex: palette.primary.hex) : Color(hex: palette.onSurfaceVariant.hex))
                                     }
                                     .buttonStyle(.plain)
@@ -2418,7 +2647,7 @@ public struct SettingsView: View {
                                         configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                                     }) {
                                         Image(systemName: item.enabled ? "eye" : "eye.slash")
-                                            .font(.system(size: 10))
+                                            .font(ThemeStore.shared.font(size: 10))
                                             .foregroundColor(Color(hex: palette.primary.hex))
                                     }
                                     .buttonStyle(.plain)
@@ -2430,7 +2659,7 @@ public struct SettingsView: View {
                                         configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                                     }) {
                                         Image(systemName: "xmark")
-                                            .font(.system(size: 10))
+                                            .font(ThemeStore.shared.font(size: 10))
                                             .foregroundColor(Color(hex: palette.error.hex))
                                     }
                                     .buttonStyle(.plain)
@@ -2454,7 +2683,7 @@ public struct SettingsView: View {
                                 Image(systemName: "plus")
                                 Text("Add Widget")
                             }
-                            .font(.system(size: 10, weight: .bold))
+                            .font(ThemeStore.shared.font(size: 10, weight: .bold))
                             .foregroundColor(Color(hex: palette.primary.hex))
                             .padding(.vertical, 4)
                             .frame(maxWidth: .infinity)
@@ -2489,7 +2718,7 @@ public struct SettingsView: View {
                         configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                     }
                 ))
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
 
                 Toggle("Show Icon", isOn: Binding(
                     get: { style.showIcon },
@@ -2499,7 +2728,7 @@ public struct SettingsView: View {
                         configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                     }
                 ))
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
 
                 Toggle("Show Label", isOn: Binding(
                     get: { style.showLabel },
@@ -2509,7 +2738,7 @@ public struct SettingsView: View {
                         configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                     }
                 ))
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
             }
 
             HStack(spacing: 12) {
@@ -2517,12 +2746,12 @@ public struct SettingsView: View {
                     get: { style.bold ?? false },
                     set: { applyOption("bold", AnyCodable($0)) }
                 ))
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
             }
 
             HStack(spacing: 8) {
                 Text("Custom Label")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: palette.onSurface.hex).opacity(0.7))
                 TextField("Alias (empty = default)", text: Binding(
                     get: { style.alias ?? "" },
@@ -2532,7 +2761,7 @@ public struct SettingsView: View {
                     }
                 ))
                 .textFieldStyle(.plain)
-                .font(.system(size: 10, design: .monospaced))
+                .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                 .padding(5)
                 .background(Color(hex: palette.surfaceContainerLow.hex))
                 .cornerRadius(5)
@@ -2541,7 +2770,7 @@ public struct SettingsView: View {
 
             HStack(spacing: 8) {
                 Text("Custom Tint")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: palette.onSurface.hex).opacity(0.7))
                 TextField("#CBA6F7 (empty = theme)", text: Binding(
                     get: { style.customTintHex ?? "" },
@@ -2551,7 +2780,7 @@ public struct SettingsView: View {
                     }
                 ))
                 .textFieldStyle(.plain)
-                .font(.system(size: 10, design: .monospaced))
+                .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                 .padding(5)
                 .background(Color(hex: palette.surfaceContainerLow.hex))
                 .cornerRadius(5)
@@ -2560,7 +2789,7 @@ public struct SettingsView: View {
 
             HStack(spacing: 8) {
                 Text("Custom Background")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: palette.onSurface.hex).opacity(0.7))
                 TextField("#1E1E2E (empty = theme)", text: Binding(
                     get: { style.customBackgroundHex ?? "" },
@@ -2570,7 +2799,7 @@ public struct SettingsView: View {
                     }
                 ))
                 .textFieldStyle(.plain)
-                .font(.system(size: 10, design: .monospaced))
+                .font(ThemeStore.shared.font(size: 10, design: .monospaced))
                 .padding(5)
                 .background(Color(hex: palette.surfaceContainerLow.hex))
                 .cornerRadius(5)
@@ -2582,7 +2811,7 @@ public struct SettingsView: View {
                     get: { style.fontScaleOverride != nil },
                     set: { applyOption("fontScaleOverride", $0 ? AnyCodable(style.fontScaleOverride ?? 1.0) : nil) }
                 ))
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 if style.fontScaleOverride != nil {
                     SettingsSliderRow(
                         title: "Font Scale",
@@ -2603,7 +2832,7 @@ public struct SettingsView: View {
                     get: { style.paddingOverride != nil },
                     set: { applyOption("paddingOverride", $0 ? AnyCodable(style.paddingOverride ?? 8) : nil) }
                 ))
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 if style.paddingOverride != nil {
                     SettingsSliderRow(
                         title: "Horizontal Padding",
@@ -2624,7 +2853,7 @@ public struct SettingsView: View {
                     get: { style.cornerRadiusOverride != nil },
                     set: { applyOption("cornerRadiusOverride", $0 ? AnyCodable(style.cornerRadiusOverride ?? 8) : nil) }
                 ))
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 if style.cornerRadiusOverride != nil {
                     SettingsSliderRow(
                         title: "Corner Radius",
@@ -2650,7 +2879,7 @@ public struct SettingsView: View {
                             configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                         }
                     ))
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
 
                     Toggle("Seconds", isOn: Binding(
                         get: { item.options["showSeconds"]?.boolValue ?? false },
@@ -2660,7 +2889,7 @@ public struct SettingsView: View {
                             configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                         }
                     ))
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
 
                     Toggle("Date", isOn: Binding(
                         get: { item.options["showDate"]?.boolValue ?? true },
@@ -2670,7 +2899,7 @@ public struct SettingsView: View {
                             configStore.update { guard $0.barConfigs.indices.contains(activeBarIndex) else { return }; $0.barConfigs[activeBarIndex].layout = updated }
                         }
                     ))
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                 }
             }
         }
@@ -2714,7 +2943,7 @@ public struct SettingsView: View {
         SettingsCard(icon: "capsule.portrait", title: "Dank Island (DIsland)", subtitle: "Interactive Dynamic Island surface & Mac notch integration", palette: palette) {
             HStack {
                 Text("Island Instance")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                 Spacer()
                 SettingsSegmentedControl(
@@ -2741,7 +2970,7 @@ public struct SettingsView: View {
                     DIslandController.shared.toggle()
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 10, weight: .bold))
+                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(Color(hex: palette.primary.hex))
@@ -2752,7 +2981,7 @@ public struct SettingsView: View {
                     DIslandController.shared.triggerOSD(icon: "speaker.wave.3.fill", label: "Volume", progress: 0.78)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 10, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(Color(hex: palette.surfaceContainerLow.hex))
@@ -2763,7 +2992,7 @@ public struct SettingsView: View {
                     DIslandController.shared.triggerNotification(title: "Dynamic Island", body: "Live activity notification preview", level: "info")
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 10, weight: .semibold))
+                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(Color(hex: palette.surfaceContainerLow.hex))
@@ -2886,7 +3115,7 @@ public struct SettingsView: View {
         SettingsCard(icon: "waveform.path.ecg", title: "Spring Physics & Hover Behavior", subtitle: "8-DOF vector spring solver & hover expansion", palette: palette) {
             HStack {
                 Text("Animation Curve")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 11, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                 Spacer()
                 SettingsSegmentedControl(
@@ -2987,7 +3216,7 @@ public struct SettingsView: View {
                             configStore.update { $0.rawSettings.merge(updated.toDictionary()) { _, new in new } }
                         }
                     ))
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                 }
             }
 
@@ -3095,10 +3324,10 @@ public struct SettingsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("macOS Screen Time Integration")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(ThemeStore.shared.font(size: 13, weight: .medium))
                             .foregroundColor(Color(hex: palette.onSurface.hex))
                         Text(wellbeingService.isMacOSScreenTimeActive ? "macOS ScreenTimeAgent is running and active" : "macOS ScreenTimeAgent is inactive or disabled")
-                            .font(.system(size: 11))
+                            .font(ThemeStore.shared.font(size: 11))
                             .foregroundColor(wellbeingService.isMacOSScreenTimeActive ? Color(hex: palette.primary.hex) : Color(hex: palette.error.hex))
                     }
                     Spacer()
@@ -3107,9 +3336,9 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 5) {
                             Image(systemName: "arrow.up.forward.app")
-                                .font(.system(size: 11))
+                                .font(ThemeStore.shared.font(size: 11))
                             Text("Open Screen Time")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -3152,10 +3381,10 @@ public struct SettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Media Hub Layout")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 12, weight: .medium))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                     Text("Bento card grid or Material centered artwork in DankDash")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                         .foregroundColor(Color(hex: palette.outline.hex))
                 }
                 Spacer()
@@ -3197,10 +3426,10 @@ public struct SettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Lyrics Cache")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(ThemeStore.shared.font(size: 12, weight: .medium))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                     Text("Stored in ~/Library/Application Support/DMS/lyrics_cache")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                         .foregroundColor(Color(hex: palette.outline.hex))
                 }
                 Spacer()
@@ -3277,7 +3506,7 @@ public struct SettingsView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
                 Text("Active: Hardware media, volume & brightness keys intercepted directly")
-                    .font(.caption)
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                 Spacer()
             }
@@ -3292,12 +3521,12 @@ public struct SettingsView: View {
                     Image(systemName: "checkmark.circle.trianglebadge.exclamationmark")
                         .foregroundColor(.blue)
                     Text("Passive Monitoring Active (Input Monitoring)")
-                        .font(.caption.bold())
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                     Spacer()
                 }
                 Text("Media keys are monitored via Input Monitoring. Native macOS bezel HUD is suppressed, and volume adjustments update the HUD via CoreAudio. To swallow keys directly, grant Device Control & Data Access.")
-                    .font(.caption2)
+                    .font(ThemeStore.shared.font(size: 9))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
                 Button(action: {
@@ -3307,7 +3536,7 @@ public struct SettingsView: View {
                         Image(systemName: "lock.open.fill")
                         Text("Open Device Control & Data Access")
                     }
-                    .font(.caption.weight(.medium))
+                    .font(ThemeStore.shared.font(size: 10, weight: .medium))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(Color(hex: palette.primary.hex))
@@ -3327,12 +3556,12 @@ public struct SettingsView: View {
                     Image(systemName: "shield.checkered")
                         .foregroundColor(.orange)
                     Text("CoreAudio Fallback Active (Zero Permissions Required)")
-                        .font(.caption.bold())
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: palette.onSurface.hex))
                     Spacer()
                 }
                 Text("Native macOS volume HUD is suppressed and volume adjustments trigger the HUD via CoreAudio. Grant 'Device Control and Data Access' in Privacy & Security for direct key interception.")
-                    .font(.caption2)
+                    .font(ThemeStore.shared.font(size: 9))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
                 HStack(spacing: 8) {
@@ -3343,7 +3572,7 @@ public struct SettingsView: View {
                             Image(systemName: "lock.open.fill")
                             Text("Open Device Control & Data Access")
                         }
-                        .font(.caption.weight(.medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Color(hex: palette.primary.hex))
@@ -3359,7 +3588,7 @@ public struct SettingsView: View {
                             Image(systemName: "hand.tap.fill")
                             Text("Open Input Monitoring")
                         }
-                        .font(.caption.weight(.medium))
+                        .font(ThemeStore.shared.font(size: 10, weight: .medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Color(hex: palette.surfaceContainerHighest.hex))
@@ -3426,7 +3655,7 @@ public struct SettingsView: View {
                             Text("Configure All System Keybinds in One Place")
                             Image(systemName: "arrow.right")
                         }
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: palette.primary.hex))
                     }
                     .buttonStyle(.plain)
@@ -3457,7 +3686,7 @@ public struct SettingsView: View {
                 )
 
                 Text("Dynamic Island anchors the launcher directly below the notch and collapses the island while open. On displays without a notch it falls back to top center.")
-                    .font(.system(size: 11))
+                    .font(ThemeStore.shared.font(size: 11))
                     .foregroundColor(Color(hex: palette.outline.hex))
             }
         }
@@ -3501,9 +3730,9 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 5) {
                             Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 11))
+                                .font(ThemeStore.shared.font(size: 11))
                             Text("Restore Defaults")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -3520,9 +3749,9 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 5) {
                             Image(systemName: "command")
-                                .font(.system(size: 11))
+                                .font(ThemeStore.shared.font(size: 11))
                             Text("Keybinds Cheatsheet HUD")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -3731,7 +3960,7 @@ public struct SettingsView: View {
                         Image(systemName: "shippingbox.fill")
                         Text("Browse Plugins")
                     }
-                    .font(.system(size: 11, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
                     .foregroundColor(Color(hex: palette.onPrimary.hex))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -3750,7 +3979,7 @@ public struct SettingsView: View {
                         Image(systemName: "lock.doc.fill")
                         Text("Lock Plugins")
                     }
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: palette.primary.hex))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -3767,7 +3996,7 @@ public struct SettingsView: View {
                     ForEach(installed) { plugin in
                         HStack(spacing: 8) {
                             Image(systemName: plugin.icon)
-                                .font(.system(size: 12))
+                                .font(ThemeStore.shared.font(size: 12))
                                 .foregroundColor(Color(hex: palette.primary.hex))
                                 .frame(width: 22, height: 22)
                                 .background(Color(hex: palette.surfaceVariant.hex))
@@ -3775,10 +4004,10 @@ public struct SettingsView: View {
 
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(plugin.name)
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
                                     .foregroundColor(Color(hex: palette.onSurface.hex))
                                 Text(plugin.description)
-                                    .font(.system(size: 9))
+                                    .font(ThemeStore.shared.font(size: 9))
                                     .foregroundColor(Color(hex: palette.outline.hex))
                                     .lineLimit(1)
                             }
@@ -3791,7 +4020,7 @@ public struct SettingsView: View {
                                         Image(systemName: "arrow.up.forward.app")
                                         Text("Open Sync")
                                     }
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                     .foregroundColor(Color(hex: palette.onPrimary.hex))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
@@ -3810,7 +4039,7 @@ public struct SettingsView: View {
 
                             Button(action: { pluginService.uninstallPlugin(id: plugin.id) }) {
                                 Image(systemName: "trash")
-                                    .font(.system(size: 10))
+                                    .font(ThemeStore.shared.font(size: 10))
                                     .foregroundColor(Color(hex: palette.error.hex))
                                     .padding(4)
                                     .background(Color(hex: palette.surfaceVariant.hex))
@@ -3836,7 +4065,7 @@ public struct SettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Text("Version \(DMSVersion.displayVersion)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(ThemeStore.shared.font(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(hex: palette.onPrimary.hex))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -3846,7 +4075,7 @@ public struct SettingsView: View {
                 }
 
                 Text("DankMacShell — a native Swift 6 & SwiftUI shell for macOS. Follows complete Material Design 3 guidelines with zero idle CPU and native macOS integration.")
-                    .font(.system(size: 10))
+                    .font(ThemeStore.shared.font(size: 10))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
 
                 HStack(spacing: 12) {
@@ -3854,7 +4083,7 @@ public struct SettingsView: View {
                     Link("GitHub Repository", destination: URL(string: "https://github.com/JonasNowak/DankMacShell")!)
                     Link("Report an Issue", destination: URL(string: "https://github.com/JonasNowak/DankMacShell/issues")!)
                 }
-                .font(.system(size: 10, weight: .bold))
+                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                 .foregroundColor(Color(hex: palette.primary.hex))
 
                 Divider().opacity(0.3).padding(.vertical, 2)
@@ -3865,9 +4094,9 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: updateCheckService.isChecking ? "arrow.triangle.2.circlepath" : "arrow.down.circle.fill")
-                                .font(.system(size: 11))
+                                .font(ThemeStore.shared.font(size: 11))
                             Text(updateCheckService.isChecking ? "Checking for Updates…" : "Check for Updates")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         }
                         .foregroundColor(Color(hex: palette.onPrimary.hex))
                         .padding(.horizontal, 10)
@@ -3887,13 +4116,13 @@ public struct SettingsView: View {
                             }
                         }) {
                             Text("Update available: v\(latest)")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                                 .foregroundColor(Color(hex: palette.error.hex))
                         }
                         .buttonStyle(.plain)
                     } else if !updateCheckService.isChecking {
                         Text("Up to date (v\(DMSVersion.displayVersion))")
-                            .font(.system(size: 10))
+                            .font(ThemeStore.shared.font(size: 10))
                             .foregroundColor(Color(hex: palette.outline.hex))
                     }
                 }
@@ -3901,7 +4130,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.3).padding(.vertical, 2)
 
                 Text("SUBSYSTEM HEALTH")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(ThemeStore.shared.font(size: 9, weight: .bold))
                     .foregroundColor(Color(hex: palette.outline.hex))
 
                 let socketPath = NSHomeDirectory() + "/Library/Application Support/DMS/dms.sock"
@@ -3955,9 +4184,9 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 11))
+                                .font(ThemeStore.shared.font(size: 11))
                             Text("Re-run Welcome & Setup Wizard…")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(ThemeStore.shared.font(size: 10, weight: .bold))
                         }
                         .foregroundColor(Color(hex: palette.onPrimary.hex))
                         .padding(.horizontal, 10)
@@ -3977,14 +4206,14 @@ public struct SettingsView: View {
     private func diagnosticRow(name: String, status: String, ok: Bool, palette: DMSPalette) -> some View {
         HStack {
             Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .font(.system(size: 10))
+                .font(ThemeStore.shared.font(size: 10))
                 .foregroundColor(ok ? Color(hex: palette.primary.hex) : Color(hex: palette.error.hex))
             Text(name)
-                .font(.system(size: 10, weight: .medium))
+                .font(ThemeStore.shared.font(size: 10, weight: .medium))
                 .foregroundColor(Color(hex: palette.onSurface.hex))
             Spacer()
             Text(status)
-                .font(.system(size: 9, design: .monospaced))
+                .font(ThemeStore.shared.font(size: 9, design: .monospaced))
                 .foregroundColor(Color(hex: palette.outline.hex))
         }
         .padding(.horizontal, 8)
@@ -4075,11 +4304,11 @@ private struct WallpaperColorSwatch: View {
                             .stroke(Color.white.opacity(0.2), lineWidth: 1)
                     )
                 Text(name)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 9, weight: .medium))
                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                     .lineLimit(1)
                 Text(colorHex.uppercased())
-                    .font(.system(size: 8, weight: .regular, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 8, weight: .regular, design: .monospaced))
                     .foregroundColor(Color(hex: palette.outline.hex))
                     .lineLimit(1)
             }
@@ -4103,14 +4332,14 @@ private struct WallpaperFolderRow: View {
         HStack(spacing: 8) {
             Image(systemName: isDefault ? "folder.fill" : "folder.badge.gearshape")
                 .foregroundColor(Color(hex: palette.primary.hex))
-                .font(.system(size: 13))
+                .font(ThemeStore.shared.font(size: 13))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(name)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ThemeStore.shared.font(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: palette.onSurface.hex))
                 Text(path)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(ThemeStore.shared.font(size: 9, design: .monospaced))
                     .foregroundColor(Color(hex: palette.outline.hex))
                     .lineLimit(1)
             }
@@ -4119,7 +4348,7 @@ private struct WallpaperFolderRow: View {
 
             if isDefault {
                 Text("System Default")
-                    .font(.system(size: 9, weight: .medium))
+                    .font(ThemeStore.shared.font(size: 9, weight: .medium))
                     .foregroundColor(Color(hex: palette.outline.hex))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -4128,7 +4357,7 @@ private struct WallpaperFolderRow: View {
             } else {
                 Button(action: onRemove) {
                     Image(systemName: "trash")
-                        .font(.system(size: 10))
+                        .font(ThemeStore.shared.font(size: 10))
                         .foregroundColor(Color(hex: palette.error.hex))
                         .frame(width: 22, height: 22)
                         .background(Color(hex: palette.errorContainer.hex).opacity(0.3))
@@ -4178,7 +4407,7 @@ private struct OmniWMWindowBorderPreview: View {
                                 Circle().fill(Color.green.opacity(0.85)).frame(width: 8, height: 8)
                                 Spacer()
                                 Text("OmniWM Active Window Preview")
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(ThemeStore.shared.font(size: 9, weight: .semibold))
                                     .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
                                 Spacer()
                                 Color.clear.frame(width: 32, height: 8)
@@ -4191,10 +4420,10 @@ private struct OmniWMWindowBorderPreview: View {
 
                             HStack(spacing: 8) {
                                 Image(systemName: "sparkles")
-                                    .font(.system(size: 10))
+                                    .font(ThemeStore.shared.font(size: 10))
                                     .foregroundColor(Color(hex: palette.primary.hex))
                                 Text(isGradient ? "\(start.hex)  ➔  \(end.hex)" : "\(solid.hex) (Solid)")
-                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .font(ThemeStore.shared.font(size: 10, weight: .medium, design: .monospaced))
                                     .foregroundColor(Color(hex: palette.onSurface.hex))
                             }
                             Spacer()

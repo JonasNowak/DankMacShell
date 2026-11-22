@@ -180,22 +180,6 @@ public struct FileItem: Sendable, Identifiable, Equatable {
     }
 }
 
-/// Running window item for launcher window switcher.
-public struct WindowItem: Sendable, Identifiable, Equatable {
-    public var id: Int { windowID }
-    public let windowID: Int
-    public let ownerPID: Int32
-    public let ownerName: String
-    public let title: String
-
-    public init(windowID: Int, ownerPID: Int32, ownerName: String, title: String) {
-        self.windowID = windowID
-        self.ownerPID = ownerPID
-        self.ownerName = ownerName
-        self.title = title
-    }
-}
-
 /// Quick math evaluator result.
 public struct MathResult: Sendable, Equatable {
     public let expression: String
@@ -209,15 +193,19 @@ public struct MathResult: Sendable, Equatable {
 
 /// Emoji search item.
 public struct EmojiItem: Sendable, Identifiable, Equatable {
-    public var id: String { emoji }
+    public var id: String { shortcode.isEmpty ? emoji : "\(emoji)-\(shortcode)" }
     public let emoji: String
     public let name: String
     public let keywords: [String]
+    public let shortcode: String
+    public let isNerdFont: Bool
 
-    public init(emoji: String, name: String, keywords: [String] = []) {
+    public init(emoji: String, name: String, keywords: [String] = [], shortcode: String = "", isNerdFont: Bool = false) {
         self.emoji = emoji
         self.name = name
         self.keywords = keywords
+        self.shortcode = shortcode
+        self.isNerdFont = isNerdFont
     }
 }
 
@@ -322,6 +310,9 @@ public enum AppSearch {
     public static func evaluateMath(query: String) -> MathResult? {
         var clean = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if clean.isEmpty { return nil }
+
+        // Unit / base / currency / timezone conversions ("1 km in mi", "100 usd in eur", ...)
+        if let converted = UnitConverter.evaluate(query: clean) { return converted }
 
         // Percentage syntax: "15% of 80" -> "0.15 * 80"
         if let percentRange = clean.range(of: "% of ", options: .caseInsensitive) {
@@ -801,73 +792,213 @@ public enum AppSearch {
     }
 
     /// Common emojis dataset for quick emoji lookup.
-    public static let commonEmojis: [EmojiItem] = [
-        EmojiItem(emoji: "🚀", name: "Rocket", keywords: ["space", "launch", "fast", "speed"]),
-        EmojiItem(emoji: "🔥", name: "Fire", keywords: ["lit", "hot", "flame", "cool"]),
-        EmojiItem(emoji: "✨", name: "Sparkles", keywords: ["magic", "star", "clean", "shine"]),
-        EmojiItem(emoji: "💡", name: "Light Bulb", keywords: ["idea", "smart", "bright", "think"]),
-        EmojiItem(emoji: "⚡️", name: "Zap", keywords: ["fast", "electricity", "thunder", "power"]),
-        EmojiItem(emoji: "🎉", name: "Party Popper", keywords: ["celebrate", "tada", "fun"]),
-        EmojiItem(emoji: "👍", name: "Thumbs Up", keywords: ["ok", "good", "agree", "yes"]),
-        EmojiItem(emoji: "❤️", name: "Red Heart", keywords: ["love", "heart", "like"]),
-        EmojiItem(emoji: "💻", name: "Laptop", keywords: ["computer", "code", "tech", "mac"]),
-        EmojiItem(emoji: "☕️", name: "Coffee", keywords: ["drink", "cafe", "espresso", "morning"]),
-        EmojiItem(emoji: "🛠️", name: "Hammer and Wrench", keywords: ["tools", "build", "dev", "fix"]),
-        EmojiItem(emoji: "📦", name: "Package", keywords: ["box", "delivery", "bundle", "repo"]),
-        EmojiItem(emoji: "🔍", name: "Magnifying Glass", keywords: ["search", "find", "look"]),
-        EmojiItem(emoji: "🎨", name: "Artist Palette", keywords: ["art", "theme", "design", "color"]),
-        EmojiItem(emoji: "⏱️", name: "Stopwatch", keywords: ["time", "clock", "timer", "fast"]),
-        EmojiItem(emoji: "✅", name: "Check Mark", keywords: ["done", "yes", "pass", "ok"]),
-        EmojiItem(emoji: "❌", name: "Cross Mark", keywords: ["no", "fail", "bad", "delete"]),
-        EmojiItem(emoji: "⚠️", name: "Warning", keywords: ["alert", "caution", "danger"]),
-        EmojiItem(emoji: "🌟", name: "Glowing Star", keywords: ["fav", "star", "bright"]),
-        EmojiItem(emoji: "🌙", name: "Crescent Moon", keywords: ["night", "dark", "sleep"]),
-        EmojiItem(emoji: "☀️", name: "Sun", keywords: ["light", "day", "warm", "weather"]),
-        EmojiItem(emoji: "🌧️", name: "Cloud with Rain", keywords: ["rain", "storm", "weather"]),
-        EmojiItem(emoji: "❄️", name: "Snowflake", keywords: ["cold", "winter", "ice"])
-    ]
+    public static var commonEmojis: [EmojiItem] { EmojiCatalog.emojis }
 
-    /// Searches emojis by name or keyword.
+    /// Nerd Font glyph dataset for quick glyph lookup.
+    public static var nerdFontGlyphs: [EmojiItem] { EmojiCatalog.nerdFontGlyphs }
+
+    /// Determines whether the input query is requesting an emoji search.
+    /// Prefixes: "emoji:", "nf:", or ":" followed by a non-whitespace character.
+    public static func isEmojiQuery(_ query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmed.hasPrefix("emoji:") || trimmed.hasPrefix("nf:") {
+            return true
+        }
+        if trimmed.hasPrefix(":"), trimmed.count >= 2 {
+            let second = trimmed[trimmed.index(trimmed.startIndex, offsetBy: 1)]
+            return !second.isWhitespace
+        }
+        return false
+    }
+
+    /// Searches emojis by name, shortcode, or keyword.
+    /// Strips a leading "emoji:" (common pool), "nf:" (nerd font pool), or ":" (both pools),
+    /// plus a trailing ":". An empty stripped query returns the first 24 items of the pool.
     public static func searchEmojis(query: String) -> [EmojiItem] {
-        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !clean.isEmpty else { return Array(commonEmojis.prefix(12)) }
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
 
-        return commonEmojis.filter { item in
-            item.name.lowercased().contains(clean) ||
-            item.keywords.contains { $0.lowercased().contains(clean) }
+        let pool: [EmojiItem]
+        var stripped: String
+        if lower.hasPrefix("nf:") {
+            pool = nerdFontGlyphs
+            stripped = String(trimmed.dropFirst(3))
+        } else if lower.hasPrefix("emoji:") {
+            pool = commonEmojis
+            stripped = String(trimmed.dropFirst(6))
+        } else if lower.hasPrefix(":") {
+            pool = commonEmojis + nerdFontGlyphs
+            stripped = String(trimmed.dropFirst(1))
+        } else {
+            pool = commonEmojis + nerdFontGlyphs
+            stripped = trimmed
+        }
+
+        stripped = stripped.trimmingCharacters(in: .whitespaces)
+        if stripped.hasSuffix(":") { stripped.removeLast() }
+        stripped = stripped.trimmingCharacters(in: .whitespaces).lowercased()
+
+        guard !stripped.isEmpty else { return Array(pool.prefix(24)) }
+
+        let scored: [(index: Int, item: EmojiItem, tier: Int)] = pool.enumerated().compactMap { index, item in
+            let name = item.name.lowercased()
+            let code = item.shortcode.lowercased()
+            if name.hasPrefix(stripped) || code.hasPrefix(stripped) {
+                return (index: index, item: item, tier: 0)
+            }
+            if name.contains(stripped) || code.contains(stripped) {
+                return (index: index, item: item, tier: 1)
+            }
+            if item.keywords.contains(where: { $0.lowercased().hasPrefix(stripped) }) {
+                return (index: index, item: item, tier: 2)
+            }
+            if item.keywords.contains(where: { $0.lowercased().contains(stripped) }) {
+                return (index: index, item: item, tier: 3)
+            }
+            return nil
+        }
+        return scored
+            .sorted { lhs, rhs in
+                lhs.tier == rhs.tier ? lhs.index < rhs.index : lhs.tier < rhs.tier
+            }
+            .map { $0.item }
+    }
+
+    /// Resolved web search target, optionally produced by a `!bang` token.
+    public struct WebSearchTarget: Sendable, Equatable {
+        public let providerName: String
+        public let query: String
+        public let url: URL
+        public let isBang: Bool
+
+        public init(providerName: String, query: String, url: URL, isBang: Bool) {
+            self.providerName = providerName
+            self.query = query
+            self.url = url
+            self.isBang = isBang
         }
     }
 
-    /// Generates web search URL for configured provider.
-    /// Uses `URLComponents` + `URLQueryItem` so `&`, `+`, `=`, `?`, `#` and spaces in the
-    /// query are percent-encoded correctly (e.g. "C++" -> `C%2B%2B`).
-    public static func webSearchURL(query: String, provider: String = "google") -> URL? {
-        var components = URLComponents()
-        // Strict RFC 3986 encoding: only unreserved characters pass through, so
-        // `+`, `&`, `=`, `?`, `#`, `%` in the search text are percent-encoded
-        // (`URLQueryItem` would leave `+` and `?` literal, corrupting the query).
-        let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: unreserved) else { return nil }
-        components.percentEncodedQuery = "q=\(encoded)"
+    /// DuckDuckGo-style `!bang` tokens mapped to provider names, honored at the
+    /// start or end of the query (e.g. "!gh dankmacshell" or "dankmacshell !gh").
+    private static let bangProviders: [String: String] = [
+        "!g": "google",
+        "!ddg": "duckduckgo",
+        "!gh": "github",
+        "!yt": "youtube",
+        "!w": "wikipedia",
+        "!kagi": "kagi",
+        "!brew": "homebrew",
+        "!crates": "crates",
+        "!npm": "npm",
+        "!so": "stackoverflow",
+        "!apple": "apple"
+    ]
+
+    /// Resolves a query to a web search target, honoring `!bang` tokens at the start
+    /// or end of the query and falling back to `defaultProvider` otherwise.
+    public static func resolveWebSearch(query: String, defaultProvider: String = "google") -> WebSearchTarget? {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let tokens = trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        var bangProvider: String? = nil
+        var searchQuery = trimmed
+        if let first = tokens.first, let provider = bangProviders[first.lowercased()] {
+            bangProvider = provider
+            searchQuery = tokens.dropFirst().joined(separator: " ")
+        } else if let last = tokens.last, let provider = bangProviders[last.lowercased()] {
+            bangProvider = provider
+            searchQuery = tokens.dropLast().joined(separator: " ")
+        }
+
+        let providerName = bangProvider ?? canonicalProvider(defaultProvider)
+        guard !searchQuery.isEmpty else { return nil }
+        guard let url = searchURL(provider: providerName, query: searchQuery) else { return nil }
+        return WebSearchTarget(
+            providerName: providerName,
+            query: searchQuery,
+            url: url,
+            isBang: bangProvider != nil
+        )
+    }
+
+    /// Maps a configured provider name to a canonical provider, defaulting to Google.
+    private static func canonicalProvider(_ provider: String) -> String {
         switch provider.lowercased() {
-        case "duckduckgo", "ddg":
-            components.scheme = "https"
+        case "duckduckgo", "ddg": return "duckduckgo"
+        case "bing": return "bing"
+        case "kagi": return "kagi"
+        default: return "google"
+        }
+    }
+
+    private static let unreservedQueryChars = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+
+    /// Builds a provider search URL. Uses strict RFC 3986 encoding: only unreserved
+    /// characters pass through, so `+`, `&`, `=`, `?`, `#`, `%` in the search text are
+    /// percent-encoded (`URLQueryItem` would leave `+` and `?` literal, corrupting the query).
+    private static func searchURL(provider: String, query: String) -> URL? {
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: unreservedQueryChars) else { return nil }
+        var components = URLComponents()
+        components.scheme = "https"
+        switch provider {
+        case "duckduckgo":
             components.host = "duckduckgo.com"
             components.path = "/"
+            components.percentEncodedQuery = "q=\(encoded)"
         case "bing":
-            components.scheme = "https"
             components.host = "www.bing.com"
             components.path = "/search"
+            components.percentEncodedQuery = "q=\(encoded)"
         case "kagi":
-            components.scheme = "https"
             components.host = "kagi.com"
             components.path = "/search"
-        default:
-            components.scheme = "https"
+            components.percentEncodedQuery = "q=\(encoded)"
+        case "github":
+            components.host = "github.com"
+            components.path = "/search"
+            components.percentEncodedQuery = "q=\(encoded)"
+        case "youtube":
+            components.host = "www.youtube.com"
+            components.path = "/results"
+            components.percentEncodedQuery = "search_query=\(encoded)"
+        case "wikipedia":
+            components.host = "en.wikipedia.org"
+            components.path = "/w/index.php"
+            components.percentEncodedQuery = "search=\(encoded)"
+        case "homebrew":
+            components.host = "formulae.brew.sh"
+            components.path = "/"
+            components.percentEncodedQuery = "q=\(encoded)"
+        case "crates":
+            components.host = "crates.io"
+            components.path = "/search"
+            components.percentEncodedQuery = "q=\(encoded)"
+        case "npm":
+            components.host = "www.npmjs.com"
+            components.path = "/search"
+            components.percentEncodedQuery = "q=\(encoded)"
+        case "stackoverflow":
+            components.host = "stackoverflow.com"
+            components.path = "/search"
+            components.percentEncodedQuery = "q=\(encoded)"
+        case "apple":
+            components.host = "developer.apple.com"
+            components.path = "/search/"
+            components.percentEncodedQuery = "q=\(encoded)"
+        default: // google
             components.host = "www.google.com"
             components.path = "/search"
+            components.percentEncodedQuery = "q=\(encoded)"
         }
         return components.url
+    }
+
+    /// Generates web search URL for configured provider, honoring `!bang` tokens
+    /// at the start or end of the query (e.g. "!gh dms" searches GitHub).
+    public static func webSearchURL(query: String, provider: String = "google") -> URL? {
+        resolveWebSearch(query: query, defaultProvider: provider)?.url
     }
 
     /// Swift-6-safe locked box around a non-Sendable `NumberFormatter`.
