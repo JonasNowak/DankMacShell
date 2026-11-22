@@ -47,6 +47,10 @@ public struct CapsLockIndicatorWidget: View {
     }
 
     private func checkCapsLock() {
+        if ConfigStore.shared.config.disableCapsLock {
+            self.isCapsLockOn = false
+            return
+        }
         let flags = CGEventSource.flagsState(.combinedSessionState)
         self.isCapsLockOn = flags.contains(.maskAlphaShift)
     }

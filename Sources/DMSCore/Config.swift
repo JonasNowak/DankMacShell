@@ -1323,6 +1323,12 @@ public struct DMSConfig: Sendable, Codable, Equatable {
         set { rawSettings["reducedMotion"] = AnyCodable(newValue) }
     }
 
+    /// Prevents Caps Lock from locking ON while keeping external Hyper Key remappers working (default `true`).
+    public var disableCapsLock: Bool {
+        get { rawSettings["disableCapsLock"]?.boolValue ?? true }
+        set { rawSettings["disableCapsLock"] = AnyCodable(newValue) }
+    }
+
     /// Dynamic Island configuration bridged to `IslandSettings`.
     public var islandSettings: IslandSettings {
         get { IslandSettings(from: rawSettings) }

@@ -640,6 +640,7 @@ public struct DankBarView: View {
     private func liveWidgetVisible(_ id: String) -> Bool {
         switch id {
         case "capsLockIndicator":
+            guard !configStore.config.disableCapsLock else { return false }
             return CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
         case "media", "mediaControls":
             let t = NowPlayingService.shared.currentTrack

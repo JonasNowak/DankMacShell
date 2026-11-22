@@ -3696,6 +3696,24 @@ public struct SettingsView: View {
     @ViewBuilder
     private func shortcutsTab(palette: DMSPalette) -> some View {
         VStack(spacing: 12) {
+            // Caps Lock Guard Card
+            SettingsCard(
+                icon: "capslock.fill",
+                title: "Caps Lock Guard",
+                subtitle: "Prevent Caps Lock from locking ON while keeping external Hyper Key remappers working",
+                palette: palette
+            ) {
+                SettingsToggleRow(
+                    title: "Never Lock Caps Lock",
+                    subtitle: "Immediately clears hardware and software Caps Lock state if a press leaks through (compatible with Hyperkey.app and Karabiner)",
+                    isOn: Binding(
+                        get: { configStore.config.disableCapsLock },
+                        set: { val in configStore.update { $0.disableCapsLock = val } }
+                    ),
+                    palette: palette
+                )
+            }
+
             // Shortcut Actions & Defaults Card
             SettingsCard(
                 icon: "command",

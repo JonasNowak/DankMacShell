@@ -76,6 +76,7 @@ public final class OSDController {
             lastCapsLockState = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
             flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] _ in
                 Task { @MainActor [weak self] in
+                    guard !ConfigStore.shared.config.disableCapsLock else { return }
                     let isCaps = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
                     guard let self = self, isCaps != self.lastCapsLockState else { return }
                     self.lastCapsLockState = isCaps

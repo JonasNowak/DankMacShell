@@ -147,6 +147,24 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // Live FX rates for launcher currency conversion (12h disk cache + periodic refresh)
         CurrencyRateService.shared.start()
 
+        // Caps Lock Guard: prevent Caps Lock from locking ON while keeping external Hyper Key remappers working
+        if cfg.disableCapsLock {
+            CapsLockGuardService.shared.start()
+        }
+        ConfigStore.shared.$config
+            .map { $0.disableCapsLock }
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { shouldDisable in
+                if shouldDisable {
+                    CapsLockGuardService.shared.start()
+                } else {
+                    CapsLockGuardService.shared.stop()
+                }
+            }
+            .store(in: &cancellables)
+
         // First-run Welcome & Setup wizard (shown once, until onboardingCompleted is set)
         if !ConfigStore.shared.config.onboardingCompleted {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {

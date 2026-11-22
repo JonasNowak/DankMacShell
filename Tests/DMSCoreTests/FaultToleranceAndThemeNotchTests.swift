@@ -330,6 +330,20 @@ struct ThemeTokensAndCustomizationTests {
         #expect(decoded.fontFamilyNerd == "JetBrainsMono Nerd Font")
         #expect(decoded.customFontPaths == ["/tmp/CustomFont.ttf"])
     }
+
+    @Test("DMSConfig disableCapsLock defaults to true and round-trips")
+    func testDisableCapsLockConfigRoundTrip() throws {
+        var cfg = DMSConfig()
+        #expect(cfg.disableCapsLock == true)
+
+        cfg.disableCapsLock = false
+        let decodedFalse = DMSConfig.load(from: try cfg.encodeJSON())
+        #expect(decodedFalse.disableCapsLock == false)
+
+        cfg.disableCapsLock = true
+        let decodedTrue = DMSConfig.load(from: try cfg.encodeJSON())
+        #expect(decodedTrue.disableCapsLock == true)
+    }
 }
 
 @Suite("Mac Display Notch and Bar Layout Solver Tests")
