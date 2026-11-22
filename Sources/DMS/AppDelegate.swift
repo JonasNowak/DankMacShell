@@ -83,9 +83,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             IdleInhibitService.shared.enable()
         }
 
-        // Show DankBar, Dynamic Island & Desktop Widgets
+        // Show DankBar, Dynamic Island & sync WidgetKit desktop widget snapshots
         DankBarController.shared.show()
-        DesktopWidgetsController.shared.start()
+        WidgetSnapshotService.shared.start()
         _ = DIslandController.shared
         _ = WorkspaceService.shared
         _ = PluginService.shared

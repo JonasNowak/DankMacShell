@@ -203,7 +203,7 @@ public struct SettingsView: View {
             onClose()
             return .handled
         }
-        .onAppear { DesktopWidgetsController.shared.start() }
+        .onAppear { WidgetSnapshotService.shared.start() }
     }
 
     // MARK: - Tab Router
@@ -3608,16 +3608,64 @@ public struct SettingsView: View {
     // MARK: - 15. Widgets & Notifications - Desktop Widgets Tab
     @ViewBuilder
     private func desktopWidgetsTab(palette: DMSPalette) -> some View {
-        SettingsCard(icon: "macwindow.on.rectangle", title: "Desktop Widgets", subtitle: "Wallpaper-level clock and system monitoring", palette: palette) {
-            SettingsToggleRow(
-                title: "Enable Desktop Widgets Canvas",
-                subtitle: "Pin interactive telemetry tiles directly to your desktop space",
-                isOn: Binding(
-                    get: { configStore.config.rawSettings["desktopWidgetsEnabled"]?.boolValue ?? false },
-                    set: { val in configStore.update { $0.rawSettings["desktopWidgetsEnabled"] = AnyCodable(val) } }
-                ),
-                palette: palette
-            )
+        SettingsCard(icon: "macwindow.on.rectangle", title: "macOS Desktop Widgets (WidgetKit)", subtitle: "Native desktop and Notification Center widgets styled with your live Material 3 theme", palette: palette) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Right-click your desktop (or open Notification Center), click Edit Widgets…, and search for DankMaterialShell to place Material Clock, System & Weather, or Pomodoro Focus widgets anywhere on your displays.")
+                    .font(ThemeStore.shared.font(size: 11))
+                    .foregroundColor(Color(hex: palette.onSurfaceVariant.hex))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    desktopWidgetRow(icon: "clock.fill", name: "Material Clock", description: "Live digital clock and date styled with your active DankMacShell Material 3 palette and font.", palette: palette)
+                    desktopWidgetRow(icon: "cpu.fill", name: "System & Weather", description: "CPU, RAM, battery, and weather snapshot synced with your active DankMacShell theme.", palette: palette)
+                    desktopWidgetRow(icon: "timer", name: "Pomodoro Focus", description: "Live Pomodoro focus and break countdown synced with DankMacShell.", palette: palette)
+                }
+
+                HStack {
+                    Button(action: {
+                        WidgetSnapshotService.shared.syncNow(forceReload: true)
+                        ToastCenter.shared.show(icon: "arrow.triangle.2.circlepath", message: "Refreshed Desktop Widgets")
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("Refresh Desktop Widgets Now")
+                        }
+                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
+                        .foregroundColor(Color(hex: palette.onPrimary.hex))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(hex: palette.primary.hex))
+                        .cornerRadius(7)
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+                }
+
+                Text("Theme and Pomodoro changes sync automatically; telemetry and weather snapshots refresh periodically within macOS WidgetKit limits.")
+                    .font(ThemeStore.shared.font(size: 9))
+                    .foregroundColor(Color(hex: palette.outline.hex))
+            }
+        }
+    }
+
+    private func desktopWidgetRow(icon: String, name: String, description: String, palette: DMSPalette) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(ThemeStore.shared.font(size: 12))
+                .foregroundColor(Color(hex: palette.primary.hex))
+                .frame(width: 22, height: 22)
+                .background(Color(hex: palette.surfaceVariant.hex))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
+                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                Text(description)
+                    .font(ThemeStore.shared.font(size: 9))
+                    .foregroundColor(Color(hex: palette.outline.hex))
+                    .lineLimit(2)
+            }
         }
     }
 
@@ -3970,6 +4018,63 @@ public struct SettingsView: View {
     @ViewBuilder
     private func pluginsTab(palette: DMSPalette) -> some View {
         SettingsCard(icon: "puzzlepiece.extension.fill", title: "Plugin Manager & Registry", palette: palette) {
+            // v0.9.6: local plugin runtime actions
+            HStack(spacing: 8) {
+                Button(action: {
+                    PluginRuntimeService.shared.openPluginsFolder()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "folder.fill")
+                        Text("Open Plugins Folder")
+                    }
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: palette.primary.hex))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: palette.primaryContainer.hex))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {
+                    PluginService.shared.reloadPlugins()
+                    ToastCenter.shared.show(icon: "arrow.triangle.2.circlepath", message: "Reloaded Plugins")
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                        Text("Reload Plugins")
+                    }
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: palette.primary.hex))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: palette.primaryContainer.hex))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {
+                    if PluginRuntimeService.shared.createExamplePlugin() != nil {
+                        PluginService.shared.reloadPlugins()
+                        ToastCenter.shared.show(icon: "sparkles", message: "Created hello-world example plugin")
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                        Text("Create Example Plugin")
+                    }
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: palette.primary.hex))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: palette.primaryContainer.hex))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+            }
+
             HStack {
                 Button(action: {
                     showBrowsePluginsModal = true
@@ -4021,9 +4126,20 @@ public struct SettingsView: View {
                                 .clipShape(Circle())
 
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(plugin.name)
-                                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
-                                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                                HStack(spacing: 6) {
+                                    Text(plugin.name)
+                                        .font(ThemeStore.shared.font(size: 11, weight: .bold))
+                                        .foregroundColor(Color(hex: palette.onSurface.hex))
+                                    if plugin.isLocal {
+                                        Text("LOCAL PLUGIN")
+                                            .font(ThemeStore.shared.font(size: 8, weight: .bold))
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1)
+                                            .background(Color(hex: palette.primaryContainer.hex))
+                                            .foregroundColor(Color(hex: palette.primary.hex))
+                                            .clipShape(Capsule())
+                                    }
+                                }
                                 Text(plugin.description)
                                     .font(ThemeStore.shared.font(size: 9))
                                     .foregroundColor(Color(hex: palette.outline.hex))

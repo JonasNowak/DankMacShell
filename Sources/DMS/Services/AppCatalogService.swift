@@ -119,6 +119,31 @@ public final class AppCatalogService {
             }
         }
 
+        // v0.9.6: active local plugins are surfaced as launcher entries (type .plugin)
+        // and scored through LauncherScorer so they rank alongside apps and built-ins.
+        for id in PluginRuntimeService.shared.activeLauncherPluginIDs {
+            guard let manifest = PluginRuntimeService.shared.manifests[id] else { continue }
+            let app = AppItem(
+                id: "io.dms.localplugin.\(id)",
+                name: manifest.name,
+                bundleID: "io.dms.localplugin.\(id)",
+                path: "/System/Library/CoreServices/Finder.app",
+                subtitle: "Plugin • \(manifest.description)",
+                category: "Plugin"
+            )
+            let candidate = LauncherCandidate(
+                id: "io.dms.localplugin.\(id)",
+                name: manifest.name,
+                genericName: manifest.description,
+                identifier: id,
+                type: .plugin,
+                tags: [manifest.launcherPrefix ?? "", manifest.author].filter { !$0.isEmpty }
+            )
+            if let score = LauncherScorer.score(candidate: candidate, query: trimmed, now: now) {
+                matches.append(SearchResult(app: app, score: score))
+            }
+        }
+
         matches.sort { $0.score > $1.score }
         return (math, matches)
     }

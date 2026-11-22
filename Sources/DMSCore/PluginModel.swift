@@ -43,6 +43,7 @@ public struct DMSPlugin: Identifiable, Sendable, Codable, Equatable {
     public var repoURL: String?
     public var tags: [String]
     public var isOfficial: Bool
+    public var isLocal: Bool
 
     public init(
         id: String,
@@ -56,7 +57,8 @@ public struct DMSPlugin: Identifiable, Sendable, Codable, Equatable {
         icon: String = "puzzlepiece.extension",
         repoURL: String? = nil,
         tags: [String] = [],
-        isOfficial: Bool = true
+        isOfficial: Bool = true,
+        isLocal: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -70,6 +72,28 @@ public struct DMSPlugin: Identifiable, Sendable, Codable, Equatable {
         self.repoURL = repoURL
         self.tags = tags
         self.isOfficial = isOfficial
+        self.isLocal = isLocal
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, author, version, type, isInstalled, isEnabled, icon, repoURL, tags, isOfficial, isLocal
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.description = try container.decode(String.self, forKey: .description)
+        self.author = try container.decode(String.self, forKey: .author)
+        self.version = try container.decode(String.self, forKey: .version)
+        self.type = try container.decode(DMSPluginType.self, forKey: .type)
+        self.isInstalled = try container.decode(Bool.self, forKey: .isInstalled)
+        self.isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        self.icon = try container.decode(String.self, forKey: .icon)
+        self.repoURL = try container.decodeIfPresent(String.self, forKey: .repoURL)
+        self.tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        self.isOfficial = try container.decodeIfPresent(Bool.self, forKey: .isOfficial) ?? true
+        self.isLocal = try container.decodeIfPresent(Bool.self, forKey: .isLocal) ?? false
     }
 }
 
@@ -158,100 +182,46 @@ public enum StandardApplets {
 public enum DMSPluginRegistry {
     public static let standardPlugins: [DMSPlugin] = [
         DMSPlugin(
-            id: "github-notifications",
-            name: "GitHub Notifications",
-            description: "Live unread notification counter and pull-request alerts in the bar.",
-            author: "AvengeMedia",
-            version: "1.2.0",
-            type: .barWidget,
-            isInstalled: true,
-            isEnabled: true,
-            icon: "bell.badge.fill",
-            repoURL: "https://github.com/AvengeMedia/dms-plugin-github"
-        ),
-        DMSPlugin(
             id: "pomodoro-timer",
             name: "Pomodoro Focus Timer",
-            description: "Productivity timer with focus/break intervals and notification chimes.",
-            author: "dms-community",
-            version: "1.0.4",
+            description: "Productivity timer with focus/break intervals, DankBar countdown pill, and native Desktop Widget.",
+            author: "DankMacShell",
+            version: "1.1.0",
             type: .barWidget,
             isInstalled: true,
             isEnabled: false,
             icon: "timer",
-            repoURL: "https://github.com/dms-community/dms-pomodoro"
-        ),
-        DMSPlugin(
-            id: "network-speed",
-            name: "Net Speed Monitor",
-            description: "Real-time upload and download throughput monitor on the bar.",
-            author: "AvengeMedia",
-            version: "2.1.0",
-            type: .barWidget,
-            isInstalled: true,
-            isEnabled: false,
-            icon: "arrow.up.arrow.down",
-            repoURL: "https://github.com/AvengeMedia/dms-netspeed"
-        ),
-        DMSPlugin(
-            id: "crypto-tracker",
-            name: "Crypto Ticker",
-            description: "Live BTC, ETH, and SOL price tracking with color indicators.",
-            author: "crypto-dev",
-            version: "0.9.1",
-            type: .barWidget,
-            isInstalled: false,
-            isEnabled: false,
-            icon: "bitcoinsign.circle.fill",
-            repoURL: "https://github.com/dms-community/dms-crypto"
-        ),
-        DMSPlugin(
-            id: "disk-usage",
-            name: "Disk Space Indicator",
-            description: "Monitors primary APFS container free space and warns on low storage.",
-            author: "mac-tools",
-            version: "1.1.2",
-            type: .controlCenter,
-            isInstalled: false,
-            isEnabled: false,
-            icon: "internaldrive.fill",
-            repoURL: "https://github.com/dms-community/dms-disk-usage"
+            repoURL: "https://github.com/JonasNowak/DankMacShell",
+            tags: ["pomodoro", "timer", "focus", "productivity"],
+            isOfficial: true
         ),
         DMSPlugin(
             id: "tailscale-status",
             name: "Tailscale VPN Pill",
-            description: "Displays Tailscale mesh network connectivity and exit-node status.",
-            author: "mesh-hacker",
-            version: "1.3.0",
+            description: "Live Tailscale mesh status, tailnet name, exit-node indicator, and one-click IP copy in the bar.",
+            author: "DankMacShell",
+            version: "1.1.0",
             type: .barWidget,
-            isInstalled: false,
+            isInstalled: true,
             isEnabled: false,
             icon: "shield.checkered",
-            repoURL: "https://github.com/dms-community/dms-tailscale"
+            repoURL: "https://github.com/JonasNowak/DankMacShell",
+            tags: ["tailscale", "vpn", "mesh", "network"],
+            isOfficial: true
         ),
         DMSPlugin(
-            id: "spotify-mini",
-            name: "Spotify Expressive",
-            description: "Expanded Spotify album artwork visualizer and playlist shortcuts.",
-            author: "AvengeMedia",
-            version: "2.0.1",
-            type: .controlCenter,
-            isInstalled: false,
+            id: "github-notifications",
+            name: "GitHub Notifications",
+            description: "Live unread GitHub notification counter via authenticated gh CLI with click-to-open inbox.",
+            author: "DankMacShell",
+            version: "1.1.0",
+            type: .barWidget,
+            isInstalled: true,
             isEnabled: false,
-            icon: "music.note.tv",
-            repoURL: "https://github.com/AvengeMedia/dms-spotify-mini"
-        ),
-        DMSPlugin(
-            id: "currency-converter",
-            name: "Currency & Unit Converter",
-            description: "Adds unit and FX currency conversions directly into the launcher.",
-            author: "dms-community",
-            version: "1.0.0",
-            type: .launcher,
-            isInstalled: false,
-            isEnabled: false,
-            icon: "dollarsign.circle",
-            repoURL: "https://github.com/dms-community/dms-currency"
+            icon: "bell.badge.fill",
+            repoURL: "https://github.com/JonasNowak/DankMacShell",
+            tags: ["github", "notifications", "pr", "dev"],
+            isOfficial: true
         ),
         DMSPlugin(
             id: "symbian-belle-sync",
@@ -268,4 +238,120 @@ public enum DMSPluginRegistry {
             isOfficial: true
         )
     ]
+}
+
+/// On-disk manifest describing a locally installed DMS plugin script.
+public struct DMSPluginManifest: Sendable, Codable, Equatable {
+    public var id: String
+    public var name: String
+    public var description: String
+    public var author: String
+    public var version: String
+    public var type: DMSPluginType
+    public var icon: String
+    public var command: String
+    public var intervalSeconds: Double
+    public var onClick: String?
+    public var launcherPrefix: String?
+
+    public init(
+        id: String,
+        name: String,
+        description: String,
+        command: String,
+        author: String = "Local",
+        version: String = "1.0.0",
+        type: DMSPluginType = .barWidget,
+        icon: String = "puzzlepiece.extension",
+        intervalSeconds: Double = 30,
+        onClick: String? = nil,
+        launcherPrefix: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.author = author
+        self.version = version
+        self.type = type
+        self.icon = icon
+        self.command = command
+        self.intervalSeconds = intervalSeconds
+        self.onClick = onClick
+        self.launcherPrefix = launcherPrefix
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, author, version, type, icon, command, intervalSeconds, onClick, launcherPrefix
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.description = try container.decode(String.self, forKey: .description)
+        self.author = try container.decodeIfPresent(String.self, forKey: .author) ?? "Local"
+        self.version = try container.decodeIfPresent(String.self, forKey: .version) ?? "1.0.0"
+        self.type = try container.decodeIfPresent(DMSPluginType.self, forKey: .type) ?? .barWidget
+        self.icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? "puzzlepiece.extension"
+        self.command = try container.decode(String.self, forKey: .command)
+        self.intervalSeconds = try container.decodeIfPresent(Double.self, forKey: .intervalSeconds) ?? 30
+        self.onClick = try container.decodeIfPresent(String.self, forKey: .onClick)
+        self.launcherPrefix = try container.decodeIfPresent(String.self, forKey: .launcherPrefix)
+    }
+
+    /// Polling interval clamped to a sane range (5s...1h).
+    public var clampedInterval: TimeInterval { min(3600, max(5, intervalSeconds)) }
+
+    /// Converts the manifest into a registry entry for a locally installed plugin.
+    public func toPlugin(isEnabled: Bool) -> DMSPlugin {
+        DMSPlugin(
+            id: id,
+            name: name,
+            description: description,
+            author: author,
+            version: version,
+            type: type,
+            isInstalled: true,
+            isEnabled: isEnabled,
+            icon: icon,
+            repoURL: nil,
+            tags: [],
+            isOfficial: false,
+            isLocal: true
+        )
+    }
+}
+
+/// Structured output a plugin script prints to stdout for the bar widget.
+public struct DMSPluginWidgetOutput: Sendable, Codable, Equatable {
+    public var text: String
+    public var icon: String?
+    public var color: String?
+    public var tooltip: String?
+
+    public init(text: String, icon: String? = nil, color: String? = nil, tooltip: String? = nil) {
+        self.text = text
+        self.icon = icon
+        self.color = color
+        self.tooltip = tooltip
+    }
+
+    /// Parses plugin stdout: JSON object when it starts with `{`, otherwise the
+    /// first non-empty line clamped to 64 characters. Returns nil when empty.
+    public static func parse(stdout: String) -> DMSPluginWidgetOutput? {
+        let trimmed = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.hasPrefix("{"),
+           let data = trimmed.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(DMSPluginWidgetOutput.self, from: data),
+           !decoded.text.isEmpty {
+            return decoded
+        }
+        let line = trimmed
+            .components(separatedBy: .newlines)
+            .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+            .map { String($0.trimmingCharacters(in: .whitespaces).prefix(64)) }
+            ?? String(trimmed.prefix(64))
+        return DMSPluginWidgetOutput(text: line)
+    }
 }

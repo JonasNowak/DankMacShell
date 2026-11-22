@@ -69,7 +69,11 @@ public final class PluginService: ObservableObject {
     }
 
     public func loadPlugins() {
-        var catalog = DMSPluginRegistry.standardPlugins
+        let standard = DMSPluginRegistry.standardPlugins
+        let standardIDs = Set(standard.map { $0.id })
+        let localPlugins = PluginRuntimeService.shared.discoverLocalPlugins()
+            .filter { !standardIDs.contains($0.id) }
+        var catalog = standard + localPlugins
         let enabledIDs = Set(ConfigStore.shared.config.enabledPlugins)
 
         // Read lockfile if exists
@@ -92,6 +96,10 @@ public final class PluginService: ObservableObject {
 
         self.plugins = catalog
         updatePluginLifecycles(enabledIDs: Set(catalog.filter { $0.isInstalled && $0.isEnabled }.map { $0.id }))
+    }
+
+    public func reloadPlugins() {
+        loadPlugins()
     }
 
     public func loadApplets() {
@@ -290,5 +298,21 @@ public final class PluginService: ObservableObject {
             cfg.setSetting("showDiskUsage", value: AnyCodable(enabledIDs.contains("disk-usage")))
             cfg.setSetting("showTailscaleStatus", value: AnyCodable(enabledIDs.contains("tailscale-status")))
         }
+
+        // Real plugin services: start/stop polling only while the plugin is enabled.
+        if enabledIDs.contains("tailscale-status") {
+            TailscaleService.shared.start()
+        } else {
+            TailscaleService.shared.stop()
+        }
+
+        if enabledIDs.contains("github-notifications") {
+            GitHubNotificationsService.shared.start()
+        } else {
+            GitHubNotificationsService.shared.stop()
+        }
+
+        // Local plugin runtime: reconcile widget timers and active plugin lists.
+        PluginRuntimeService.shared.syncRunningPlugins(enabledIDs: enabledIDs)
     }
 }

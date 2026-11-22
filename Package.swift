@@ -11,6 +11,7 @@ let package = Package(
         .executable(name: "DankMacShell", targets: ["DMS"]),
         .executable(name: "dms", targets: ["DMSCLI"]),
         .executable(name: "dms-symbian", targets: ["DMSSymbian"]),
+        .executable(name: "DMSWidgets", targets: ["DMSWidgets"]),
     ],
     dependencies: [
         .package(url: "https://github.com/JonasNowak/MaterialMacLibrary.git", from: "0.3.0"),
@@ -58,6 +59,20 @@ let package = Package(
             path: "Sources/DMSSymbian",
             resources: [
                 .process("Resources")
+            ]
+        ),
+        // Native macOS WidgetKit extension (DMSWidgets.appex): Material Clock, System & Weather,
+        // and Pomodoro Focus widgets rendering the shared DMSCore widget snapshot.
+        .executableTarget(
+            name: "DMSWidgets",
+            dependencies: ["DMSCore"],
+            path: "Sources/DMSWidgets",
+            swiftSettings: [.unsafeFlags(["-application-extension"])],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-application_extension",
+                    "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain",
+                ])
             ]
         ),
         // Unit tests for core logic.

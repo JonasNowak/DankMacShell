@@ -1059,6 +1059,13 @@ public struct LauncherView: View {
             }
             return
         }
+        // v0.9.6: local plugins trigger their click handler instead of launching an app.
+        if app.bundleID.hasPrefix("io.dms.localplugin.") {
+            let pluginID = String(app.bundleID.dropFirst("io.dms.localplugin.".count))
+            onClose()
+            PluginRuntimeService.shared.triggerClick(pluginID: pluginID)
+            return
+        }
         if app.bundleID == "io.dms.plugin.symbian-belle-sync" {
             _ = SymbianClient.shared.launchCompanion()
             onClose()
@@ -1181,15 +1188,16 @@ public struct LauncherItemRow: View {
         let isHidden = RunningAppsService.shared.isHidden(bundleID: item.bundleID)
         let isDMSSetting = item.bundleID.hasPrefix("io.dms.setting.")
         let isDMSAction = item.bundleID.hasPrefix("io.dms.action.")
+        let isLocalPlugin = item.bundleID.hasPrefix("io.dms.localplugin.")
 
         Button {
             onSelect()
         } label: {
             HStack(spacing: 14) {
-                if isDMSSetting || isDMSAction {
+                if isDMSSetting || isDMSAction || isLocalPlugin {
                     // v0.9.5: built-in DMS entries get a themed SF Symbol badge
-                    // instead of the Finder file icon.
-                    Image(systemName: isDMSSetting ? "gearshape.fill" : "bolt.fill")
+                    // instead of the Finder file icon; v0.9.6: local plugins too.
+                    Image(systemName: isDMSSetting ? "gearshape.fill" : (isDMSAction ? "bolt.fill" : "puzzlepiece.extension.fill"))
                         .font(ThemeStore.shared.font(size: 16, weight: .semibold))
                         .foregroundColor(theme.primary)
                         .frame(width: 36, height: 36)
@@ -1216,6 +1224,14 @@ public struct LauncherItemRow: View {
                                 .clipShape(Capsule())
                         } else if isDMSAction {
                             Text("DMS ACTION")
+                                .font(ThemeStore.shared.font(size: 9, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(theme.primaryContainer.opacity(0.5))
+                                .foregroundColor(theme.primary)
+                                .clipShape(Capsule())
+                        } else if isLocalPlugin {
+                            Text("PLUGIN")
                                 .font(ThemeStore.shared.font(size: 9, weight: .bold))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)

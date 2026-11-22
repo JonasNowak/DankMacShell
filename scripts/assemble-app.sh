@@ -103,6 +103,19 @@ fi
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || true
 
+# Assemble the WidgetKit extension (DMSWidgets.appex) when its binary was built
+if [ -f "$BIN_DIR/DMSWidgets" ]; then
+    APPEX="$APP/Contents/PlugIns/DMSWidgets.appex"
+    mkdir -p "$APPEX/Contents/MacOS"
+    cp "$BIN_DIR/DMSWidgets" "$APPEX/Contents/MacOS/DMSWidgets"
+    chmod +x "$APPEX/Contents/MacOS/DMSWidgets"
+    cp "$ROOT/Support/DMSWidgets-Info.plist" "$APPEX/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APPEX/Contents/Info.plist"
+    if [ -n "${BUNDLE_SHORT_VERSION:-}" ]; then
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $BUNDLE_SHORT_VERSION" "$APPEX/Contents/Info.plist"
+    fi
+fi
+
 echo "==> Signing $APP with identity: $IDENTITY (inside-out)..."
 for nested in "$APP/Contents/MacOS/dms" "$APP/Contents/MacOS/dms-symbian"; do
     if [ -f "$nested" ]; then
@@ -116,5 +129,16 @@ for bundle in "$APP/Contents/Resources/"*.bundle; do
         codesign --force --sign "$IDENTITY" "$bundle"
     fi
 done
+# Sign the widget extension inside-out, before the enclosing app
+if [ -d "$APP/Contents/PlugIns/DMSWidgets.appex" ]; then
+    codesign --force --sign "$IDENTITY" --entitlements "$ROOT/Support/DMSWidgets.entitlements" "$APP/Contents/PlugIns/DMSWidgets.appex"
+fi
 codesign --force --sign "$IDENTITY" "$APP"
+
+# Register the app and its widget extension with LaunchServices / pluginkit (non-fatal)
+if [ -d "$APP/Contents/PlugIns/DMSWidgets.appex" ]; then
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" 2>/dev/null || true
+    pluginkit -a "$APP/Contents/PlugIns/DMSWidgets.appex" 2>/dev/null || true
+    pluginkit -e use -i io.github.jonasnowak.dms.widgets 2>/dev/null || true
+fi
 echo "Assembled and signed $APP"
