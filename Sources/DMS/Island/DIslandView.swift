@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import DMSCore
 
 // MARK: - Goth Corner Shape (Spec 19 / Spec 24 Concave Top Fillets)
@@ -209,6 +210,16 @@ public struct DIslandView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(shape)
+        // DankDrop: dragging files/URLs/text onto the island morphs it into the drop shelf.
+        .onDrop(
+            of: [.fileURL, .url, .plainText],
+            isTargeted: Binding(
+                get: { controller.isDropTargeted },
+                set: { controller.setDropTargeted($0) }
+            )
+        ) { providers in
+            handleDrop(providers: providers)
+        }
         .onHover { hovering in
             controller.setHovered(hovering)
         }
@@ -217,6 +228,46 @@ public struct DIslandView: View {
                 controller.toggle()
             }
         }
+    }
+
+    /// Accepts dropped file URLs, web URLs, and plain text into the DankDrop shelf.
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    DispatchQueue.main.async {
+                        if let url = item as? URL {
+                            controller.addDroppedFileURL(url)
+                        } else if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                            controller.addDroppedFileURL(url)
+                        }
+                    }
+                }
+                handled = true
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { item, _ in
+                    DispatchQueue.main.async {
+                        if let url = item as? URL {
+                            controller.addDroppedFileURL(url)
+                        } else if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                            controller.addDroppedFileURL(url)
+                        }
+                    }
+                }
+                handled = true
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+                    DispatchQueue.main.async {
+                        if let text = item as? String {
+                            controller.addDroppedText(text)
+                        }
+                    }
+                }
+                handled = true
+            }
+        }
+        return handled
     }
 
     @ViewBuilder
@@ -248,6 +299,7 @@ private struct CompactIslandContent: View {
     @ObservedObject private var configStore = ConfigStore.shared
     @ObservedObject private var nowPlaying = NowPlayingService.shared
     @ObservedObject private var weather = WeatherService.shared
+    @ObservedObject private var pomodoro = PomodoroService.shared
     private let audio = AudioService.shared
 
     var body: some View {
@@ -272,6 +324,38 @@ private struct CompactIslandContent: View {
                         .foregroundColor(isNotchAttached ? .white : theme.onSurface)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
+                } else if activity == .timer {
+                    // Live Pomodoro: phase badge + monospace MM:SS countdown
+                    HStack(spacing: 5) {
+                        Text(pomodoro.phaseLabel)
+                            .font(theme.font(size: 9, weight: .bold))
+                            .foregroundColor(isNotchAttached ? .black : theme.onPrimary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(isNotchAttached ? Color.white : theme.primary)
+                            .clipShape(Capsule())
+                        Text(pomodoro.formattedRemaining)
+                            .font(theme.font(size: 11, weight: .bold, mono: true))
+                            .foregroundColor(isNotchAttached ? .white : theme.onSurface)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                } else if activity == .fileDrop {
+                    // DankDrop: highlighted "Drop to Shelf" pill while targeted, shelf badge otherwise
+                    HStack(spacing: 5) {
+                        Image(systemName: "tray.and.arrow.down.fill")
+                            .font(theme.font(size: 11, weight: .bold))
+                            .foregroundColor(controller.isDropTargeted ? (isNotchAttached ? .black : theme.onPrimary) : theme.primary)
+                        Text(controller.isDropTargeted ? "Drop to Shelf" : "DankDrop")
+                            .font(theme.font(size: 11, weight: .semibold))
+                            .foregroundColor(controller.isDropTargeted ? (isNotchAttached ? .black : theme.onPrimary) : (isNotchAttached ? .white : theme.onSurface))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(controller.isDropTargeted ? (isNotchAttached ? Color.white : theme.primary) : theme.surfaceContainerHigh.opacity(0.6))
+                    .clipShape(Capsule())
                 } else if activity == .media || nowPlaying.currentTrack.isPlaying {
                     Image(systemName: "waveform")
                         .font(ThemeStore.shared.font(size: 11, weight: .bold))
@@ -329,7 +413,36 @@ private struct CompactIslandContent: View {
                         // label in the left wing — keep the right wing empty instead of duplicating it.
                         EmptyView()
                     }
-                } else if activity != .osd {
+                } else if activity == .timer {
+                    // Progress dot: ring fills as the current Pomodoro phase elapses
+                    let phaseTotal = pomodoro.isBreak
+                        ? (pomodoro.completedSessions % 4 == 0 ? 15 * 60 : 5 * 60)
+                        : 25 * 60
+                    let progress = phaseTotal > 0
+                        ? CGFloat(max(0.0, min(1.0, 1.0 - Double(pomodoro.remainingSeconds) / Double(phaseTotal))))
+                        : 0
+                    ZStack {
+                        Circle()
+                            .stroke(theme.surfaceContainerHighest.opacity(0.9), lineWidth: 2.5)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(theme.primary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                    }
+                    .frame(width: 12, height: 12)
+                } else if activity == .fileDrop {
+                    if !controller.dropStore.items.isEmpty {
+                        Text("\(controller.dropStore.items.count)")
+                            .font(theme.font(size: 10, weight: .bold, mono: true))
+                            .foregroundColor(isNotchAttached ? .white : theme.onSurface)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(theme.primary.opacity(0.25))
+                            .clipShape(Capsule())
+                    } else {
+                        EmptyView()
+                    }
+                } else {
                     let isCelsius = configStore.config.weatherUnits.lowercased() == "celsius"
                     let temp = isCelsius ? weather.currentWeather.temperatureC : weather.currentWeather.temperatureF
                     Image(systemName: weather.currentWeather.sfSymbol)
@@ -365,8 +478,8 @@ private struct ExpandedIslandContent: View {
             HStack(spacing: 6) {
                 // `.notification` is intentionally excluded from the user-clickable tabs:
                 // notifications surface via the island's own toast/notification flow, not a tab.
-                ForEach([IslandActivity.home, .media, .controlCenter, .dash, .clipboard, .weather].filter { $0 != .notification }, id: \.rawValue) { act in
-                    if settings.enabledActivities.contains(act.rawValue) || act == .home {
+                ForEach([IslandActivity.home, .media, .controlCenter, .dash, .clipboard, .weather, .timer, .fileDrop].filter { $0 != .notification }, id: \.rawValue) { act in
+                    if settings.enabledActivities.contains(act.rawValue) || act == .home || act == .timer || act == .fileDrop {
                         Button {
                             controller.open(activity: act)
                         } label: {
@@ -416,6 +529,10 @@ private struct ExpandedIslandContent: View {
                     ExpandedWeatherView()
                 case .powerMenu:
                     ExpandedPowerMenuView(controller: controller)
+                case .timer:
+                    ExpandedTimerView(controller: controller)
+                case .fileDrop:
+                    ExpandedFileDropView(controller: controller)
                 case .launcher, .home:
                     ExpandedHomeView(controller: controller)
                 }
@@ -437,6 +554,8 @@ private struct ExpandedIslandContent: View {
         case .clipboard: return "doc.on.clipboard"
         case .powerMenu: return "power"
         case .weather: return "cloud.sun.fill"
+        case .timer: return "timer"
+        case .fileDrop: return "tray.and.arrow.down.fill"
         }
     }
 }
@@ -801,42 +920,364 @@ private struct ExpandedClipboardView: View {
     @ObservedObject var controller: DIslandController
     @ObservedObject private var theme = ThemeStore.shared
     @ObservedObject private var clipboard = ClipboardService.shared
+    @State private var query: String = ""
+    /// Session-local pins (ClipboardItem has no persisted pin flag): pinned items sort first.
+    @State private var pinned: Set<UUID> = []
+
+    /// Case-insensitive live filter over the live service items, pinned first, capped at 30 rows.
+    private var filtered: [ClipboardItem] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let base: [ClipboardItem]
+        if q.isEmpty {
+            base = clipboard.items
+        } else {
+            base = clipboard.items.filter { $0.text.lowercased().contains(q) }
+        }
+        let pinnedItems = base.filter { pinned.contains($0.id) }
+        let unpinnedItems = base.filter { !pinned.contains($0.id) }
+        return Array((pinnedItems + unpinnedItems).prefix(30))
+    }
 
     var body: some View {
-        let recent = Array(clipboard.items.prefix(3))
-        return VStack(alignment: .leading, spacing: 5) {
-            if recent.isEmpty {
-                Text("Clipboard is empty")
+        VStack(alignment: .leading, spacing: 6) {
+            // Live search field
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                    .foregroundColor(theme.onSurfaceVariant)
+                TextField("Search clipboard", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(theme.font(size: 11))
+                    .foregroundColor(theme.onSurface)
+                if !query.isEmpty {
+                    Button {
+                        query = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(ThemeStore.shared.font(size: 10))
+                            .foregroundColor(theme.onSurfaceVariant)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(theme.surfaceContainerHigh.opacity(0.6))
+            .cornerRadius(8)
+
+            if filtered.isEmpty {
+                Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Clipboard is empty" : "No matches")
                     .font(theme.font(size: 11))
                     .foregroundColor(theme.onSurfaceVariant)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 16)
             } else {
-                ForEach(recent) { item in
-                    Button {
-                        clipboard.copyItem(text: item.text)
-                        controller.close()
-                    } label: {
-                        HStack {
-                            Image(systemName: "doc.on.doc")
-                                .font(ThemeStore.shared.font(size: 10))
-                                .foregroundColor(theme.primary)
-                            Text(item.text.replacingOccurrences(of: "\n", with: " "))
-                                .font(theme.font(size: 11, mono: true))
-                                .foregroundColor(theme.onSurface)
-                                .lineLimit(1)
-                            Spacer()
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(filtered) { item in
+                            clipboardRow(item)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(theme.surfaceContainerHigh.opacity(0.6))
-                        .cornerRadius(6)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
         .padding(.top, 4)
+    }
+
+    private func clipboardRow(_ item: ClipboardItem) -> some View {
+        HStack(spacing: 6) {
+            Button {
+                clipboard.copyItem(text: item.text)
+                controller.close()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: pinned.contains(item.id) ? "pin.fill" : "doc.on.doc")
+                        .font(ThemeStore.shared.font(size: 10))
+                        .foregroundColor(pinned.contains(item.id) ? theme.primary : theme.onSurfaceVariant)
+                    Text(item.text.replacingOccurrences(of: "\n", with: " "))
+                        .font(theme.font(size: 11, mono: true))
+                        .foregroundColor(theme.onSurface)
+                        .lineLimit(1)
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Pin / Copy / Paste / Delete actions
+            Button {
+                if pinned.contains(item.id) {
+                    pinned.remove(item.id)
+                } else {
+                    pinned.insert(item.id)
+                }
+            } label: {
+                Image(systemName: pinned.contains(item.id) ? "pin.slash.fill" : "pin")
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                    .foregroundColor(pinned.contains(item.id) ? theme.primary : theme.onSurfaceVariant)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(pinned.contains(item.id) ? "Unpin" : "Pin")
+
+            Button {
+                clipboard.copyItem(text: item.text)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                    .foregroundColor(theme.onSurfaceVariant)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Copy")
+
+            Button {
+                clipboard.copyItem(text: item.text)
+                controller.close()
+            } label: {
+                Image(systemName: "doc.on.clipboard")
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                    .foregroundColor(theme.onSurfaceVariant)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Paste")
+
+            Button {
+                pinned.remove(item.id)
+                clipboard.removeItem(id: item.id)
+            } label: {
+                Image(systemName: "trash")
+                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                    .foregroundColor(theme.error)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(theme.surfaceContainerHigh.opacity(0.6))
+        .cornerRadius(6)
+    }
+}
+
+// MARK: - Expanded Pomodoro Timer (Live Activity)
+
+private struct ExpandedTimerView: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var pomodoro = PomodoroService.shared
+
+    /// Total seconds of the current phase (mirrors PomodoroService.advancePhase durations).
+    private var phaseTotalSeconds: Int {
+        if pomodoro.isBreak {
+            return (pomodoro.completedSessions % 4 == 0) ? 15 * 60 : 5 * 60
+        }
+        return 25 * 60
+    }
+
+    private var phaseProgress: CGFloat {
+        let total = Double(phaseTotalSeconds)
+        guard total > 0 else { return 0 }
+        return CGFloat(max(0.0, min(1.0, 1.0 - Double(pomodoro.remainingSeconds) / total)))
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 14) {
+                // Large MM:SS countdown inside a circular progress ring
+                ZStack {
+                    Circle()
+                        .stroke(theme.surfaceContainerHighest, lineWidth: 8)
+                    Circle()
+                        .trim(from: 0, to: phaseProgress)
+                        .stroke(theme.primary, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 2) {
+                        Text(pomodoro.phaseLabel)
+                            .font(theme.font(size: 10, weight: .bold))
+                            .foregroundColor(theme.primary)
+                        Text(pomodoro.formattedRemaining)
+                            .font(theme.font(size: 26, weight: .bold, mono: true))
+                            .foregroundColor(theme.onSurface)
+                    }
+                }
+                .frame(width: 96, height: 96)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(pomodoro.isBreak ? "Break" : "Focus")
+                        .font(theme.font(size: 15, weight: .bold))
+                        .foregroundColor(theme.onSurface)
+                    Text(pomodoro.isRunning ? "Session in progress" : "Paused")
+                        .font(theme.font(size: 11))
+                        .foregroundColor(theme.onSurfaceVariant)
+                    Text("\(pomodoro.completedSessions) completed")
+                        .font(theme.font(size: 10, mono: true))
+                        .foregroundColor(theme.onSurfaceVariant)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                IslandActionButton(
+                    icon: pomodoro.isRunning ? "pause.fill" : "play.fill",
+                    label: pomodoro.isRunning ? "Pause" : "Start"
+                ) {
+                    pomodoro.toggleStartPause()
+                }
+                IslandActionButton(icon: "forward.end.fill", label: "Skip") {
+                    pomodoro.skipPhase()
+                }
+                IslandActionButton(icon: "arrow.counterclockwise", label: "Reset") {
+                    pomodoro.reset()
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
+// MARK: - Expanded DankDrop Shelf (File-Drop Target)
+
+private struct ExpandedFileDropView: View {
+    @ObservedObject var controller: DIslandController
+    @ObservedObject private var theme = ThemeStore.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "tray.and.arrow.down.fill")
+                    .font(ThemeStore.shared.font(size: 13, weight: .bold))
+                    .foregroundColor(theme.primary)
+                Text("DankDrop")
+                    .font(theme.font(size: 13, weight: .bold))
+                    .foregroundColor(theme.onSurface)
+                Text("\(controller.dropStore.items.count)/\(controller.dropStore.maxItems)")
+                    .font(theme.font(size: 10, mono: true))
+                    .foregroundColor(theme.onSurfaceVariant)
+                Spacer()
+                if !controller.dropStore.items.isEmpty {
+                    Button {
+                        controller.clearDroppedItems()
+                    } label: {
+                        Text("Clear All")
+                            .font(theme.font(size: 10, weight: .semibold))
+                            .foregroundColor(theme.error)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if controller.dropStore.items.isEmpty {
+                // Dashed drop prompt
+                VStack(spacing: 6) {
+                    Image(systemName: "tray.and.arrow.down")
+                        .font(theme.font(size: 22, weight: .semibold))
+                        .foregroundColor(theme.primary)
+                    Text("Drop files, links, or text onto the island")
+                        .font(theme.font(size: 11))
+                        .foregroundColor(theme.onSurfaceVariant)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                        .foregroundColor(theme.outlineVariant)
+                )
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 220))], spacing: 8) {
+                        ForEach(controller.dropStore.items) { item in
+                            DankDropCard(controller: controller, item: item)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
+private struct DankDropCard: View {
+    @ObservedObject var controller: DIslandController
+    let item: DankDropItem
+    @ObservedObject private var theme = ThemeStore.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: item.sfSymbol)
+                    .font(ThemeStore.shared.font(size: 16, weight: .bold))
+                    .foregroundColor(theme.primary)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(theme.font(size: 11, weight: .semibold))
+                        .foregroundColor(theme.onSurface)
+                        .lineLimit(1)
+                    Text(item.subtitle)
+                        .font(theme.font(size: 9))
+                        .foregroundColor(theme.onSurfaceVariant)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                if let urlString = item.urlString, let url = URL(string: urlString) {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    } label: {
+                        Label("Reveal", systemImage: "finder")
+                            .font(theme.font(size: 9, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(theme.primary)
+                    Button {
+                        copyToPasteboard(url.path)
+                    } label: {
+                        Label("Copy Path", systemImage: "doc.on.doc")
+                            .font(theme.font(size: 9, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(theme.onSurfaceVariant)
+                } else if let text = item.textPayload {
+                    Button {
+                        copyToPasteboard(text)
+                    } label: {
+                        Label("Copy Text", systemImage: "doc.on.doc")
+                            .font(theme.font(size: 9, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(theme.onSurfaceVariant)
+                }
+                Spacer()
+                Button {
+                    controller.removeDroppedItem(id: item.id)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(ThemeStore.shared.font(size: 12))
+                        .foregroundColor(theme.onSurfaceVariant)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove")
+            }
+        }
+        .padding(8)
+        .background(theme.cardBackground)
+        .cornerRadius(10)
+        // Drag-out: re-offer the file URL (or text) so items can be dragged elsewhere
+        .onDrag {
+            if let urlString = item.urlString, let url = URL(string: urlString) {
+                return NSItemProvider(object: url as NSURL)
+            } else if let text = item.textPayload {
+                return NSItemProvider(object: text as NSString)
+            }
+            return NSItemProvider()
+        }
+    }
+
+    private func copyToPasteboard(_ string: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(string, forType: .string)
     }
 }
 

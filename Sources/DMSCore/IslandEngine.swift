@@ -240,6 +240,8 @@ public enum IslandActivity: String, Sendable, Codable, CaseIterable {
     case clipboard = "clipboard"
     case powerMenu = "powerMenu"
     case weather = "weather"
+    case fileDrop = "fileDrop"
+    case timer = "timer"
 
     public static func parse(_ raw: String?) -> IslandActivity {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty else {
@@ -255,6 +257,8 @@ public enum IslandActivity: String, Sendable, Codable, CaseIterable {
         case "clipboard", "clip": return .clipboard
         case "power", "powermenu", "power-menu": return .powerMenu
         case "weather", "forecast": return .weather
+        case "drop", "filedrop", "dankdrop", "shelf", "files": return .fileDrop
+        case "timer", "pomodoro", "focus": return .timer
         default: return .home
         }
     }
@@ -276,10 +280,14 @@ public enum IslandPresentationState: String, Sendable, Codable, Equatable {
     case expandedClipboard
     case expandedPowerMenu
     case expandedWeather
+    case compactTimer
+    case compactFileDrop
+    case expandedTimer
+    case expandedFileDrop
 
     public var isExpanded: Bool {
         switch self {
-        case .idle, .compactMedia, .compactNotification, .compactOSD:
+        case .idle, .compactMedia, .compactNotification, .compactOSD, .compactTimer, .compactFileDrop:
             return false
         default:
             return true
@@ -298,6 +306,8 @@ public enum IslandPresentationState: String, Sendable, Codable, Equatable {
         case .expandedClipboard: return .clipboard
         case .expandedPowerMenu: return .powerMenu
         case .expandedWeather: return .weather
+        case .compactTimer, .expandedTimer: return .timer
+        case .compactFileDrop, .expandedFileDrop: return .fileDrop
         }
     }
 }
@@ -311,14 +321,18 @@ public struct IslandStateMachine: Sendable, Equatable {
     public var isExpanded: Bool = false
     public var expandedActivity: IslandActivity = .home
     public var enabledModules: Set<IslandActivity> = Set(IslandActivity.allCases)
+    public var isTimerRunning: Bool = false
+    public var isFileDropTargeted: Bool = false
+    public var hasDroppedFiles: Bool = false
 
     public init(enabledModules: Set<IslandActivity> = Set(IslandActivity.allCases)) {
         self.enabledModules = enabledModules
     }
 
     /// Resolves the highest-priority active state at timestamp `now`.
-    /// Priority Arbitration (`24-island-surface-widgets.md §3`):
-    /// `OSD Level (3s timeout)` > `Notification Alert (5s timeout)` > `Media Playback (persistent if playing)` > `Home Idle`.
+    /// Priority Arbitration (`24-island-surface-widgets.md §3`, Phase 6):
+    /// `OSD Level (3s timeout)` > `FileDrop Shelf (while drag-targeted)` > `Notification Alert (5s timeout)`
+    /// > `Pomodoro Timer (persistent while running)` > `Media Playback (persistent if playing)` > `Home Idle`.
     public mutating func resolveState(at now: Date = Date()) -> IslandPresentationState {
         // Expire elapsed transient states
         if let osdEnd = activeOSDUntil, now >= osdEnd {
@@ -341,14 +355,22 @@ public struct IslandStateMachine: Sendable, Equatable {
             case .clipboard: return .expandedClipboard
             case .powerMenu: return .expandedPowerMenu
             case .weather: return .expandedWeather
+            case .fileDrop: return .expandedFileDrop
+            case .timer: return .expandedTimer
             }
         }
 
         if activeOSDUntil != nil && enabledModules.contains(.osd) {
             return .compactOSD
         }
+        if isFileDropTargeted && enabledModules.contains(.fileDrop) {
+            return .compactFileDrop
+        }
         if activeNotificationUntil != nil && enabledModules.contains(.notification) {
             return .compactNotification
+        }
+        if isTimerRunning && enabledModules.contains(.timer) {
+            return .compactTimer
         }
         if isMediaPlaying && enabledModules.contains(.media) {
             return .compactMedia
@@ -423,6 +445,12 @@ public struct IslandStateMachine: Sendable, Equatable {
         case .compactOSD:
             width = max(baseCompactWidth + 64.0, isNotchAttached ? notch.notchWidth + 240.0 : 240.0)
             height = max(baseCompactHeight, 42.0)
+        case .compactTimer:
+            width = max(baseCompactWidth + 48.0, isNotchAttached ? notch.notchWidth + 240.0 : 224.0)
+            height = baseCompactHeight
+        case .compactFileDrop:
+            width = max(baseCompactWidth + 88.0, isNotchAttached ? notch.notchWidth + 280.0 : 280.0)
+            height = max(baseCompactHeight, 44.0)
         case .expandedControlCenter:
             let cols = CcMetrics.clampColumns(controlCenterColumns)
             width = Double(cols == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: cols))
@@ -437,7 +465,9 @@ public struct IslandStateMachine: Sendable, Equatable {
              .expandedLauncher,
              .expandedClipboard,
              .expandedPowerMenu,
-             .expandedWeather:
+             .expandedWeather,
+             .expandedTimer,
+             .expandedFileDrop:
             width = settings.expandedWidth
             height = settings.expandedHeight
         }

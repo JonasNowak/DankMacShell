@@ -4015,8 +4015,168 @@ public struct SettingsView: View {
     }
 
     // MARK: - 20. Plugins Tab (Matches settings_plugin.png!)
-    @ViewBuilder
+    // NOTE: no @ViewBuilder here — the body declares a local `GitHubAccountCard` view,
+    // and result-builder closures cannot contain type declarations.
     private func pluginsTab(palette: DMSPalette) -> some View {
+        // GitHub Notifications account card (local view so it can observe the service
+        // without touching any other tab of SettingsView).
+        struct GitHubAccountCard: View {
+            let palette: DMSPalette
+            @ObservedObject private var gh = GitHubNotificationsService.shared
+            @State private var tokenInput: String = ""
+
+            private var authMethodLabel: String {
+                switch gh.authMethod {
+                case .keychainToken: return "KEYCHAIN TOKEN"
+                case .ghCLI: return "GH CLI"
+                case .none: return "NOT SIGNED IN"
+                }
+            }
+
+            var body: some View {
+                SettingsCard(icon: "bell.badge.fill", title: "GitHub Notifications Account", subtitle: "Sign in with a scoped token or gh CLI for the DankBar notifications tracker", palette: palette) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: gh.isSignedIn ? "checkmark.circle.fill" : "person.crop.circle.badge.questionmark")
+                                .font(ThemeStore.shared.font(size: 14, weight: .bold))
+                                .foregroundColor(gh.isSignedIn ? Color(hex: palette.primary.hex) : Color(hex: palette.outline.hex))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(gh.isSignedIn ? "@\(gh.username ?? "unknown")" : "Not signed in")
+                                    .font(ThemeStore.shared.font(size: 11, weight: .bold))
+                                    .foregroundColor(Color(hex: palette.onSurface.hex))
+                                Text(gh.isSignedIn ? "\(gh.unreadCount) unread notifications" : "Sign in to track GitHub notifications from DankBar")
+                                    .font(ThemeStore.shared.font(size: 9))
+                                    .foregroundColor(Color(hex: palette.outline.hex))
+                            }
+                            Spacer()
+                            Text(authMethodLabel)
+                                .font(ThemeStore.shared.font(size: 8, weight: .bold))
+                                .foregroundColor(Color(hex: palette.primary.hex))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(hex: palette.primaryContainer.hex))
+                                .clipShape(Capsule())
+                        }
+
+                        HStack(spacing: 8) {
+                            Button(action: { gh.openCreateTokenPage() }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "key.fill")
+                                    Text("Get Token on GitHub")
+                                }
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                                .foregroundColor(Color(hex: palette.primary.hex))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color(hex: palette.primaryContainer.hex))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button(action: {
+                                Task { await gh.detectGHCLIAuth() }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "terminal.fill")
+                                    Text("Use gh CLI")
+                                }
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                                .foregroundColor(Color(hex: palette.primary.hex))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color(hex: palette.primaryContainer.hex))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button(action: { gh.refresh() }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.clockwise")
+                                    Text("Refresh")
+                                }
+                                .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                                .foregroundColor(Color(hex: palette.primary.hex))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color(hex: palette.primaryContainer.hex))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+
+                            if gh.isSignedIn {
+                                Button(action: { gh.signOut() }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                                        Text("Sign Out")
+                                    }
+                                    .font(ThemeStore.shared.font(size: 10, weight: .semibold))
+                                    .foregroundColor(Color(hex: palette.error.hex))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color(hex: palette.surfaceVariant.hex))
+                                    .cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        if !gh.isSignedIn {
+                            HStack(spacing: 8) {
+                                SecureField("Paste GitHub token (ghp_... / github_pat_...)", text: $tokenInput)
+                                    .font(ThemeStore.shared.font(size: 10, weight: .medium, design: .monospaced))
+                                    .textFieldStyle(.plain)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(Color(hex: palette.surfaceContainerLow.hex))
+                                    .cornerRadius(6)
+
+                                Button(action: {
+                                    Task { await gh.signInWithToken(tokenInput) }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        if gh.isAuthenticating {
+                                            ProgressView()
+                                                .scaleEffect(0.6)
+                                                .frame(width: 10, height: 10)
+                                        } else {
+                                            Image(systemName: "lock.open.fill")
+                                        }
+                                        Text(gh.isAuthenticating ? "Signing In..." : "Sign In")
+                                    }
+                                    .font(ThemeStore.shared.font(size: 10, weight: .bold))
+                                    .foregroundColor(Color(hex: palette.onPrimary.hex))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color(hex: palette.primary.hex))
+                                    .cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(gh.isAuthenticating || tokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+
+                            if let authError = gh.authError {
+                                HStack(alignment: .top, spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(ThemeStore.shared.font(size: 10, weight: .bold))
+                                        .foregroundColor(Color(hex: palette.error.hex))
+                                    Text(authError)
+                                        .font(ThemeStore.shared.font(size: 9, weight: .medium))
+                                        .foregroundColor(Color(hex: palette.error.hex))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .padding(6)
+                                .background(Color(hex: palette.error.hex).opacity(0.1))
+                                .cornerRadius(6)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return VStack(spacing: 12) {
         SettingsCard(icon: "puzzlepiece.extension.fill", title: "Plugin Manager & Registry", palette: palette) {
             // v0.9.6: local plugin runtime actions
             HStack(spacing: 8) {
@@ -4189,6 +4349,9 @@ public struct SettingsView: View {
                 }
                 .padding(.top, 4)
             }
+        }
+
+            GitHubAccountCard(palette: palette)
         }
     }
 

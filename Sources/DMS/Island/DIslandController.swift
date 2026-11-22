@@ -61,6 +61,11 @@ public final class DIslandController: ObservableObject {
     @Published public var osdPayload: (icon: String, label: String, progress: Double?)? = nil
     @Published public var toastPayload: (title: String, body: String, level: String)? = nil
 
+    /// DankDrop shelf contents (Phase 6 file-drop target).
+    @Published public private(set) var dropStore: DankDropStore = DankDropStore()
+    /// True while a drag hovers the island, i.e. the island is an active drop target.
+    @Published public var isDropTargeted: Bool = false
+
     public private(set) var panel: ShellPanel?
     private var hostingView: NSHostingView<DIslandView>?
 
@@ -165,7 +170,7 @@ public final class DIslandController: ObservableObject {
 
     public func open(activity: IslandActivity) {
         let s = settings
-        guard s.enabledActivities.contains(activity.rawValue) || activity == .home || activity == .osd || activity == .notification || activity == .controlCenter || activity == .dash else {
+        guard s.enabledActivities.contains(activity.rawValue) || activity == .home || activity == .osd || activity == .notification || activity == .controlCenter || activity == .dash || activity == .fileDrop || activity == .timer else {
             return
         }
         autoDismissTask?.cancel()
@@ -195,6 +200,48 @@ public final class DIslandController: ObservableObject {
         stateMachine.triggerNotification(at: Date())
         syncStateAndAnimate()
         scheduleAutoDismiss(afterSeconds: 5.05)
+    }
+
+    // MARK: - DankDrop Shelf & Pomodoro Live Activity (Phase 6)
+
+    /// Called by the island's `.onDrop(isTargeted:)` binding while a drag hovers/leaves the island.
+    /// When targeted, the island morphs into the expanded DankDrop shelf to accept the drop.
+    public func setDropTargeted(_ targeted: Bool) {
+        guard isDropTargeted != targeted else { return }
+        isDropTargeted = targeted
+        stateMachine.isFileDropTargeted = targeted
+        if targeted {
+            stateMachine.expand(to: .fileDrop)
+        } else if presentationState.activity == .fileDrop {
+            stateMachine.collapse()
+        }
+        syncStateAndAnimate()
+    }
+
+    public func addDroppedFileURL(_ url: URL) {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let fileSizeBytes = (attrs?[.size] as? NSNumber)?.int64Value
+        dropStore.addFile(url: url, fileSizeBytes: fileSizeBytes)
+        stateMachine.hasDroppedFiles = true
+        syncStateAndAnimate()
+    }
+
+    public func addDroppedText(_ text: String) {
+        dropStore.addText(text)
+        stateMachine.hasDroppedFiles = !dropStore.items.isEmpty
+        syncStateAndAnimate()
+    }
+
+    public func removeDroppedItem(id: UUID) {
+        dropStore.remove(id: id)
+        stateMachine.hasDroppedFiles = !dropStore.items.isEmpty
+        syncStateAndAnimate()
+    }
+
+    public func clearDroppedItems() {
+        dropStore.clear()
+        stateMachine.hasDroppedFiles = false
+        syncStateAndAnimate()
     }
 
     public func setHovered(_ hovering: Bool) {
@@ -265,7 +312,9 @@ public final class DIslandController: ObservableObject {
         }
 
         let enabledSet = Set(s.enabledActivities.compactMap { IslandActivity(rawValue: $0) })
-        var modules = enabledSet.union([.home])
+        // DankDrop and the Pomodoro live activity are always available (like .home):
+        // a drag onto the island must work even when the user never enabled a tab for them.
+        var modules = enabledSet.union([.home, .fileDrop, .timer])
         if enabledSet.contains(.dash) { modules.insert(.dash) }
         if enabledSet.contains(.controlCenter) { modules.insert(.controlCenter) }
         stateMachine.enabledModules = modules
@@ -524,6 +573,18 @@ public final class DIslandController: ObservableObject {
                 guard let self = self else { return }
                 let enabled = self.settings.enabledActivities.contains(IslandActivity.media.rawValue)
                 self.stateMachine.isMediaPlaying = isPlaying && enabled
+                self.syncStateAndAnimate()
+            }
+            .store(in: &cancellables)
+
+        // Pomodoro live activity: mirror the running flag into the island priority state
+        // machine so a running timer morphs the island into .compactTimer (and back on pause).
+        PomodoroService.shared.$isRunning
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isRunning in
+                guard let self = self else { return }
+                self.stateMachine.isTimerRunning = isRunning
                 self.syncStateAndAnimate()
             }
             .store(in: &cancellables)

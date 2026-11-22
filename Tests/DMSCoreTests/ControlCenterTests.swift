@@ -456,11 +456,11 @@ struct ControlCenterTests {
     @Test("Grid Catalog Widgets Completeness")
     func testGridCatalogWidgetsCompleteness() {
         let catalog = ControlCenterUtils.gridCatalogWidgets
-        #expect(catalog.count == 14)
+        #expect(catalog.count == 15)
         let expectedIds: Set<String> = [
             "wifi", "bluetooth", "audioOutput", "audioInput", "battery", "diskUsage",
             "colorPicker", "idleInhibitor", "doNotDisturb", "nightMode", "darkMode",
-            "theme", "media", "quickTiles"
+            "theme", "media", "quickTiles", "vpn"
         ]
         #expect(Set(catalog.map { $0.id }) == expectedIds)
         for widget in catalog {

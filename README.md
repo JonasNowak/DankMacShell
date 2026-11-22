@@ -36,7 +36,7 @@ DankMacShell (DMS) is a native macOS shell written in Swift. It is highly inspir
 
 It runs on **stock macOS** on its own. If you use the tiling window manager [OmniWM](https://github.com/OmniNull/OmniWM), DMS integrates with it for tiling, workspaces, and border sync, but OmniWM is optional, never required (without it, DMS falls back to native SkyLight spaces).
 
-> **v0.9.1**: hardened pre-1.0 release with macOS 14+ support, locked-down IPC/URL scheme security, full native widget/service wiring, and the `media-bridge.swift` 100%-CPU hotfix. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
+> **v0.9.7**: native macOS WidgetKit widgets (`DMSWidgets.appex`), Dynamic Island DankDrop file shelf & Pomodoro live activity, GitHub Sign-In & Notifications popout, Control Center Tailscale/VPN detail page, Vorssaint-style driverless Per-App Audio Mixer (`0%–200%` boost & per-app routing), live plugin runtimes, 32-target theme sync, custom/Nerd Fonts everywhere, upgraded DLauncherV2, Caps Lock Guard, and a 5-step onboarding wizard. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
 
 <p align="center">
   <img src="assets/demo.gif" width="1100" alt="DankMacShell demo — launcher, DankDash and dynamic wallpaper theming">
@@ -105,7 +105,7 @@ One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`d
 
 ### ⬇️ 3. Download the DMG (reduced experience)
 
-- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.9.1.dmg`)
+- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.9.7.dmg`)
 - [ ] Open the DMG and drag **DankMacShell** into `/Applications`
 - [ ] First launch: the DMG is not signed/notarized — right-click the app and choose **Open**, or run `xattr -cr /Applications/DankMacShell.app`, then grant Accessibility & Input Monitoring when prompted
 
@@ -437,7 +437,7 @@ and is always writable, regardless of which emulator targets are managed.
 
 ## 🗺️ Roadmap
 
-Status: **v0.9.1**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: `media-bridge.swift` stdin loop 100%-CPU fix (v0.9.1); security & IPC hardening, idle-CPU/leak fixes, macOS 14+ alignment, Privacy/VPN/Sounds/DesktopWidgets/UpdateCheck wiring, and Swift 6 `DMSCore` readiness (v0.9.0); customizable Control Center tile grid + Homebrew/Nix packaging (v0.8.2); OmniWM margin auto-adjust (v0.8.1); M3 Expressive theming via `MaterialMacLibrary` + Rust theme engine (v0.8).
+Status: **v0.9.7**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: Vorssaint-style CoreAudio Process Tap Per-App Audio Mixer (`0%–200%` boost & output routing), Dynamic Island DankDrop shelf & Pomodoro live activity, Keychain GitHub Sign-In & notifications popout, and Control Center Tailscale/VPN detail page (v0.9.7); native macOS WidgetKit extension + real Pomodoro/Tailscale/GitHub/local plugins, custom & Nerd Fonts everywhere, upgraded DLauncherV2, Caps Lock Guard, 5-step onboarding wizard, live multi-bar settings, and 32-target theme sync (v0.9.2–v0.9.6); `media-bridge.swift` stdin loop 100%-CPU fix (v0.9.1).
 
 - Next up: To be announced soon.
 - Originally I wanted to ship basic DMS parity, but the original plan was completed with v0.7. 
@@ -460,6 +460,17 @@ DankMacShell bundles a standalone, crash-isolated companion — `dms-symbian` (i
 > The SymbianOS plugin is a work in progress, I want to port the full symbian suite from Windows XP.
 
 <a id="contributing"></a>
+
+## 💡 Inspirations & Acknowledgements
+
+DankMacShell stands on the shoulders of several great open-source and macOS projects:
+
+- [**DankMaterialShell**](https://github.com/AvengeMedia/DankMaterialShell) — primary inspiration for DankBar, DLauncherV2, DankDash, Control Center, dynamic Material You theming, and CLI/IPC architecture. *(Not affiliated with or endorsed by AvengeMedia.)*
+- [**Vorssaint**](https://github.com/vorssaint/vorssaint-utils) ([vorssaint.com](https://vorssaint.com)) & [**FineTune**](https://github.com/ronitsingh10/FineTune) — inspiration for the driverless macOS 14.2+ CoreAudio Process Tap per-app volume mixer (`0%–200%` boost, per-app output routing, and app pinning).
+- [**OmniWM**](https://github.com/OmniNull/OmniWM) — optional macOS tiling window manager integration for workspaces, tiling layouts, and live border gradient sync.
+- [**Boring.Notch**](https://github.com/TheBoredTeam/boring.notch) & [**Alcove**](https://tryalcove.com/) — inspiration for the MacBook notch Dynamic Island interactions and the DankDrop drag-and-drop file shelf.
+- [**Raycast**](https://www.raycast.com/) — inspiration for DLauncherV2's dynamic natural-language currency/unit/timezone converter, `!bang` web search, and quick-action UX.
+- [**matugen**](https://github.com/InioX/matugen) — Material Design 3 wallpaper color extraction and template-driven theme generation concepts behind `dank-theme-engine`.
 
 ## 🤝 Contributing
 

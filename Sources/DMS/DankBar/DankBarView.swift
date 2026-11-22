@@ -1786,16 +1786,24 @@ private struct PluginBarWidgetsStrip: View {
     }
 
     private var githubPill: some View {
-        Button(action: { gh.openNotifications() }) {
+        Button(action: { GitHubNotificationsPopoutController.shared.toggle(from: nil) }) {
             HStack(spacing: 4) {
-                Image(systemName: gh.unreadCount > 0 ? "bell.badge.fill" : "bell.fill")
+                let icon = gh.isSignedIn ? (gh.unreadCount > 0 ? "bell.badge.fill" : "bell.fill") : "lock.fill"
+                Image(systemName: icon)
                     .font(theme.font(size: 11, weight: .medium))
-                    .foregroundColor(gh.unreadCount > 0 ? theme.primary : theme.onSurfaceVariant)
+                    .foregroundColor(gh.isSignedIn && gh.unreadCount > 0 ? theme.primary : theme.onSurfaceVariant)
                 if !isVertical {
-                    Text("\(gh.unreadCount)")
-                        .font(theme.font(size: 11, weight: .semibold, mono: true))
-                        .foregroundColor(theme.onSurface)
-                        .lineLimit(1)
+                    if gh.isSignedIn {
+                        Text("\(gh.unreadCount)")
+                            .font(theme.font(size: 11, weight: .semibold, mono: true))
+                            .foregroundColor(theme.onSurface)
+                            .lineLimit(1)
+                    } else {
+                        Text("Sign in")
+                            .font(theme.font(size: 11, weight: .semibold))
+                            .foregroundColor(theme.onSurfaceVariant)
+                            .lineLimit(1)
+                    }
                 }
             }
             .padding(.horizontal, isVertical ? 0 : 8)
@@ -1804,11 +1812,16 @@ private struct PluginBarWidgetsStrip: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+        .background(GitHubPillAnchorReader().frame(width: 0, height: 0))
         .contextMenu {
             Button("Open GitHub Notifications") { gh.openNotifications() }
             Button("Refresh") { gh.refresh() }
+            if gh.isSignedIn {
+                Button("Mark All Read") { gh.markAllAsRead() }
+                Button("Sign Out") { gh.signOut() }
+            }
         }
-        .help("GitHub Notifications — \(gh.unreadCount) unread")
+        .help(gh.isSignedIn ? "GitHub Notifications — \(gh.unreadCount) unread" : "GitHub Notifications — Sign in")
     }
 
     private func pluginWidgetPill(id: String, output: DMSPluginWidgetOutput) -> some View {

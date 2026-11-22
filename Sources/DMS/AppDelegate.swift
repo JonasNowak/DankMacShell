@@ -193,6 +193,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
+        AppAudioMixerService.shared.stopAllTaps()
         MediaKeyInterceptor.shared.stop()
         SystemOSDManager.resumeOSDUIHelperForTermination()
         WorkspaceService.shared.stopOmniWMSubscription()

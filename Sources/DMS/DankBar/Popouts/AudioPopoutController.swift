@@ -44,8 +44,8 @@ public final class AudioPopoutController: ObservableObject, PopoutController {
             panel = nil
         }
 
-        let bodyWidth: CGFloat = 255
-        let bodyHeight: CGFloat = 348
+        let bodyWidth: CGFloat = 320
+        let bodyHeight: CGFloat = 440
 
         let rect = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
@@ -134,7 +134,7 @@ public struct AudioPopoutView: View {
     }
 
     public var body: some View {
-        PopoutSurfaceContainer(bodyWidth: 255, bodyHeight: 348, ownerPanel: ownerPanel) {
+        PopoutSurfaceContainer(bodyWidth: 320, bodyHeight: 440, ownerPanel: ownerPanel) {
             VStack(spacing: 0) {
                 // Header
                 HStack(spacing: 8) {

@@ -46,7 +46,7 @@ public enum CcMetrics: Sendable {
             return detailHeightBrightness
         }
         switch section {
-        case "wifi", "network", "bluetooth", "battery", "builtin_vpn", "builtin_tailscale",
+        case "wifi", "network", "bluetooth", "battery", "vpn", "tailscale", "builtin_vpn", "builtin_tailscale",
              "audioOutput", "audioInput", "diskUsage", "runningApps":
             return detailHeightList
         default:

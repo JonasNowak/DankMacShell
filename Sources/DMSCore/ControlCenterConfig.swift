@@ -251,6 +251,7 @@ public enum ControlCenterUtils: Sendable {
         ControlCenterWidgetConfig(id: "theme", col: 0, row: 5, w: 2, h: 1),
         ControlCenterWidgetConfig(id: "media", col: 0, row: 6, w: 4, h: 1),
         ControlCenterWidgetConfig(id: "quickTiles", col: 0, row: 7, w: 8, h: 1),
+        ControlCenterWidgetConfig(id: "vpn", col: 0, row: 7, w: 4, h: 1),
         ControlCenterWidgetConfig(id: "volumeSlider", col: 0, row: 8, w: 4, h: 1),
         ControlCenterWidgetConfig(id: "brightnessSlider", col: 4, row: 8, w: 4, h: 1),
         ControlCenterWidgetConfig(id: "lock", col: 5, row: 0, w: 1, h: 1, small: true),
@@ -274,7 +275,8 @@ public enum ControlCenterUtils: Sendable {
         ControlCenterWidgetConfig(id: "darkMode", col: 0, row: 10, w: 2, h: 1),
         ControlCenterWidgetConfig(id: "theme", col: 0, row: 11, w: 2, h: 1),
         ControlCenterWidgetConfig(id: "media", col: 0, row: 12, w: 4, h: 1),
-        ControlCenterWidgetConfig(id: "quickTiles", col: 0, row: 13, w: 8, h: 1)
+        ControlCenterWidgetConfig(id: "quickTiles", col: 0, row: 13, w: 8, h: 1),
+        ControlCenterWidgetConfig(id: "vpn", col: 0, row: 7, w: 4, h: 1)
     ]
 
     /// Canonical 8 hardware tiles in the 2-column grid matching cc.png 1:1.
@@ -339,6 +341,7 @@ public enum ControlCenterUtils: Sendable {
         case "darkMode": return "Dark Mode"
         case "theme": return "Theme"
         case "media": return "Now Playing"
+        case "vpn": return "VPN & Tailscale"
         case "quickTiles": return "Quick Actions"
         case "volumeSlider": return "Volume Slider"
         case "brightnessSlider": return "Brightness Slider"
@@ -366,6 +369,7 @@ public enum ControlCenterUtils: Sendable {
         case "darkMode": return "Switch light & dark appearance"
         case "theme": return "Cycle Material 3 palettes"
         case "media": return "Active media playback controls"
+        case "vpn": return "Tailscale mesh, exit node & system VPN"
         case "quickTiles": return "Compact toggles bundle"
         case "volumeSlider": return "Full-width master volume slider"
         case "brightnessSlider": return "Full-width screen brightness slider"
@@ -391,6 +395,7 @@ public enum ControlCenterUtils: Sendable {
         case "darkMode": return "moon"
         case "theme": return "circle.lefthalf.filled"
         case "media": return "play.circle.fill"
+        case "vpn": return "network.badge.shield.half.filled"
         case "quickTiles": return "square.grid.2x2.fill"
         case "volumeSlider": return "speaker.wave.3.fill"
         case "brightnessSlider": return "sun.max"
@@ -405,7 +410,7 @@ public enum ControlCenterUtils: Sendable {
 
     public static func category(for id: String) -> String {
         switch id {
-        case "wifi", "bluetooth": return "Connectivity"
+        case "wifi", "bluetooth", "vpn": return "Connectivity"
         case "audioOutput", "audioInput", "volumeSlider", "brightnessSlider", "media": return "Audio & Display"
         case "battery", "diskUsage": return "System"
         case "colorPicker", "idleInhibitor", "doNotDisturb", "quickTiles": return "Utilities"

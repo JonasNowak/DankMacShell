@@ -12,6 +12,7 @@ public enum ControlCenterPage: Equatable {
     case battery
     case doNotDisturb
     case idleInhibitor
+    case vpn
 }
 
 /// Control Center master dashboard implementing dynamic 2D grid bin-packing (`GridPackingSolver`),
@@ -28,6 +29,8 @@ public struct ControlCenterView: View {
     @ObservedObject private var inhibit = IdleInhibitService.shared
     @ObservedObject private var dnd = DoNotDisturbService.shared
     @ObservedObject private var nowPlaying = NowPlayingService.shared
+    @ObservedObject private var tailscale = TailscaleService.shared
+    @ObservedObject private var vpn = VPNService.shared
     private let nightShift = NightShiftService.shared
 
     @State private var navigationStack: [ControlCenterPage] = [.root]
@@ -689,6 +692,25 @@ public struct ControlCenterView: View {
                 onDetailTap: { pushPage(.doNotDisturb) }
             )
 
+        case "vpn":
+            ControlCenterTile(
+                icon: "network.badge.shield.half.filled",
+                title: vpnTileTitle,
+                subtitle: widget.w > 1 ? vpnTileSubtitle : "",
+                isActive: tailscale.isConnected || vpn.isConnected,
+                hasDetail: widget.w > 1,
+                isPillIcon: true,
+                tileWidthCols: widget.w,
+                onTap: {
+                    if tailscale.isInstalled {
+                        tailscale.toggleConnection()
+                    } else {
+                        pushPage(.vpn)
+                    }
+                },
+                onDetailTap: { pushPage(.vpn) }
+            )
+
         case "quickTiles":
             QuickTilesGroup(cols: widget.w)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -747,6 +769,27 @@ public struct ControlCenterView: View {
                 onTap: {}
             )
         }
+    }
+
+    // MARK: - VPN Tile Helpers
+    private var vpnTileTitle: String {
+        if tailscale.isConnected {
+            return tailscale.exitNodeActive ? "Exit Node" : "Tailscale"
+        }
+        if vpn.isConnected {
+            return "VPN"
+        }
+        return "VPN & Tailscale"
+    }
+
+    private var vpnTileSubtitle: String {
+        if !tailscale.tailnetName.isEmpty {
+            return tailscale.tailnetName
+        }
+        if let iface = vpn.activeInterface {
+            return iface
+        }
+        return "Off"
     }
 
     // MARK: - User Header Card with 12 Geometric Avatar Shapes
@@ -1127,6 +1170,7 @@ public struct ControlCenterView: View {
         case .battery: return "battery"
         case .doNotDisturb: return "doNotDisturb"
         case .idleInhibitor: return "idleInhibitor"
+        case .vpn: return "vpn"
         case .root: return ""
         }
     }
@@ -1182,6 +1226,14 @@ public struct ControlCenterView: View {
                 onClose: { ControlCenterController.shared.hide(); popToRoot() }
             ) {
                 IdleInhibitorDetailPage()
+            }
+        case .vpn:
+            CcDetailPage(
+                title: "VPN & Tailscale",
+                onBack: { popPage() },
+                onClose: { ControlCenterController.shared.hide(); popToRoot() }
+            ) {
+                VPNDetailPage()
             }
         case .root:
             EmptyView()
