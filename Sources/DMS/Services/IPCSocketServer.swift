@@ -67,6 +67,9 @@ public final class SocketConnection: @unchecked Sendable {
         let fd = _fd
         _fd = -1
         if fd >= 0 {
+            // shutdown() first so a peer blocked in read/write unblocks immediately,
+            // then close() releases the FD exactly once.
+            Darwin.shutdown(fd, SHUT_RDWR)
             Darwin.close(fd)
         }
         return fd
@@ -172,7 +175,10 @@ public final class IPCSocketServer: @unchecked Sendable {
         guard isRunning else { return }
         isRunning = false
         if serverFD >= 0 {
-            close(serverFD)
+            // shutdown() unblocks a pending accept() immediately on macOS (it then
+            // fails with EINVAL/EBADF) instead of waiting for the next client.
+            Darwin.shutdown(serverFD, SHUT_RDWR)
+            Darwin.close(serverFD)
             serverFD = -1
         }
         removeStaleSocket(at: socketURL.path)
@@ -196,6 +202,7 @@ public final class IPCSocketServer: @unchecked Sendable {
     }
 
     private func acceptLoop() {
+        var backoff = CappedBackoffPolicy.ipcAccept
         while isRunning && serverFD >= 0 {
             var clientAddr = sockaddr_un()
             var clientLen = socklen_t(MemoryLayout<sockaddr_un>.size)
@@ -207,9 +214,22 @@ public final class IPCSocketServer: @unchecked Sendable {
             }
 
             guard clientFD >= 0 else {
-                if !isRunning { break }
+                let acceptErrno = errno
+                // stop() shuts down + closes the listening FD, so accept() then fails
+                // with EBADF/EINVAL — break cleanly instead of spinning.
+                if !isRunning || acceptErrno == EBADF || acceptErrno == EINVAL {
+                    break
+                }
+                if acceptErrno == EINTR {
+                    continue
+                }
+                // Transient failure (EMFILE/ENFILE/...): sleep with a capped backoff so
+                // the loop can never spin at 100% CPU while the FD table is exhausted.
+                Thread.sleep(forTimeInterval: backoff.nextDelay())
                 continue
             }
+
+            backoff.reset()
 
             // Set SO_NOSIGPIPE so client write errors return -1/EPIPE instead of raising SIGPIPE
             var val: Int32 = 1
@@ -256,7 +276,16 @@ public final class IPCSocketServer: @unchecked Sendable {
             } else if errno == EINTR {
                 continue
             } else if errno == EAGAIN || errno == EWOULDBLOCK {
-                // Non-blocking subscriber socket: wait for readability or hangup instead of spinning.
+                // SO_RCVTIMEO expiry on an idle request/response client: when the connection
+                // is neither kept open nor subscribed to any stream, break immediately instead
+                // of polling forever (fixes the idle connection slot leak).
+                if !keepOpen && !EventSubscriptionBroker.shared.isSubscribed(connection) {
+                    break
+                }
+                if connection.isClosed {
+                    break
+                }
+                // Long-lived subscriber socket: wait for readability or hangup instead of spinning.
                 var pfd = pollfd(fd: clientFD, events: Int16(POLLIN | POLLHUP | POLLERR), revents: 0)
                 let pollRes = poll(&pfd, 1, 1000)
                 if pollRes > 0 && (pfd.revents & Int16(POLLHUP | POLLERR)) != 0 {
@@ -264,7 +293,7 @@ public final class IPCSocketServer: @unchecked Sendable {
                 }
                 continue
             } else {
-                break // includes SO_RCVTIMEO expiry on idle request/response clients
+                break // unrecoverable read error
             }
 
             // Process full newline-delimited lines

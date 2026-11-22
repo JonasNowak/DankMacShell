@@ -5,9 +5,9 @@ import Foundation
 @Suite("DMSVersion Tests")
 struct DMSVersionTests {
 
-    @Test("Current version is 0.9.7")
+    @Test("Current version is 0.9.8")
     func testCurrentVersion() {
-        #expect(DMSVersion.current == "0.9.7")
+        #expect(DMSVersion.current == "0.9.8")
     }
 
     @Test("Display version is non-empty")

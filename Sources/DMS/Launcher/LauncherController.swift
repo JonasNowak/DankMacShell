@@ -16,6 +16,11 @@ public final class LauncherController {
     /// v0.7 CLI: the in-flight `dms dmenu` request whose result must be delivered on dismiss.
     private var activeDMenuRequestID: String?
 
+    /// Phase 7 Shard 3: hot-plug observer token for `didChangeScreenParametersNotification`.
+    private var screenParametersObserver: NSObjectProtocol?
+    /// Attachment mode used by the current presentation, reused when re-anchoring on hot-plug.
+    private var activeAttachmentMode: LauncherAttachmentMode = .center
+
     private init() {
         panel = ShellPanel(
             contentRect: .zero,
@@ -34,6 +39,68 @@ public final class LauncherController {
         let host = NSHostingView(rootView: rootView)
         panel.contentView = host
         self.hostingView = host
+
+        observeScreenParameters()
+    }
+
+    deinit {
+        if let screenParametersObserver {
+            NotificationCenter.default.removeObserver(screenParametersObserver)
+        }
+    }
+
+    // MARK: - Phase 7 Shard 3: Multi-Monitor Anchoring & Hot-Plug
+
+    /// Screen under the pointer, falling back to the main screen then any screen.
+    private func activeScreen() -> NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
+    /// The panel's current screen when still connected, else the active pointer screen.
+    private func survivingScreen(for panel: NSPanel?) -> NSScreen? {
+        if let screen = panel?.screen, NSScreen.screens.contains(screen) {
+            return screen
+        }
+        return activeScreen()
+    }
+
+    /// Clamps a frame fully inside `bounds`, shrinking it when larger than the screen.
+    private func clampedFrame(_ frame: NSRect, in bounds: NSRect) -> NSRect {
+        let width = min(frame.width, bounds.width)
+        let height = min(frame.height, bounds.height)
+        let x = min(max(frame.minX, bounds.minX), bounds.maxX - width)
+        let y = min(max(frame.minY, bounds.minY), bounds.maxY - height)
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func observeScreenParameters() {
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleScreenParametersChanged()
+            }
+        }
+    }
+
+    /// Hot-plug / resolution change: re-anchor the visible panel onto the surviving screen
+    /// without closing it or losing state.
+    private func handleScreenParametersChanged() {
+        guard isVisible, panel.isVisible else { return }
+        guard let targetScreen = survivingScreen(for: panel) else { return }
+        let notch = targetScreen.extractNotchGeometry()
+        let solved = LauncherPlacementSolver.solve(
+            screenFrame: targetScreen.frame,
+            visibleFrame: targetScreen.visibleFrame,
+            notch: notch,
+            mode: activeAttachmentMode,
+            panelWidth: panel.frame.width,
+            panelHeight: panel.frame.height
+        )
+        panel.setFrame(clampedFrame(solved, in: targetScreen.visibleFrame), display: true)
     }
 
     public func toggle() {
@@ -81,14 +148,13 @@ public final class LauncherController {
         let frame = panel.frame
         let newWidth: CGFloat = show ? 900 : 680
         guard frame.width != newWidth else { return }
-        panel.setFrame(
-            NSRect(x: frame.midX - newWidth / 2, y: frame.minY, width: newWidth, height: frame.height),
-            display: true
-        )
+        let resized = NSRect(x: frame.midX - newWidth / 2, y: frame.minY, width: newWidth, height: frame.height)
+        let bounds = panel.screen?.visibleFrame ?? activeScreen()?.visibleFrame
+        panel.setFrame(bounds.map { clampedFrame(resized, in: $0) } ?? resized, display: true)
     }
 
     private func present(_ makeView: () -> LauncherView) {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        guard let screen = activeScreen() else { return }
         if ConfigStore.shared.config.disableCapsLock {
             CapsLockGuardService.shared.clearHardwareCapsLock()
         }
@@ -105,11 +171,12 @@ public final class LauncherController {
         // v0.6 LAUNCH: "island" attachment anchors the launcher directly below the
         // Dynamic Island / notch (top-center below the menu bar on notchless displays).
         let mode = LauncherAttachmentMode.parse(ConfigStore.shared.config.launcherAttachment)
+        activeAttachmentMode = mode
         if mode == .island {
             DIslandController.shared.collapse()
         }
         let notch = screen.extractNotchGeometry()
-        let frame = LauncherPlacementSolver.solve(
+        let solved = LauncherPlacementSolver.solve(
             screenFrame: screen.frame,
             visibleFrame: screen.visibleFrame,
             notch: notch,
@@ -117,6 +184,8 @@ public final class LauncherController {
             panelWidth: width,
             panelHeight: height
         )
+        // Never open partially off-screen on asymmetrical multi-monitor setups.
+        let frame = clampedFrame(solved, in: screen.visibleFrame)
         panel.setFrame(frame, display: true)
 
         let rootView = makeView()

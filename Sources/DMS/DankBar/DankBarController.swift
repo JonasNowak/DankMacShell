@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import CoreGraphics
 import DMSCore
 
 /// Multi-instance DankBar layout engine and window manager.
@@ -10,9 +11,12 @@ import DMSCore
 public final class DankBarController {
     public static let shared = DankBarController()
 
+    // Panel state is keyed by BarPanelKey.rawKey ("<displayID>|<position>|<configID>"),
+    // where displayID is the stable CGDirectDisplayID — never the volatile
+    // NSScreen.screens array index, which changes on monitor reorder/hot-plug/wake.
     public private(set) var panels: [String: ShellPanel] = [:]
     private var hostingViews: [String: NSHostingView<DankBarView>] = [:]
-    public private(set) var screenNotchGeometries: [Int: ScreenNotchGeometry] = [:]
+    public private(set) var screenNotchGeometries: [CGDirectDisplayID: ScreenNotchGeometry] = [:]
     public private(set) var isVisible = true
     private var autoHideRevealed: [String: Bool] = [:]
     private var hoverTasks: [String: Task<Void, Never>] = [:]
@@ -20,7 +24,7 @@ public final class DankBarController {
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Smart Auto-Hide State (Ported from Tralphium)
-    public private(set) var fullscreenScreens: Set<Int> = []
+    public private(set) var fullscreenScreens: Set<CGDirectDisplayID> = []
     public private(set) var obstructedBarKeys: Set<String> = []
     private var fullscreenTimer: Timer?
     private var fullscreenCheckTasks: [Task<Void, Never>] = []
@@ -30,7 +34,12 @@ public final class DankBarController {
     public static let verticalBarWidth: CGFloat = 54
 
     public var panel: ShellPanel {
-        // Primary panel for backward compatibility with existing single-panel consumers
+        // Primary panel for backward compatibility with existing single-panel consumers.
+        // Prefer the bar on the main display (stable CGDirectDisplayID), then any panel.
+        let mainDisplayID = CGMainDisplayID()
+        if let primary = panels.first(where: { BarPanelKey(rawKey: $0.key)?.displayID == mainDisplayID })?.value {
+            return primary
+        }
         if let primary = panels.values.first {
             return primary
         }
@@ -52,23 +61,25 @@ public final class DankBarController {
         scheduleFullscreenChecks()
     }
 
-    /// Exact bar-config lookup for a panel key of the form "<screenIndex>_<barConfig.id>_<position>".
-    /// Avoids substring collisions where one config id is a prefix of another.
+    /// Exact bar-config lookup for a panel key (see `BarPanelKey.rawKey`).
+    /// Parses the key structurally, so config ids that are prefixes of one another
+    /// (or contain underscores/special characters) can never collide.
     private func barConfig(forKey key: String, configs: [BarConfig]) -> BarConfig? {
-        guard let firstUnderscore = key.firstIndex(of: "_") else { return nil }
-        let rest = key[key.index(after: firstUnderscore)...]
-        guard let lastUnderscore = rest.lastIndex(of: "_") else { return nil }
-        let id = String(rest[..<lastUnderscore])
-        return configs.first(where: { $0.id == id })
+        guard let configID = BarPanelKey(rawKey: key)?.configID else { return nil }
+        return configs.first(where: { $0.id == configID })
     }
 
     /// Active bar configs for a screen. When the user pinned bars to specific screens
     /// (explicit screenPreferences without "all"), screens matching no config get NO bar.
-    private func activeBarConfigs(for screenIndex: Int, screenName: String, configs: [BarConfig]) -> [BarConfig] {
+    /// A config with empty screenPreferences defaults to the primary display —
+    /// `screen.isPrimaryDisplay` (stable CGDirectDisplayID comparison), falling back
+    /// to array index 0 when the display id cannot be determined.
+    private func activeBarConfigs(for screen: NSScreen, screenIndex: Int, screenName: String, configs: [BarConfig]) -> [BarConfig] {
+        let isPrimary = screen.isPrimaryDisplay || screenIndex == 0
         let matching = configs.filter { config in
             config.screenPreferences.contains("all") ||
             config.screenPreferences.contains(screenName) ||
-            (config.screenPreferences.isEmpty && screenIndex == 0)
+            (config.screenPreferences.isEmpty && isPrimary)
         }
         if !matching.isEmpty { return matching }
         let anyExplicit = configs.contains { !$0.screenPreferences.isEmpty && !$0.screenPreferences.contains("all") }
@@ -79,8 +90,8 @@ public final class DankBarController {
         isVisible = true
         let configs = ConfigStore.shared.config.barConfigs
         for (key, panel) in panels {
-            let screenIndex = Int(key.split(separator: "_").first ?? "") ?? 0
-            let isScreenFS = fullscreenScreens.contains(screenIndex)
+            let displayID = BarPanelKey(rawKey: key)?.displayID ?? 0
+            let isScreenFS = fullscreenScreens.contains(displayID)
             let isObstructed = obstructedBarKeys.contains(key) || isScreenFS
             let barConfig = barConfig(forKey: key, configs: configs) ?? .default
             if (barConfig.smartAutoHide && isObstructed) || isScreenFS {
@@ -111,10 +122,10 @@ public final class DankBarController {
 
         for (screenIndex, screen) in screens.enumerated() {
             let screenName = screen.localizedName
-            let activeConfigs = activeBarConfigs(for: screenIndex, screenName: screenName, configs: configs)
+            let activeConfigs = activeBarConfigs(for: screen, screenIndex: screenIndex, screenName: screenName, configs: configs)
 
             for barConfig in activeConfigs {
-                let key = "\(screenIndex)_\(barConfig.id)_\(barConfig.position)"
+                let key = BarPanelKey(displayID: screen.displayID, configID: barConfig.id, position: barConfig.position).rawKey
                 activeKeys.insert(key)
 
                 if barConfig.autoHide {
@@ -122,7 +133,7 @@ public final class DankBarController {
                 }
 
                 let notch = screen.extractNotchGeometry(barConfig: barConfig)
-                screenNotchGeometries[screenIndex] = notch
+                screenNotchGeometries[screen.displayID] = notch
 
                 let baseThickness = CGFloat(barConfig.thickness > 0 ? barConfig.thickness : (barConfig.isVertical ? 54 : 48))
                 let isTopNotched = (barConfig.position.lowercased() == "top" && notch.hasNotch && barConfig.adaptToNotch)
@@ -210,7 +221,7 @@ public final class DankBarController {
                     hostingViews[key] = host
                 }
 
-                let isScreenFS = fullscreenScreens.contains(screenIndex)
+                let isScreenFS = fullscreenScreens.contains(screen.displayID)
                 let isObstructed = obstructedBarKeys.contains(key) || isScreenFS
                 if (barConfig.smartAutoHide && isObstructed) || isScreenFS {
                     panel.orderOut(nil)
@@ -245,8 +256,16 @@ public final class DankBarController {
 
     // MARK: - Smart Auto-Hide & Fullscreen Detection (Spec 19 / Ported from Tralphium)
 
+    public func isScreenFullscreen(displayID: CGDirectDisplayID) -> Bool {
+        fullscreenScreens.contains(displayID)
+    }
+
+    /// Compatibility helper for callers still holding a volatile `NSScreen.screens`
+    /// array index: resolves the index to the screen's stable display id first.
     public func isScreenFullscreen(index: Int) -> Bool {
-        fullscreenScreens.contains(index)
+        let screens = NSScreen.screens
+        guard index >= 0, index < screens.count else { return false }
+        return fullscreenScreens.contains(screens[index].displayID)
     }
 
     public var isAppFullscreen: Bool {
@@ -320,7 +339,7 @@ public final class DankBarController {
         let screens = NSScreen.screens
         guard !screens.isEmpty else { return }
 
-        var newFullscreenScreens = Set<Int>()
+        var newFullscreenScreens = Set<CGDirectDisplayID>()
         var newObstructedBarKeys = Set<String>()
 
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
@@ -370,8 +389,9 @@ public final class DankBarController {
             let screenVisH = Double(screen.visibleFrame.height)
 
             // Native fullscreen presentation options only apply to the screen that actually
-            // hosts the fullscreen window (the main screen) — never to every other monitor.
-            var isFS = (screen === NSScreen.main) && NSApp.currentSystemPresentationOptions.contains(.fullScreen)
+            // hosts the fullscreen window (the main screen, compared by stable display id)
+            // — never to every other monitor.
+            var isFS = screen.isPrimaryDisplay && NSApp.currentSystemPresentationOptions.contains(.fullScreen)
             if !isFS {
                 for win in windowList {
                     guard let layer = win[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
@@ -415,15 +435,15 @@ public final class DankBarController {
             }
 
             if isFS {
-                newFullscreenScreens.insert(screenIndex)
+                newFullscreenScreens.insert(screen.displayID)
             }
 
             // Per-bar obstruction evaluation for active configs on this screen
             let screenName = screen.localizedName
-            let activeConfigs = activeBarConfigs(for: screenIndex, screenName: screenName, configs: configs)
+            let activeConfigs = activeBarConfigs(for: screen, screenIndex: screenIndex, screenName: screenName, configs: configs)
 
             for barConfig in activeConfigs {
-                let key = "\(screenIndex)_\(barConfig.id)_\(barConfig.position)"
+                let key = BarPanelKey(displayID: screen.displayID, configID: barConfig.id, position: barConfig.position).rawKey
                 if isFS {
                     newObstructedBarKeys.insert(key)
                     continue
@@ -654,15 +674,15 @@ public final class DankBarController {
         // revealed bar instead of leaving it stuck open forever.
         for (screenIndex, screen) in screens.enumerated() {
             let screenName = screen.localizedName
-            let activeConfigs = activeBarConfigs(for: screenIndex, screenName: screenName, configs: configs)
+            let activeConfigs = activeBarConfigs(for: screen, screenIndex: screenIndex, screenName: screenName, configs: configs)
 
             for barConfig in activeConfigs where barConfig.autoHide {
-                let isScreenFS = fullscreenScreens.contains(screenIndex)
+                let isScreenFS = fullscreenScreens.contains(screen.displayID)
                 if barConfig.smartAutoHide && isScreenFS {
                     continue
                 }
 
-                let key = "\(screenIndex)_\(barConfig.id)_\(barConfig.position)"
+                let key = BarPanelKey(displayID: screen.displayID, configID: barConfig.id, position: barConfig.position).rawKey
                 let thickness = CGFloat(barConfig.thickness > 0 ? barConfig.thickness : (barConfig.isVertical ? 54 : 48))
                 let triggerBand: CGFloat = (autoHideRevealed[key] ?? false) ? (thickness + 20) : 6.0
                 let sf = screen.frame
@@ -717,9 +737,29 @@ public final class DankBarController {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                // Prune notch geometries for disconnected monitors.
-                let screenCount = NSScreen.screens.count
-                self.screenNotchGeometries = self.screenNotchGeometries.filter { $0.key < screenCount }
+                // Prune all per-display state for disconnected monitors. Everything is
+                // keyed by stable CGDirectDisplayID, so anything whose display id is no
+                // longer connected is stale: notch geometries, fullscreen flags,
+                // obstruction keys, hover tasks, and orphaned panels.
+                let connectedIDs = Set(NSScreen.screens.map(\.displayID))
+                func isConnected(_ key: String) -> Bool {
+                    guard let displayID = BarPanelKey(rawKey: key)?.displayID else { return false }
+                    return connectedIDs.contains(displayID)
+                }
+                self.screenNotchGeometries = self.screenNotchGeometries.filter { connectedIDs.contains($0.key) }
+                self.fullscreenScreens = self.fullscreenScreens.filter { connectedIDs.contains($0) }
+                self.obstructedBarKeys = self.obstructedBarKeys.filter(isConnected)
+                for key in self.hoverTasks.keys.filter({ !isConnected($0) }) {
+                    self.hoverTasks[key]?.cancel()
+                    self.hoverTasks.removeValue(forKey: key)
+                }
+                let stalePanelKeys = self.panels.keys.filter { !isConnected($0) }
+                for key in stalePanelKeys {
+                    self.panels[key]?.orderOut(nil)
+                    self.panels.removeValue(forKey: key)
+                    self.hostingViews.removeValue(forKey: key)
+                    self.autoHideRevealed.removeValue(forKey: key)
+                }
                 self.scheduleFullscreenChecks()
                 self.reposition()
             }

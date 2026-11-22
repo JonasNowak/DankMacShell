@@ -350,7 +350,12 @@ public final class MediaKeyInterceptor {
         if let tap = sessionTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             if let src = sessionSource {
+                // The source was added to BOTH .commonModes and .defaultMode, so it must be
+                // removed from both — otherwise it stays scheduled in .defaultMode and keeps
+                // the runloop (and the invalidated mach port) alive.
                 CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes)
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .defaultMode)
+                CFRunLoopSourceInvalidate(src)
                 sessionSource = nil
             }
             CFMachPortInvalidate(tap)
@@ -361,6 +366,8 @@ public final class MediaKeyInterceptor {
             CGEvent.tapEnable(tap: tap, enable: false)
             if let src = hidSource {
                 CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes)
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .defaultMode)
+                CFRunLoopSourceInvalidate(src)
                 hidSource = nil
             }
             CFMachPortInvalidate(tap)

@@ -1,7 +1,7 @@
 import Foundation
 
 public enum DMSVersion: Sendable {
-    public static let current = "0.9.7"
+    public static let current = "0.9.8"
 
     public static var displayVersion: String {
         if let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,

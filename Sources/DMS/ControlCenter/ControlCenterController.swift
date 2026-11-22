@@ -39,6 +39,9 @@ public final class ControlCenterController {
     /// exit-animation completion can never order out a freshly re-shown panel.
     private var animationGeneration: UInt64 = 0
 
+    /// Phase 7 Shard 3: hot-plug observer token for `didChangeScreenParametersNotification`.
+    private var screenParametersObserver: NSObjectProtocol?
+
     private init() {
         panel = ShellPanel(
             contentRect: .zero,
@@ -47,6 +50,59 @@ public final class ControlCenterController {
             defer: false
         )
         panel.onEscape = { [weak self] in self?.hide() }
+
+        observeScreenParameters()
+    }
+
+    deinit {
+        if let screenParametersObserver {
+            NotificationCenter.default.removeObserver(screenParametersObserver)
+        }
+    }
+
+    // MARK: - Phase 7 Shard 3: Multi-Monitor Anchoring & Hot-Plug
+
+    /// Screen under the pointer, falling back to the main screen then any screen.
+    private func activeScreen() -> NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
+    /// The panel's current screen when still connected, else the active pointer screen.
+    private func survivingScreen(for panel: NSPanel?) -> NSScreen? {
+        if let screen = panel?.screen, NSScreen.screens.contains(screen) {
+            return screen
+        }
+        return activeScreen()
+    }
+
+    /// Clamps a frame fully inside `bounds`, shrinking it when larger than the screen.
+    private func clampedFrame(_ frame: NSRect, in bounds: NSRect) -> NSRect {
+        let width = min(frame.width, bounds.width)
+        let height = min(frame.height, bounds.height)
+        let x = min(max(frame.minX, bounds.minX), bounds.maxX - width)
+        let y = min(max(frame.minY, bounds.minY), bounds.maxY - height)
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func observeScreenParameters() {
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleScreenParametersChanged()
+            }
+        }
+    }
+
+    /// Hot-plug / resolution change: re-anchor the visible panel onto the surviving screen
+    /// without closing it or losing state.
+    private func handleScreenParametersChanged() {
+        guard isVisible, panel.isVisible else { return }
+        guard let targetScreen = survivingScreen(for: panel) else { return }
+        reposition(on: targetScreen)
     }
 
     public func toggle(fromBar: Bool = false) {
@@ -65,19 +121,19 @@ public final class ControlCenterController {
         ProcessListController.shared.hide()
         PopoutCoordinator.shared.dismissAll()
 
-        let mouseLoc = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
-        guard let targetScreen = screen else { return }
+        guard let targetScreen = activeScreen() else { return }
 
         let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
         let bodyWidth: CGFloat = columns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
         currentSheetHeight = Self.preferredSheetHeight()
-        let targetFrame = PopoutLayoutHelper.frame(
+        let solved = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
             bodyHeight: currentSheetHeight,
             screen: targetScreen,
             isControlCenter: true
         )
+        // Never open partially off-screen on asymmetrical multi-monitor setups.
+        let targetFrame = clampedFrame(solved, in: targetScreen.visibleFrame)
 
         panel.setFrame(targetFrame, display: false)
         // Fresh-mount ControlCenterView so entrance scaling & state reset cleanly
@@ -137,12 +193,13 @@ public final class ControlCenterController {
     public func reposition(on screen: NSScreen) {
         let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
         let bodyWidth: CGFloat = columns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
-        let frame = PopoutLayoutHelper.frame(
+        let solved = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
             bodyHeight: currentSheetHeight,
             screen: screen,
             isControlCenter: true
         )
+        let frame = clampedFrame(solved, in: screen.visibleFrame)
         panel.setFrame(frame, display: true)
     }
 
@@ -156,12 +213,13 @@ public final class ControlCenterController {
         guard let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
         let columns = CcMetrics.clampColumns(ConfigStore.shared.config.controlCenterColumns)
         let bodyWidth: CGFloat = columns == CcMetrics.defaultColumns ? CcMetrics.defaultSheetWidth : CcMetrics.sheetWidthFor(columns: columns)
-        let frame = PopoutLayoutHelper.frame(
+        let solved = PopoutLayoutHelper.frame(
             bodyWidth: bodyWidth,
             bodyHeight: newHeight,
             screen: screen,
             isControlCenter: true
         )
+        let frame = clampedFrame(solved, in: screen.visibleFrame)
         panel.setFrame(frame, display: true, animate: true)
     }
 

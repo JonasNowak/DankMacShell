@@ -750,6 +750,10 @@ final class MediaRemoteBridge: @unchecked Sendable {
     private var buffer = ""
     private var isTerminated = false
     private var lastReport: Date?
+    /// Spawn/restart backoff for the bridge child (capped at 30s, healthy after 30s uptime).
+    private var backoff = CappedBackoffPolicy.mediaBridge
+    /// When the current child process was started, for healthy-reset accounting.
+    private var lastStartDate: Date?
     private let onTrack: @Sendable (NowPlayingTrack?) -> Void
 
     init(onTrack: @escaping @Sendable (NowPlayingTrack?) -> Void) {
@@ -805,14 +809,22 @@ final class MediaRemoteBridge: @unchecked Sendable {
 
         task.terminationHandler = { [weak self] _ in
             guard let self = self else { return }
-            let shouldRestart = self.lock.withLock { () -> Bool in
+            // Clear the readability handler before releasing the process so no late
+            // callback fires on the dead pipe.
+            outHandle.readabilityHandler = nil
+            let restartDelay = self.lock.withLock { () -> TimeInterval? in
                 self.process = nil
-                return !self.isTerminated
-            }
-            if shouldRestart {
-                DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                    self?.start()
+                guard !self.isTerminated else { return nil }
+                if let start = self.lastStartDate {
+                    // A bridge that stayed up >= 30s was healthy: reset the backoff.
+                    self.backoff.resetIfHealthy(uptime: Date().timeIntervalSince(start))
                 }
+                self.lastStartDate = nil
+                return self.backoff.nextDelay()
+            }
+            guard let delay = restartDelay else { return }
+            DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.start()
             }
         }
 
@@ -822,9 +834,27 @@ final class MediaRemoteBridge: @unchecked Sendable {
                 self.process = task
                 self.inPipe = inP
                 self.outPipe = outP
+                self.lastStartDate = Date()
             }
         } catch {
-            // Process start failed
+            // Spawn failure: clean up pipes/readabilityHandler and schedule a backoff
+            // retry (previously a spawn failure was never retried).
+            outHandle.readabilityHandler = nil
+            try? inP.fileHandleForWriting.close()
+            try? outP.fileHandleForReading.close()
+            let retryDelay = lock.withLock { () -> TimeInterval? in
+                self.process = nil
+                self.inPipe = nil
+                self.outPipe = nil
+                self.lastStartDate = nil
+                guard !self.isTerminated else { return nil }
+                return self.backoff.nextDelay()
+            }
+            if let delay = retryDelay {
+                DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.start()
+                }
+            }
         }
     }
 
@@ -841,6 +871,7 @@ final class MediaRemoteBridge: @unchecked Sendable {
         var proc: Process?
         lock.withLock {
             isTerminated = true
+            // Clear the readability handler cleanly before terminating the process.
             outPipe?.fileHandleForReading.readabilityHandler = nil
             try? inPipe?.fileHandleForWriting.close()
             try? outPipe?.fileHandleForReading.close()
@@ -848,6 +879,7 @@ final class MediaRemoteBridge: @unchecked Sendable {
             process = nil
             inPipe = nil
             outPipe = nil
+            lastStartDate = nil
         }
         if let proc = proc, proc.isRunning {
             proc.terminate()

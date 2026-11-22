@@ -13,6 +13,9 @@ public final class OSDController {
     private var flagsMonitor: Any?
     private var lastCapsLockState: Bool = false
 
+    /// Phase 7 Shard 3: hot-plug observer token for `didChangeScreenParametersNotification`.
+    private var screenParametersObserver: NSObjectProtocol?
+
     private init() {
         panel = ShellPanel(
             contentRect: .zero,
@@ -25,6 +28,66 @@ public final class OSDController {
         lastCapsLockState = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
 
         setupListeners()
+        observeScreenParameters()
+    }
+
+    deinit {
+        if let screenParametersObserver {
+            NotificationCenter.default.removeObserver(screenParametersObserver)
+        }
+    }
+
+    // MARK: - Phase 7 Shard 3: Multi-Monitor Anchoring & Hot-Plug
+
+    /// Screen under the pointer, falling back to the main screen then any screen.
+    private func activeScreen() -> NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
+    /// The panel's current screen when still connected, else the active pointer screen.
+    private func survivingScreen(for panel: NSPanel?) -> NSScreen? {
+        if let screen = panel?.screen, NSScreen.screens.contains(screen) {
+            return screen
+        }
+        return activeScreen()
+    }
+
+    /// Clamps a frame fully inside `bounds`, shrinking it when larger than the screen.
+    private func clampedFrame(_ frame: NSRect, in bounds: NSRect) -> NSRect {
+        let width = min(frame.width, bounds.width)
+        let height = min(frame.height, bounds.height)
+        let x = min(max(frame.minX, bounds.minX), bounds.maxX - width)
+        let y = min(max(frame.minY, bounds.minY), bounds.maxY - height)
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func observeScreenParameters() {
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleScreenParametersChanged()
+            }
+        }
+    }
+
+    /// Hot-plug / resolution change: keep the visible OSD pill on the surviving screen
+    /// without restarting its auto-hide timer.
+    private func handleScreenParametersChanged() {
+        guard panel.isVisible else { return }
+        guard let targetScreen = survivingScreen(for: panel) else { return }
+        let w = panel.frame.width
+        let h = panel.frame.height
+        let raw = NSRect(
+            x: targetScreen.frame.minX + (targetScreen.frame.width - w) * 0.5,
+            y: targetScreen.frame.maxY - h - 24,
+            width: w,
+            height: h
+        )
+        panel.setFrame(clampedFrame(raw, in: targetScreen.visibleFrame), display: true)
     }
 
     private func setupListeners() {
@@ -110,17 +173,19 @@ public final class OSDController {
 
     /// Floating fallback OSD pill used when the Dynamic Island is off or OSD is not whitelisted.
     private func presentFallbackOSD(type: OSDType, value: Double?, isMuted: Bool, text: String?) {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        guard let screen = activeScreen() else { return }
         let host = NSHostingView(rootView: OSDView(type: type, value: value, isMuted: isMuted, text: text))
         let fitted = host.fittingSize
         let w = max(260, fitted.width)
         let h = max(44, fitted.height)
-        let frame = NSRect(
+        let raw = NSRect(
             x: screen.frame.minX + (screen.frame.width - w) * 0.5,
             y: screen.frame.maxY - h - 24,
             width: w,
             height: h
         )
+        // Never open partially off-screen on asymmetrical multi-monitor setups.
+        let frame = clampedFrame(raw, in: screen.visibleFrame)
         panel.contentView = host
         panel.setFrame(frame, display: true)
         panel.orderFront(nil)
