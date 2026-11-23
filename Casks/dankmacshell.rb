@@ -2,8 +2,8 @@
 # frozen_string_literal: true
 
 cask "dankmacshell" do
-  version "0.9.8"
-  sha256 "9aefb48e6055496b45641850b1a16a370eed62a9d026ab5d9a9acb034b6def6b"
+  version "0.9.9"
+  sha256 "51eed026912630c84aa6b75f435e83ed04820ae5c571aa7911f56a91fc6469ff"
 
   url "https://github.com/JonasNowak/DankMacShell/releases/download/v#{version}/DankMacShell-#{version}.dmg"
   name "DankMacShell"
