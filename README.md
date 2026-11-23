@@ -36,7 +36,7 @@ DankMacShell (DMS) is a native macOS shell written in Swift. It is highly inspir
 
 It runs on **stock macOS** on its own. If you use the tiling window manager [OmniWM](https://github.com/OmniNull/OmniWM), DMS integrates with it for tiling, workspaces, and border sync, but OmniWM is optional, never required (without it, DMS falls back to native SkyLight spaces).
 
-> **v0.9.8**: multi-monitor `CGDirectDisplayID` stability & pointer-screen panel anchoring, hardened IPC/MediaRemoteBridge subsystems, interactive Keybinds Hub (inline recording, conflict detection, OmniWM import), Vorssaint-style driverless Per-App Audio Mixer (`0%–200%` boost & routing), Dynamic Island DankDrop & Pomodoro live activity, GitHub Sign-In & Notifications popout, Control Center Tailscale/VPN page, native WidgetKit widgets, and 32-target theme sync. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
+> **v0.9.9**: pre-1.0.0 feature-complete release — first-class plugin DankBar widgets with dedicated Pomodoro & Tailscale M3 popouts, comprehensive `dms doctor --json` diagnostics, declarative Nix Home Manager `settings` & guarded tool includes, optional CI Developer ID notarization, multi-monitor `CGDirectDisplayID` stability, Vorssaint-style driverless Per-App Audio Mixer, Dynamic Island DankDrop, GitHub Sign-In popout, native WidgetKit widgets, and 32-target theme sync. Track problems in [Issues](https://github.com/JonasNowak/DankMacShell/issues).
 
 <p align="center">
   <img src="assets/demo.gif" width="1100" alt="DankMacShell demo — launcher, DankDash and dynamic wallpaper theming">
@@ -105,7 +105,7 @@ One flake input installs `DankMacShell.app`, `dms`, `dms-symbian`, `dms-gop` (`d
 
 ### ⬇️ 3. Download the DMG (reduced experience)
 
-- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.9.8.dmg`)
+- [ ] Download the latest DMG from [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases/latest) (currently `DankMacShell-0.9.9.dmg`)
 - [ ] Open the DMG and drag **DankMacShell** into `/Applications`
 - [ ] First launch: the DMG is not signed/notarized — right-click the app and choose **Open**, or run `xattr -cr /Applications/DankMacShell.app`, then grant Accessibility & Input Monitoring when prompted
 
@@ -437,7 +437,7 @@ and is always writable, regardless of which emulator targets are managed.
 
 ## 🗺️ Roadmap
 
-Status: **v0.9.8**, MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: `CGDirectDisplayID` multi-monitor bar stability, pointer-screen anchoring & hot-plug repositioning, IPC/MediaRemoteBridge hardening, and Interactive Keybinds Hub with OmniWM import (v0.9.8); Vorssaint-style CoreAudio Process Tap Per-App Audio Mixer, Dynamic Island DankDrop & Pomodoro live activity, Keychain GitHub Sign-In & notifications popout, and Control Center Tailscale/VPN page (v0.9.7); native WidgetKit extension, real plugins, custom/Nerd Fonts, DLauncherV2 upgrades, Caps Lock Guard, onboarding wizard, and 32-target theme sync (v0.9.2–v0.9.6).
+Status: **v0.9.9** (pre-1.0.0 stabilization), MIT-licensed, CI-built DMG releases on [GitHub Releases](https://github.com/JonasNowak/DankMacShell/releases) with detailed changelogs. Recently shipped: first-class plugin DankBar widgets + Pomodoro/Tailscale popouts, expanded `dms doctor --json`, declarative Nix Home Manager settings & guarded includes, and optional CI notarization (v0.9.9); `CGDirectDisplayID` multi-monitor stability, IPC/MediaRemoteBridge hardening, and Interactive Keybinds Hub (v0.9.8); Vorssaint-style Per-App Audio Mixer, Dynamic Island DankDrop, Keychain GitHub Sign-In, and Tailscale/VPN page (v0.9.7); native WidgetKit extension, real plugins, custom/Nerd Fonts, DLauncherV2 upgrades, Caps Lock Guard, onboarding wizard, and 32-target theme sync (v0.9.2–v0.9.6).
 
 - Next up: To be announced soon.
 - Originally I wanted to ship basic DMS parity, but the original plan was completed with v0.7. 

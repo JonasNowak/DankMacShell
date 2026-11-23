@@ -10,6 +10,7 @@ public struct AddWidgetModal: View {
     public let onClose: () -> Void
 
     @ObservedObject private var theme = ThemeStore.shared
+    @ObservedObject private var pluginService = PluginService.shared
     @State private var searchQuery: String = ""
 
     public init(
@@ -24,12 +25,31 @@ public struct AddWidgetModal: View {
         self.onClose = onClose
     }
 
+    /// Built-in catalog plus one dynamic entry per installed local bar-widget plugin
+    /// (id `"plugin:<pluginID>"`) that is not already covered by the catalog.
+    private var allWidgets: [BarWidgetMeta] {
+        var combined = SettingsWidgetCatalog.all
+        let known = Set(combined.map { $0.id })
+        for plugin in pluginService.plugins where plugin.type == .barWidget && plugin.isInstalled {
+            let widgetID = SettingsWidgetCatalog.barWidgetID(forPluginID: plugin.id)
+            if !known.contains(widgetID) {
+                combined.append(BarWidgetMeta(
+                    id: widgetID,
+                    name: plugin.name,
+                    description: plugin.description,
+                    icon: plugin.icon
+                ))
+            }
+        }
+        return combined
+    }
+
     private var filteredWidgets: [BarWidgetMeta] {
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if trimmed.isEmpty {
-            return SettingsWidgetCatalog.all
+            return allWidgets
         }
-        return SettingsWidgetCatalog.all.filter { meta in
+        return allWidgets.filter { meta in
             meta.name.lowercased().contains(trimmed) ||
             meta.description.lowercased().contains(trimmed) ||
             meta.id.lowercased().contains(trimmed)
@@ -104,6 +124,16 @@ public struct AddWidgetModal: View {
                             }
 
                             Spacer()
+
+                            if SettingsWidgetCatalog.pluginID(forBarWidgetID: meta.id) != nil {
+                                Text("PLUGIN")
+                                    .font(ThemeStore.shared.font(size: 8, weight: .bold))
+                                    .foregroundColor(Color(hex: palette.primary.hex))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Color(hex: palette.primaryContainer.hex))
+                                    .clipShape(Capsule())
+                            }
 
                             Button(action: {
                                 onAdd(meta.id)

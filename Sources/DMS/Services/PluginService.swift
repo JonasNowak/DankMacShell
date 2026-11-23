@@ -12,6 +12,11 @@ public final class PluginService: ObservableObject {
 
     private let fileManager = FileManager.default
 
+    /// UserDefaults key tracking plugin ids whose bar widget was already migrated into
+    /// the bar layout (v0.9.9). A plugin in this set is never auto re-added on relaunch,
+    /// so a widget the user deliberately removed from Settings -> DankBar stays removed.
+    private static let migratedPluginBarWidgetsKey = "dms.migratedPluginBarWidgets"
+
     /// Hot-reload subscription: re-runs applet/plugin lifecycles when an external config
     /// reload changes `enabledPlugins` or any `show*` flag (v0.9.3).
     private var configCancellable: AnyCancellable?
@@ -65,6 +70,13 @@ public final class PluginService: ObservableObject {
         parts.append("showClipboardApplet=\(cfg.showClipboardApplet)")
         parts.append("showColorPickerApplet=\(cfg.showColorPickerApplet)")
         parts.append("showSymbianApplet=\(cfg.showSymbianApplet)")
+        // Plugin-backed bar widgets present in any bar layout also drive lifecycles
+        // (a plugin widget added to the bar runs its backing service even if the
+        // plugin toggle is off).
+        let barWidgetPlugins = cfg.barConfigs
+            .flatMap { [$0.layout.left, $0.layout.center, $0.layout.right].flatMap { $0 } }
+            .compactMap { SettingsWidgetCatalog.pluginID(forBarWidgetID: $0.widgetId) }
+        parts.append("barWidgetPlugins=\(barWidgetPlugins.sorted().joined(separator: ","))")
         return parts.joined(separator: "|")
     }
 
@@ -96,6 +108,14 @@ public final class PluginService: ObservableObject {
 
         self.plugins = catalog
         updatePluginLifecycles(enabledIDs: Set(catalog.filter { $0.isInstalled && $0.isEnabled }.map { $0.id }))
+
+        // First-time migration (v0.9.9): surface every enabled bar-widget plugin as a
+        // first-class bar widget in the primary bar's right section. Plugins already
+        // recorded in the migrated set are skipped, so a widget the user explicitly
+        // removed from their bar layout is not forcibly re-added on relaunch.
+        for plugin in catalog where plugin.isInstalled && plugin.isEnabled && plugin.type == .barWidget {
+            ensureBarWidgetForPlugin(plugin.id, explicitToggle: false)
+        }
     }
 
     public func reloadPlugins() {
@@ -211,6 +231,9 @@ public final class PluginService: ObservableObject {
         plugins[idx].isEnabled = true
         saveLockfile()
         syncConfig()
+        if plugins[idx].type == .barWidget {
+            ensureBarWidgetForPlugin(id, explicitToggle: true)
+        }
         ToastCenter.shared.show(icon: "arrow.down.circle.fill", message: "Installed plugin: \(plugins[idx].name)")
         return true
     }
@@ -231,6 +254,67 @@ public final class PluginService: ObservableObject {
         plugins[idx].isEnabled.toggle()
         saveLockfile()
         syncConfig()
+        // Explicit toggle-on: make sure the plugin's bar widget is on the primary bar
+        // (re-added even if the user previously removed it, since they just re-enabled).
+        if plugins[idx].isEnabled && plugins[idx].type == .barWidget {
+            ensureBarWidgetForPlugin(id, explicitToggle: true)
+            DankBarController.shared.reposition()
+        }
+    }
+
+    // MARK: - Plugin bar-widget migration (v0.9.9)
+
+    private func migratedPluginBarWidgets() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: Self.migratedPluginBarWidgetsKey) ?? [])
+    }
+
+    private func markPluginBarWidgetMigrated(_ pluginID: String) {
+        var migrated = migratedPluginBarWidgets()
+        migrated.insert(pluginID)
+        UserDefaults.standard.set(Array(migrated).sorted(), forKey: Self.migratedPluginBarWidgetsKey)
+    }
+
+    /// Ensures the bar widget backing `pluginID` exists in the primary bar's right
+    /// section, unless it is already present in ANY section of ANY bar config.
+    /// `explicitToggle` is true when the user just enabled/installed the plugin (always
+    /// re-adds); on startup migration only never-migrated plugins are added, so a
+    /// widget the user deliberately removed from the bar is not forcibly re-added.
+    private func ensureBarWidgetForPlugin(_ pluginID: String, explicitToggle: Bool) {
+        if !explicitToggle && migratedPluginBarWidgets().contains(pluginID) { return }
+        let widgetID = SettingsWidgetCatalog.barWidgetID(forPluginID: pluginID)
+        ConfigStore.shared.update { cfg in
+            guard !cfg.barConfigs.isEmpty else { return }
+            let present = cfg.barConfigs.contains { bar in
+                bar.layout.left.contains(where: { $0.widgetId == widgetID }) ||
+                bar.layout.center.contains(where: { $0.widgetId == widgetID }) ||
+                bar.layout.right.contains(where: { $0.widgetId == widgetID })
+            }
+            if !present {
+                let primaryIdx = cfg.barConfigs.firstIndex(where: { $0.screenPreferences.contains("all") }) ?? 0
+                let meta = SettingsWidgetCatalog.meta(for: widgetID, plugins: self.plugins)
+                cfg.barConfigs[primaryIdx].layout.right.append(BarWidgetEntry(
+                    id: "\(widgetID)_\(UUID().uuidString.prefix(4))",
+                    widgetId: widgetID,
+                    enabled: true,
+                    options: meta?.defaultOptions ?? [:]
+                ))
+            }
+        }
+        markPluginBarWidgetMigrated(pluginID)
+    }
+
+    /// Plugin ids whose backing service must run: explicitly enabled plugins OR any
+    /// plugin whose bar widget is present in any bar config (v0.9.9 first-class widgets).
+    private func effectivePluginIDs(enabledIDs: Set<String>) -> Set<String> {
+        var ids = enabledIDs
+        for bar in ConfigStore.shared.config.barConfigs {
+            for entry in bar.layout.left + bar.layout.center + bar.layout.right {
+                if let pluginID = SettingsWidgetCatalog.pluginID(forBarWidgetID: entry.widgetId) {
+                    ids.insert(pluginID)
+                }
+            }
+        }
+        return ids
     }
 
     /// Persists the lockfile atomically with `0600` POSIX permissions.
@@ -299,20 +383,28 @@ public final class PluginService: ObservableObject {
             cfg.setSetting("showTailscaleStatus", value: AnyCodable(enabledIDs.contains("tailscale-status")))
         }
 
-        // Real plugin services: start/stop polling only while the plugin is enabled.
-        if enabledIDs.contains("tailscale-status") {
+        // Real plugin services: run while the plugin is enabled OR its bar widget is
+        // present in any bar config (v0.9.9 first-class plugin widgets).
+        let effectiveIDs = effectivePluginIDs(enabledIDs: enabledIDs)
+
+        if effectiveIDs.contains("tailscale-status") {
             TailscaleService.shared.start()
         } else {
             TailscaleService.shared.stop()
         }
 
-        if enabledIDs.contains("github-notifications") {
+        if effectiveIDs.contains("github-notifications") {
             GitHubNotificationsService.shared.start()
         } else {
             GitHubNotificationsService.shared.stop()
         }
 
+        if effectiveIDs.contains("pomodoro-timer") {
+            // Pomodoro has no polling loop; just refresh the desktop widget snapshot.
+            WidgetSnapshotService.shared.syncNow(forceReload: true)
+        }
+
         // Local plugin runtime: reconcile widget timers and active plugin lists.
-        PluginRuntimeService.shared.syncRunningPlugins(enabledIDs: enabledIDs)
+        PluginRuntimeService.shared.syncRunningPlugins(enabledIDs: effectiveIDs)
     }
 }

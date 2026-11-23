@@ -20,6 +20,11 @@ public struct DankBarView: View {
     @ObservedObject private var configStore = ConfigStore.shared
     @ObservedObject private var island = DIslandController.shared
     @ObservedObject private var updateCheckService = UpdateCheckService.shared
+    @ObservedObject private var pomodoro = PomodoroService.shared
+    @ObservedObject private var tailscale = TailscaleService.shared
+    @ObservedObject private var gh = GitHubNotificationsService.shared
+    @ObservedObject private var pluginRuntime = PluginRuntimeService.shared
+    @ObservedObject private var pluginService = PluginService.shared
 
     @State private var leftSectionSize: CGFloat = 200
     @State private var rightSectionSize: CGFloat = 300
@@ -624,12 +629,10 @@ public struct DankBarView: View {
 
         if isVertical {
             VStack(spacing: 2) {
-                PluginBarWidgetsStrip(isVertical: isVertical)
                 renderWidgets(entries: entries, roles: roles)
             }
         } else {
             HStack(spacing: 2) {
-                PluginBarWidgetsStrip(isVertical: isVertical)
                 renderWidgets(entries: entries, roles: roles)
             }
         }
@@ -654,6 +657,14 @@ public struct DankBarView: View {
             return !WorkspaceService.shared.currentWorkspaceApps.isEmpty
         case "privacyIndicator":
             return PrivacyIndicatorService.shared.isAnyActive
+        case "pomodoro", "plugin:pomodoro-timer",
+             "tailscale", "plugin:tailscale-status",
+             "githubNotifications", "plugin:github-notifications":
+            return true
+        case let id where id.hasPrefix("plugin:"):
+            let pluginID = String(id.dropFirst("plugin:".count))
+            let enabled = pluginService.plugins.contains { $0.id == pluginID && $0.isEnabled }
+            return enabled || pluginRuntime.widgetOutputs[pluginID] != nil
         default:
             return true
         }
@@ -748,6 +759,14 @@ public struct DankBarView: View {
             colorPickerButton(style: style)
         case "symbianApplet", "symbianButton", "symbian":
             SymbianBarWidget(isVertical: isVertical, options: options, style: style)
+        case "pomodoro", "plugin:pomodoro-timer":
+            pomodoroPill(style: style)
+        case "tailscale", "plugin:tailscale-status":
+            tailscalePill(style: style)
+        case "githubNotifications", "plugin:github-notifications":
+            githubPill(style: style)
+        case let id where id.hasPrefix("plugin:"):
+            pluginWidgetPill(pluginID: String(id.dropFirst("plugin:".count)), style: style)
         case "spacer":
             Spacer(minLength: CGFloat(options["width"]?.doubleValue ?? 12.0))
                 .frame(width: isVertical ? nil : CGFloat(options["width"]?.doubleValue ?? 12.0),
@@ -886,6 +905,146 @@ public struct DankBarView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    // MARK: - First-class plugin bar widgets (v0.9.9)
+
+    private func pomodoroPill(style: BarWidgetStyleOptions) -> some View {
+        let idle = !pomodoro.isRunning && pomodoro.remainingSeconds >= pomodoro.totalPhaseSeconds
+        let label = idle ? "Focus" : pomodoro.formattedRemaining
+        return Button {
+            PomodoroPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x)
+        } label: {
+            HStack(spacing: 4) {
+                if style.showIcon {
+                    Image(systemName: "timer")
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
+                        .foregroundColor(pomodoro.isRunning ? theme.onPrimaryContainer : resolveWidgetTint(style, defaultColor: theme.primary))
+                }
+                if !isVertical && style.showLabel && !style.compactMode {
+                    Text(label)
+                        .font(theme.font(size: 11, weight: .semibold, mono: true))
+                        .foregroundColor(pomodoro.isRunning ? theme.onPrimaryContainer : theme.onSurface)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
+            .frame(width: isVertical ? 28 : nil, height: 28)
+            .background(resolveWidgetBackground(style, defaultColor: pomodoro.isRunning ? theme.primaryContainer : theme.barWidgetBackground))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(pomodoro.isRunning ? "Pause" : "Start") { pomodoro.toggleStartPause() }
+            Button("Skip Phase") { pomodoro.skipPhase() }
+            Button("Reset") { pomodoro.reset() }
+            Divider()
+            Button("Open in Island") { DIslandController.shared.open(activity: .timer) }
+        }
+        .help("Pomodoro — \(pomodoro.phaseLabel) \(pomodoro.formattedRemaining)")
+    }
+
+    private func tailscalePill(style: BarWidgetStyleOptions) -> some View {
+        return Button {
+            TailscalePopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x)
+        } label: {
+            HStack(spacing: 4) {
+                if style.showIcon {
+                    Image(systemName: "network.badge.shield.half.filled")
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
+                        .foregroundColor(tailscale.isConnected ? resolveWidgetTint(style, defaultColor: theme.primary) : theme.onSurfaceVariant)
+                }
+                if !isVertical && style.showLabel && !style.compactMode {
+                    Text(tailscale.barLabel)
+                        .font(theme.font(size: 11, weight: .semibold))
+                        .foregroundColor(theme.onSurface)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
+            .frame(width: isVertical ? 28 : nil, height: 28)
+            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(tailscale.isConnected ? "Disconnect" : "Connect") { tailscale.toggleConnection() }
+            Button("Copy IP") { tailscale.copyIP() }
+            Button("Open Admin Console") { tailscale.openAdminConsole() }
+        }
+        .help(tailscale.isConnected ? "Tailscale Connected — \(tailscale.selfIP)" : "Tailscale Disconnected")
+    }
+
+    private func githubPill(style: BarWidgetStyleOptions) -> some View {
+        let icon = gh.isSignedIn ? (gh.unreadCount > 0 ? "bell.badge.fill" : "bell.fill") : "lock.fill"
+        return Button {
+            GitHubNotificationsPopoutController.shared.toggle(anchorX: NSEvent.mouseLocation.x)
+        } label: {
+            HStack(spacing: 4) {
+                if style.showIcon {
+                    Image(systemName: icon)
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
+                        .foregroundColor(gh.isSignedIn && gh.unreadCount > 0 ? resolveWidgetTint(style, defaultColor: theme.primary) : theme.onSurfaceVariant)
+                }
+                if !isVertical && style.showLabel && !style.compactMode {
+                    if gh.isSignedIn {
+                        Text("\(gh.unreadCount)")
+                            .font(theme.font(size: 11, weight: .semibold, mono: true))
+                            .foregroundColor(theme.onSurface)
+                            .lineLimit(1)
+                    } else {
+                        Text("Sign in")
+                            .font(theme.font(size: 11, weight: .semibold))
+                            .foregroundColor(theme.onSurfaceVariant)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
+            .frame(width: isVertical ? 28 : nil, height: 28)
+            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Refresh") { gh.refresh() }
+            if gh.isSignedIn {
+                Button("Mark All Read") { gh.markAllAsRead() }
+            }
+            Button("Open on Web") { gh.openNotifications() }
+        }
+        .help(gh.isSignedIn ? "GitHub Notifications — \(gh.unreadCount) unread" : "GitHub Notifications — Sign in")
+    }
+
+    private func pluginWidgetPill(pluginID: String, style: BarWidgetStyleOptions) -> some View {
+        let output = pluginRuntime.widgetOutputs[pluginID]
+        let manifest = pluginRuntime.manifests[pluginID]
+        let tint: Color = {
+            switch output?.color {
+            case "primary": return theme.primary
+            case "warning": return theme.warning
+            case "error": return theme.error
+            case "success": return theme.success
+            default: return resolveWidgetTint(style, defaultColor: theme.onSurface)
+            }
+        }()
+        return Button(action: { pluginRuntime.triggerClick(pluginID: pluginID) }) {
+            HStack(spacing: 4) {
+                if style.showIcon {
+                    Image(systemName: output?.icon ?? manifest?.icon ?? "puzzlepiece.extension")
+                        .font(ThemeStore.shared.font(size: 11, weight: .medium))
+                        .foregroundColor(tint)
+                }
+                if !isVertical && style.showLabel && !style.compactMode, let text = output?.text {
+                    Text(text)
+                        .font(theme.font(size: 11, weight: .semibold))
+                        .foregroundColor(theme.onSurface)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
+            .frame(width: isVertical ? 28 : nil, height: 28)
+            .background(resolveWidgetBackground(style, defaultColor: theme.barWidgetBackground))
+        }
+        .buttonStyle(.plain)
+        .help(output?.tooltip ?? manifest?.name ?? pluginID)
     }
 
     private func micPill(style: BarWidgetStyleOptions) -> some View {
@@ -1678,181 +1837,5 @@ private struct MonitorPillView: View {
         .padding(.horizontal, isVertical ? 0 : (style.paddingOverride.map { CGFloat($0) } ?? 8))
         .frame(width: isVertical ? 28 : nil, height: 28)
         .background(backgroundColor)
-    }
-}
-
-/// Live plugin pills rendered at the start of the right bar section (v0.9.6).
-/// Shows the built-in Pomodoro / Tailscale / GitHub pills when their plugin is enabled,
-/// plus one pill per active bar-widget plugin from `PluginRuntimeService`.
-private struct PluginBarWidgetsStrip: View {
-    let isVertical: Bool
-    @ObservedObject private var theme = ThemeStore.shared
-    @ObservedObject private var pluginService = PluginService.shared
-    @ObservedObject private var pomodoro = PomodoroService.shared
-    @ObservedObject private var tailscale = TailscaleService.shared
-    @ObservedObject private var gh = GitHubNotificationsService.shared
-    @ObservedObject private var runtime = PluginRuntimeService.shared
-
-    private func pluginEnabled(_ id: String) -> Bool {
-        pluginService.plugins.contains { $0.id == id && $0.isEnabled }
-    }
-
-    var body: some View {
-        Group {
-            if isVertical {
-                VStack(spacing: 2) { pills }
-            } else {
-                HStack(spacing: 2) { pills }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var pills: some View {
-        if pluginEnabled("pomodoro-timer") {
-            pomodoroPill
-        }
-        if pluginEnabled("tailscale-status") {
-            tailscalePill
-        }
-        if pluginEnabled("github-notifications") {
-            githubPill
-        }
-        ForEach(runtime.activeWidgetPluginIDs, id: \.self) { id in
-            if let output = runtime.widgetOutputs[id] {
-                pluginWidgetPill(id: id, output: output)
-            }
-        }
-    }
-
-    private var pomodoroPill: some View {
-        Button(action: { pomodoro.toggleStartPause() }) {
-            HStack(spacing: 4) {
-                Image(systemName: "timer")
-                    .font(theme.font(size: 11, weight: .medium))
-                    .foregroundColor(pomodoro.isRunning ? theme.onPrimaryContainer : theme.primary)
-                if !isVertical {
-                    Text("\(pomodoro.phaseLabel) \(pomodoro.formattedRemaining)")
-                        .font(theme.font(size: 11, weight: .semibold, mono: true))
-                        .foregroundColor(pomodoro.isRunning ? theme.onPrimaryContainer : theme.onSurface)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, isVertical ? 0 : 8)
-            .frame(width: isVertical ? 28 : nil, height: 28)
-            .background(pomodoro.isRunning ? theme.primaryContainer : theme.barWidgetBackground)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button("Start / Pause") { pomodoro.toggleStartPause() }
-            Button("Reset Timer") { pomodoro.reset() }
-            Button("Skip Phase") { pomodoro.skipPhase() }
-        }
-        .help("Pomodoro — \(pomodoro.phaseLabel) \(pomodoro.formattedRemaining)")
-    }
-
-    private var tailscalePill: some View {
-        Button(action: {
-            if tailscale.isConnected {
-                tailscale.copyIP()
-            } else {
-                tailscale.toggleConnection()
-            }
-        }) {
-            HStack(spacing: 4) {
-                Image(systemName: "shield.checkered")
-                    .font(theme.font(size: 11, weight: .medium))
-                    .foregroundColor(tailscale.isConnected ? theme.primary : theme.onSurfaceVariant)
-                if !isVertical {
-                    Text(tailscale.barLabel)
-                        .font(theme.font(size: 11, weight: .semibold))
-                        .foregroundColor(theme.onSurface)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, isVertical ? 0 : 8)
-            .frame(width: isVertical ? 28 : nil, height: 28)
-            .background(theme.barWidgetBackground)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button("Toggle Tailscale") { tailscale.toggleConnection() }
-            Button("Copy Tailscale IP") { tailscale.copyIP() }
-            Button("Refresh Status") { tailscale.refresh() }
-        }
-        .help(tailscale.isConnected ? "Tailscale Connected — \(tailscale.selfIP)" : "Tailscale Disconnected")
-    }
-
-    private var githubPill: some View {
-        Button(action: { GitHubNotificationsPopoutController.shared.toggle(from: nil) }) {
-            HStack(spacing: 4) {
-                let icon = gh.isSignedIn ? (gh.unreadCount > 0 ? "bell.badge.fill" : "bell.fill") : "lock.fill"
-                Image(systemName: icon)
-                    .font(theme.font(size: 11, weight: .medium))
-                    .foregroundColor(gh.isSignedIn && gh.unreadCount > 0 ? theme.primary : theme.onSurfaceVariant)
-                if !isVertical {
-                    if gh.isSignedIn {
-                        Text("\(gh.unreadCount)")
-                            .font(theme.font(size: 11, weight: .semibold, mono: true))
-                            .foregroundColor(theme.onSurface)
-                            .lineLimit(1)
-                    } else {
-                        Text("Sign in")
-                            .font(theme.font(size: 11, weight: .semibold))
-                            .foregroundColor(theme.onSurfaceVariant)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            .padding(.horizontal, isVertical ? 0 : 8)
-            .frame(width: isVertical ? 28 : nil, height: 28)
-            .background(theme.barWidgetBackground)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .background(GitHubPillAnchorReader().frame(width: 0, height: 0))
-        .contextMenu {
-            Button("Open GitHub Notifications") { gh.openNotifications() }
-            Button("Refresh") { gh.refresh() }
-            if gh.isSignedIn {
-                Button("Mark All Read") { gh.markAllAsRead() }
-                Button("Sign Out") { gh.signOut() }
-            }
-        }
-        .help(gh.isSignedIn ? "GitHub Notifications — \(gh.unreadCount) unread" : "GitHub Notifications — Sign in")
-    }
-
-    private func pluginWidgetPill(id: String, output: DMSPluginWidgetOutput) -> some View {
-        let manifest = runtime.manifests[id]
-        let tint: Color = {
-            switch output.color {
-            case "primary": return theme.primary
-            case "warning": return theme.warning
-            case "error": return theme.error
-            case "success": return theme.success
-            default: return theme.onSurface
-            }
-        }()
-        return Button(action: { runtime.triggerClick(pluginID: id) }) {
-            HStack(spacing: 4) {
-                Image(systemName: output.icon ?? manifest?.icon ?? "puzzlepiece.extension")
-                    .font(theme.font(size: 11, weight: .medium))
-                    .foregroundColor(tint)
-                if !isVertical {
-                    Text(output.text)
-                        .font(theme.font(size: 11, weight: .semibold))
-                        .foregroundColor(theme.onSurface)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, isVertical ? 0 : 8)
-            .frame(width: isVertical ? 28 : nil, height: 28)
-            .background(theme.barWidgetBackground)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .help(output.tooltip ?? manifest?.name ?? id)
     }
 }

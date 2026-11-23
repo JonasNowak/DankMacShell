@@ -1,5 +1,7 @@
 import Foundation
 import AppKit
+import ApplicationServices
+import CoreGraphics
 import DMSCore
 import EditLine
 import EditLine.readline
@@ -16,7 +18,7 @@ func printHelp() {
       dms stop                         Stop running DankMaterialShell
       dms restart                      Restart DankMaterialShell
       dms status                       Show running status of DMS daemon and socket
-      dms doctor                       Run diagnostics check on permissions and subsystems
+      dms doctor [--json] [--no-color] Run diagnostics on runtime, bundle, widgets, TCC permissions, tools, theme wiring
       dms permission                   Open Device Control and Data Access settings to enable full OSD swallowing
       dms setup-cert                   Create/trust persistent 'dms-cert' and re-sign DankMacShell.app for TCC persistence
       dms onboard                      Re-open the first-run onboarding flow (alias: onboarding)
@@ -651,6 +653,542 @@ func runShell() {
     _ = write_history(historyPath)
 }
 
+// MARK: - v0.9.9 `dms doctor` diagnostics
+
+/// Runs a subprocess, capturing stdout; stderr goes to the null device.
+/// Returns (exit status, stdout text); status -1 when the tool could not be launched.
+func runDoctorTool(_ exe: String, _ arguments: [String], timeout: TimeInterval = 15) -> (status: Int32, output: String) {
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: exe)
+    proc.arguments = arguments
+    let outPipe = Pipe()
+    proc.standardOutput = outPipe
+    proc.standardError = FileHandle.nullDevice
+    guard (try? proc.run()) != nil else { return (-1, "") }
+    let done = DispatchSemaphore(value: 0)
+    DispatchQueue.global(qos: .userInitiated).async {
+        proc.waitUntilExit()
+        done.signal()
+    }
+    if done.wait(timeout: .now() + timeout) == .timedOut {
+        proc.terminate()
+        _ = done.wait(timeout: .now() + 2)
+    }
+    let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+    return (proc.terminationStatus, String(data: data, encoding: .utf8) ?? "")
+}
+
+/// Resolves an executable by name over PATH plus the usual nix/homebrew/cargo bin dirs.
+func findExecutableOnPath(_ name: String) -> String? {
+    let fm = FileManager.default
+    var dirs: [String] = []
+    if let path = ProcessInfo.processInfo.environment["PATH"] {
+        dirs.append(contentsOf: path.split(separator: ":").map { String($0) })
+    }
+    let home = fm.homeDirectoryForCurrentUser.path
+    dirs.append(contentsOf: [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "\(home)/.nix-profile/bin",
+        "/etc/profiles/per-user/\(NSUserName())/bin",
+        "/run/current-system/sw/bin",
+        "\(home)/.local/bin",
+        "\(home)/.cargo/bin",
+        "/usr/bin",
+        "/bin"
+    ])
+    for dir in dirs where !dir.isEmpty {
+        let candidate = dir + "/" + name
+        var isDir: ObjCBool = false
+        if fm.fileExists(atPath: candidate, isDirectory: &isDir),
+           !isDir.boolValue,
+           fm.isExecutableFile(atPath: candidate) {
+            return candidate
+        }
+    }
+    return nil
+}
+
+/// `uname -m` machine architecture (e.g. "arm64").
+func currentMachineArchitecture() -> String {
+    var info = utsname()
+    guard uname(&info) == 0 else { return "unknown" }
+    return withUnsafePointer(to: &info.machine) {
+        $0.withMemoryRebound(to: CChar.self, capacity: 256) { String(cString: $0) }
+    }
+}
+
+/// Human-readable age like "42s ago", "3m ago", "2h ago", "5d ago".
+func humanizeAge(_ seconds: TimeInterval) -> String {
+    let s = max(0, Int(seconds))
+    if s < 60 { return "\(s)s ago" }
+    if s < 3600 { return "\(s / 60)m ago" }
+    if s < 86400 { return "\(s / 3600)h ago" }
+    return "\(s / 86400)d ago"
+}
+
+/// `dms doctor [--json] [--no-color]`: builds a live `DoctorReport` across runtime/IPC,
+/// app bundle & signing, WidgetKit extension, TCC permissions, companion tools, and
+/// theme sync wiring, then prints it and exits with the recommended exit code.
+func runDoctor(_ args: [String]) -> Never {
+    var jsonOutput = false
+    var noColor = false
+    for arg in args {
+        switch arg.lowercased() {
+        case "--json":
+            jsonOutput = true
+        case "--no-color", "--no-colour":
+            noColor = true
+        default:
+            writeStderr("dms doctor: unknown flag '\(arg)' (supported: --json, --no-color)")
+            exit(2)
+        }
+    }
+
+    let fm = FileManager.default
+    let home = fm.homeDirectoryForCurrentUser.path
+    let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.path ?? "\(home)/Library/Application Support"
+    let configHome = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"].flatMap { $0.isEmpty ? nil : ($0 as NSString).expandingTildeInPath } ?? "\(home)/.config"
+
+    var checks: [DoctorCheck] = []
+
+    // MARK: a) Runtime & IPC
+    let runtimeCategory = "Runtime & IPC"
+
+    let pids = dmsPIDs()
+    if pids.isEmpty {
+        checks.append(DoctorCheck(
+            id: "runtime.daemon",
+            category: runtimeCategory,
+            title: "DankMacShell daemon running",
+            status: .fail,
+            detail: "No DankMaterialShell/DankMacShell process found (pgrep).",
+            fixHint: "Start it with 'dms start' (alias: 'dms run')."
+        ))
+    } else {
+        checks.append(DoctorCheck(
+            id: "runtime.daemon",
+            category: runtimeCategory,
+            title: "DankMacShell daemon running",
+            status: .pass,
+            detail: "pid \(pids.map(String.init).joined(separator: ", "))"
+        ))
+    }
+
+    let socketPath = getSocketPath()
+    if fm.fileExists(atPath: socketPath) {
+        let start = Date()
+        if let response = sendSocketCommand("status") {
+            let ms = Date().timeIntervalSince(start) * 1000.0
+            let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = "round-trip \(String(format: "%.1f", ms)) ms via \(socketPath)" + (trimmed.isEmpty ? "" : " — daemon: \(trimmed)")
+            checks.append(DoctorCheck(
+                id: "runtime.socket",
+                category: runtimeCategory,
+                title: "IPC Unix socket ping",
+                status: .pass,
+                detail: detail
+            ))
+        } else {
+            checks.append(DoctorCheck(
+                id: "runtime.socket",
+                category: runtimeCategory,
+                title: "IPC Unix socket ping",
+                status: .fail,
+                detail: "Socket exists at \(socketPath) but connect failed.",
+                fixHint: "Restart the daemon with 'dms restart'."
+            ))
+        }
+    } else if pids.isEmpty {
+        checks.append(DoctorCheck(
+            id: "runtime.socket",
+            category: runtimeCategory,
+            title: "IPC Unix socket ping",
+            status: .warn,
+            detail: "Socket missing at \(socketPath) (daemon not running).",
+            fixHint: "Start the daemon with 'dms start'."
+        ))
+    } else {
+        checks.append(DoctorCheck(
+            id: "runtime.socket",
+            category: runtimeCategory,
+            title: "IPC Unix socket ping",
+            status: .fail,
+            detail: "Daemon is running but the socket is missing at \(socketPath).",
+            fixHint: "Restart the daemon with 'dms restart'."
+        ))
+    }
+
+    let settingsCandidates = [
+        "\(appSupport)/DMS/settings.json",   // ConfigStore path
+        "\(appSupport)/DMS/config.json",      // legacy ConfigStore path
+        "\(configHome)/DankMaterialShell/settings.json"
+    ]
+    if let settingsPath = settingsCandidates.first(where: { fm.fileExists(atPath: $0) }) {
+        do {
+            let config = try DMSConfig.loadThrowing(from: URL(fileURLWithPath: settingsPath))
+            checks.append(DoctorCheck(
+                id: "runtime.settings",
+                category: runtimeCategory,
+                title: "settings.json parses (DMSConfig)",
+                status: .pass,
+                detail: "\(settingsPath) — schema v\(config.version), theme '\(config.theme)', \(config.includes.count) $include fragment(s)"
+            ))
+        } catch {
+            checks.append(DoctorCheck(
+                id: "runtime.settings",
+                category: runtimeCategory,
+                title: "settings.json parses (DMSConfig)",
+                status: .fail,
+                detail: "\(settingsPath) — \(error.localizedDescription)",
+                fixHint: "Fix the JSON syntax in \(settingsPath), or move the file aside to fall back to defaults."
+            ))
+        }
+    } else {
+        checks.append(DoctorCheck(
+            id: "runtime.settings",
+            category: runtimeCategory,
+            title: "settings.json parses (DMSConfig)",
+            status: .info,
+            detail: "No user settings file found (looked in: \(settingsCandidates.joined(separator: ", "))) — defaults in use."
+        ))
+    }
+
+    // MARK: b) App Bundle & Signing
+    let bundleCategory = "App Bundle & Signing"
+    let appPath = resolveAppPath()
+
+    if let appPath {
+        checks.append(DoctorCheck(
+            id: "bundle.exists",
+            category: bundleCategory,
+            title: "DankMacShell.app bundle",
+            status: .pass,
+            detail: appPath
+        ))
+        let sign = runDoctorTool("/usr/bin/codesign", ["-dv", "--verbose=2", appPath])
+        if sign.status == 0 {
+            let identifier = sign.output.components(separatedBy: "\n").first { $0.hasPrefix("Identifier=") } ?? ""
+            checks.append(DoctorCheck(
+                id: "bundle.signature",
+                category: bundleCategory,
+                title: "App code signature",
+                status: .pass,
+                detail: identifier.isEmpty ? "codesign -dv OK for \(appPath)" : "\(identifier) — codesign -dv OK"
+            ))
+        } else {
+            checks.append(DoctorCheck(
+                id: "bundle.signature",
+                category: bundleCategory,
+                title: "App code signature",
+                status: .warn,
+                detail: "codesign -dv exited with status \(sign.status) for \(appPath).",
+                fixHint: "Re-sign the app with 'dms setup-cert' (or ./build.sh)."
+            ))
+        }
+    } else {
+        checks.append(DoctorCheck(
+            id: "bundle.exists",
+            category: bundleCategory,
+            title: "DankMacShell.app bundle",
+            status: .fail,
+            detail: "Not found in ~/Applications, /Applications, or /Applications/Nix Apps.",
+            fixHint: "Run ./build.sh to build and install DankMacShell.app into ~/Applications."
+        ))
+    }
+
+    let identities = runDoctorTool("/usr/bin/security", ["find-identity", "-p", "codesigning", "-v"])
+    if identities.output.contains("\"dms-cert\"") {
+        checks.append(DoctorCheck(
+            id: "bundle.cert",
+            category: bundleCategory,
+            title: "Persistent 'dms-cert' signing identity",
+            status: .pass,
+            detail: "\"dms-cert\" present in the login keychain — TCC grants survive app updates."
+        ))
+    } else {
+        checks.append(DoctorCheck(
+            id: "bundle.cert",
+            category: bundleCategory,
+            title: "Persistent 'dms-cert' signing identity",
+            status: .warn,
+            detail: "security find-identity -p codesigning -v lists no \"dms-cert\" identity.",
+            fixHint: "Run ./build.sh (or 'dms setup-cert') to create the persistent dms-cert identity and re-sign DankMacShell.app so TCC permissions persist across updates."
+        ))
+    }
+
+    // MARK: c) WidgetKit Extension
+    let widgetCategory = "WidgetKit Extension"
+    let widgetBundleID = DMSWidgetSnapshotStore.extensionBundleID
+
+    if let appPath {
+        let appexPath = "\(appPath)/Contents/PlugIns/DMSWidgets.appex"
+        if fm.fileExists(atPath: appexPath) {
+            checks.append(DoctorCheck(
+                id: "widgets.appex",
+                category: widgetCategory,
+                title: "DMSWidgets.appex embedded in app bundle",
+                status: .pass,
+                detail: appexPath
+            ))
+        } else {
+            checks.append(DoctorCheck(
+                id: "widgets.appex",
+                category: widgetCategory,
+                title: "DMSWidgets.appex embedded in app bundle",
+                status: .fail,
+                detail: "Missing at \(appexPath).",
+                fixHint: "Rebuild with ./build.sh so the WidgetKit extension is embedded under Contents/PlugIns."
+            ))
+        }
+    } else {
+        checks.append(DoctorCheck(
+            id: "widgets.appex",
+            category: widgetCategory,
+            title: "DMSWidgets.appex embedded in app bundle",
+            status: .fail,
+            detail: "Cannot check — DankMacShell.app bundle not found.",
+            fixHint: "Run ./build.sh to build and install DankMacShell.app."
+        ))
+    }
+
+    let plugin = runDoctorTool("/usr/bin/pluginkit", ["-m", "-D", "-i", widgetBundleID])
+    if plugin.status == 0 && plugin.output.contains(widgetBundleID) {
+        checks.append(DoctorCheck(
+            id: "widgets.pluginkit",
+            category: widgetCategory,
+            title: "Widget extension registered with pluginkit",
+            status: .pass,
+            detail: "pluginkit -m -D -i \(widgetBundleID) matched."
+        ))
+    } else {
+        let appexPath = appPath.map { "\($0)/Contents/PlugIns/DMSWidgets.appex" } ?? "<app>/Contents/PlugIns/DMSWidgets.appex"
+        checks.append(DoctorCheck(
+            id: "widgets.pluginkit",
+            category: widgetCategory,
+            title: "Widget extension registered with pluginkit",
+            status: .warn,
+            detail: "pluginkit -m -D -i \(widgetBundleID) found no match (status \(plugin.status)).",
+            fixHint: "pluginkit -a \(appexPath) && pluginkit -e use -i \(widgetBundleID)"
+        ))
+    }
+
+    let snapshotURL = DMSWidgetSnapshotStore.hostSnapshotURL()
+    if fm.fileExists(atPath: snapshotURL.path),
+       let attrs = try? fm.attributesOfItem(atPath: snapshotURL.path),
+       let modDate = attrs[.modificationDate] as? Date {
+        let age = Date().timeIntervalSince(modDate)
+        if age < 300 {
+            checks.append(DoctorCheck(
+                id: "widgets.snapshot",
+                category: widgetCategory,
+                title: "widget-snapshot.json fresh",
+                status: .pass,
+                detail: "\(snapshotURL.path) — updated \(humanizeAge(age))"
+            ))
+        } else {
+            checks.append(DoctorCheck(
+                id: "widgets.snapshot",
+                category: widgetCategory,
+                title: "widget-snapshot.json fresh",
+                status: .warn,
+                detail: "\(snapshotURL.path) — last updated \(humanizeAge(age)).",
+                fixHint: "Start DankMacShell ('dms start') so the host refreshes the widget snapshot."
+            ))
+        }
+    } else {
+        checks.append(DoctorCheck(
+            id: "widgets.snapshot",
+            category: widgetCategory,
+            title: "widget-snapshot.json fresh",
+            status: .warn,
+            detail: "Missing at \(snapshotURL.path).",
+            fixHint: "Start DankMacShell ('dms start'); the host writes the snapshot the widget extension reads."
+        ))
+    }
+
+    // MARK: d) macOS Permissions (TCC)
+    let tccCategory = "macOS Permissions (TCC)"
+
+    // NOTE: these APIs answer for *this CLI process*, which inherits the terminal's
+    // trust — not necessarily DankMacShell.app's. The labels say so explicitly.
+    let axOptions = ["AXTrustedCheckOptionPrompt": false] as CFDictionary
+    if AXIsProcessTrustedWithOptions(axOptions) {
+        checks.append(DoctorCheck(
+            id: "tcc.accessibility",
+            category: tccCategory,
+            title: "Accessibility / Device Control (this CLI process)",
+            status: .pass,
+            detail: "AXIsProcessTrustedWithOptions = true for the terminal running dms — this reflects the terminal's trust, not necessarily the app's."
+        ))
+    } else {
+        checks.append(DoctorCheck(
+            id: "tcc.accessibility",
+            category: tccCategory,
+            title: "Accessibility / Device Control (this CLI process)",
+            status: .warn,
+            detail: "AXIsProcessTrustedWithOptions = false — the CLI inherits the terminal's trust; DankMacShell.app may still be trusted separately.",
+            fixHint: "Open System Settings > Privacy & Security > Accessibility (Device Control and Data Access) and enable DankMacShell, or run 'dms onboard'."
+        ))
+    }
+
+    if CGPreflightListenEventAccess() {
+        checks.append(DoctorCheck(
+            id: "tcc.input-monitoring",
+            category: tccCategory,
+            title: "Input Monitoring (this CLI process)",
+            status: .pass,
+            detail: "CGPreflightListenEventAccess = true for the terminal running dms — again, terminal trust, not necessarily the app's."
+        ))
+    } else {
+        checks.append(DoctorCheck(
+            id: "tcc.input-monitoring",
+            category: tccCategory,
+            title: "Input Monitoring (this CLI process)",
+            status: .warn,
+            detail: "CGPreflightListenEventAccess = false — the CLI inherits the terminal's trust; DankMacShell.app may still be trusted separately.",
+            fixHint: "Open System Settings > Privacy & Security > Input Monitoring and enable DankMacShell, or run 'dms onboard'."
+        ))
+    }
+
+    // MARK: e) Companion Tools
+    let toolsCategory = "Companion Tools"
+
+    func toolCheck(id: String, names: [String], title: String, missingStatus: DoctorCheckStatus, installHint: String) {
+        if let path = names.compactMap({ findExecutableOnPath($0) }).first {
+            checks.append(DoctorCheck(
+                id: id,
+                category: toolsCategory,
+                title: title,
+                status: .pass,
+                detail: path
+            ))
+        } else {
+            checks.append(DoctorCheck(
+                id: id,
+                category: toolsCategory,
+                title: title,
+                status: missingStatus,
+                detail: "Not found on PATH (looked for: \(names.joined(separator: ", "))).",
+                fixHint: installHint
+            ))
+        }
+    }
+
+    toolCheck(id: "tools.dms-gop", names: ["dms-gop", "dgop"], title: "dms-gop / dgop helper",
+              missingStatus: .info, installHint: "Install dms-gop (or dgop) — DMS companion helper binary.")
+    toolCheck(id: "tools.dte", names: ["dte"], title: "dank-theme-engine (dte)",
+              missingStatus: .warn, installHint: "Install dank-theme-engine (dte) — required for live terminal theme sync.")
+    toolCheck(id: "tools.omniwmctl", names: ["omniwmctl"], title: "omniwmctl",
+              missingStatus: .info, installHint: "Install omniwmctl to enable OmniWM window-border auto-theming.")
+    toolCheck(id: "tools.tailscale", names: ["tailscale"], title: "Tailscale CLI",
+              missingStatus: .info, installHint: "Install Tailscale ('brew install tailscale') for VPN status in DankBar.")
+    toolCheck(id: "tools.gh", names: ["gh"], title: "GitHub CLI (gh)",
+              missingStatus: .info, installHint: "Install GitHub CLI ('brew install gh') for GitHub sign-in and notifications.")
+    toolCheck(id: "tools.swift", names: ["swift"], title: "Swift toolchain",
+              missingStatus: .warn, installHint: "Install Xcode Command Line Tools ('xcode-select --install') — media-bridge.swift needs swift.")
+
+    // MARK: f) Theme Sync Wiring
+    let themeCategory = "Theme Sync Wiring"
+
+    func themeWiringCheck(
+        target: ThemeSyncTarget,
+        configPaths: [String],
+        isWired: (String) -> Bool
+    ) {
+        // Only audit apps that are genuinely installed on this machine.
+        guard TerminalThemeDetector.isTargetInstalled(target) else { return }
+        let snippet = target.setupSnippet ?? ""
+        guard let configPath = configPaths.first(where: { fm.fileExists(atPath: $0) }) else {
+            checks.append(DoctorCheck(
+                id: "theme.\(target.rawValue)",
+                category: themeCategory,
+                title: "\(target.rawValue) theme include wired",
+                status: .warn,
+                detail: "\(target.rawValue) is installed but no config file found (looked in: \(configPaths.joined(separator: ", "))).",
+                fixHint: "Create the config file and add '\(snippet)'."
+            ))
+            return
+        }
+        let text = (try? String(contentsOfFile: configPath, encoding: .utf8)) ?? ""
+        if isWired(text) {
+            checks.append(DoctorCheck(
+                id: "theme.\(target.rawValue)",
+                category: themeCategory,
+                title: "\(target.rawValue) theme include wired",
+                status: .pass,
+                detail: "\(configPath) references the DMS theme file (\(target.relativePathSummary))."
+            ))
+        } else {
+            checks.append(DoctorCheck(
+                id: "theme.\(target.rawValue)",
+                category: themeCategory,
+                title: "\(target.rawValue) theme include wired",
+                status: .warn,
+                detail: "\(configPath) does not reference the DMS theme file (\(target.relativePathSummary)).",
+                fixHint: "Add '\(snippet)' to \(configPath)."
+            ))
+        }
+    }
+
+    themeWiringCheck(
+        target: .kitty,
+        configPaths: ["\(configHome)/kitty/kitty.conf"],
+        isWired: { EmulatorReload.kittyConfigReferencesTheme($0) }
+    )
+    themeWiringCheck(
+        target: .ghostty,
+        configPaths: ["\(configHome)/ghostty/config"],
+        isWired: { text in
+            for rawLine in text.split(separator: "\n") {
+                let line = rawLine.trimmingCharacters(in: .whitespaces)
+                if line.isEmpty || line.hasPrefix("#") { continue }
+                if line.contains("themes/dms") || (line.contains("theme") && line.contains("dms")) { return true }
+            }
+            return false
+        }
+    )
+    themeWiringCheck(
+        target: .alacritty,
+        configPaths: ["\(configHome)/alacritty/alacritty.toml", "\(configHome)/alacritty/alacritty.yml"],
+        isWired: { text in
+            for rawLine in text.split(separator: "\n") {
+                let line = rawLine.trimmingCharacters(in: .whitespaces)
+                if line.isEmpty || line.hasPrefix("#") { continue }
+                if line.contains("dms-theme.toml") && line.contains("import") { return true }
+            }
+            return false
+        }
+    )
+    themeWiringCheck(
+        target: .tmux,
+        configPaths: ["\(home)/.tmux.conf", "\(configHome)/tmux/tmux.conf"],
+        isWired: { EmulatorReload.tmuxConfigReferencesTheme($0) }
+    )
+
+    // MARK: Render & exit
+    let report = DoctorReport(
+        version: version,
+        macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+        architecture: currentMachineArchitecture(),
+        generatedAt: Date(),
+        checks: checks
+    )
+
+    if jsonOutput {
+        do {
+            print(try report.renderJSON())
+        } catch {
+            writeStderr("dms doctor: failed to encode JSON report: \(error.localizedDescription)")
+            exit(2)
+        }
+    } else {
+        let useColor = isatty(STDOUT_FILENO) != 0 && !noColor
+        print(report.renderText(useColor: useColor))
+    }
+    exit(report.recommendedExitCode)
+}
+
 let args = Array(CommandLine.arguments.dropFirst())
 guard let command = args.first?.lowercased() else {
     printHelp()
@@ -803,45 +1341,7 @@ case "status":
     }
 
 case "doctor":
-    print("=== DankMaterialShell Doctor (macOS Diagnostic) ===")
-    let running = isDMSRunning()
-    print("[\(running ? "✓" : "✗")] Daemon running: \(running ? "YES" : "NO (use 'dms run')")")
-
-    let socketExists = FileManager.default.fileExists(atPath: getSocketPath())
-    print("[\(socketExists ? "✓" : "✗")] IPC Unix Socket: \(socketExists ? getSocketPath() : "Missing")")
-
-    let settingsPath = ("~/Library/Application Support/DMS/settings.json" as NSString).expandingTildeInPath
-    let configPath = ("~/Library/Application Support/DMS/config.json" as NSString).expandingTildeInPath
-    let configExists = FileManager.default.fileExists(atPath: settingsPath) || FileManager.default.fileExists(atPath: configPath)
-    let activePath = FileManager.default.fileExists(atPath: settingsPath) ? settingsPath : configPath
-    print("[\(configExists ? "✓" : "✗")] User Config: \(configExists ? activePath : "Default fallback")")
-
-    let notesPath = ("~/Library/Application Support/DMS/notes.json" as NSString).expandingTildeInPath
-    print("[\(FileManager.default.fileExists(atPath: notesPath) ? "✓" : "i")] Notepad storage: \(notesPath)")
-
-    let clipPath = ("~/Library/Application Support/DMS/clipboard_history.json" as NSString).expandingTildeInPath
-    print("[\(FileManager.default.fileExists(atPath: clipPath) ? "✓" : "i")] Clipboard history storage: \(clipPath)")
-
-    if running, socketExists, let daemonDoc = sendSocketCommand("doctor") {
-        print("\nLive Daemon Diagnostics:")
-        for line in daemonDoc.components(separatedBy: "\n") {
-            print("  \(line)")
-        }
-        if daemonDoc.contains("AXTrusted=false") {
-            print("\n[!] Device Control and Data Access Permission: NOT GRANTED")
-            print("    Media keys are in passive listening mode.")
-            print("    Run 'dms permission' and toggle DankMacShell ON to enable active event swallowing.")
-        }
-    } else {
-        print("\nSubsystems check:")
-        print("[✓] CoreAudio: Enabled")
-        print("[✓] CoreWLAN: Enabled")
-        print("[✓] IOBluetooth: Enabled")
-        print("[✓] IOKit Power Sources: Enabled")
-        print("[✓] DisplayServices: Brightness dynamic lookup")
-        print("[✓] CBBlueLightClient: Night Shift dynamic lookup")
-    }
-    print("Doctor check complete.")
+    runDoctor(Array(args.dropFirst()))
 
 case "dmenu":
     runDMenu(args: Array(args.dropFirst()))

@@ -488,6 +488,24 @@ public struct SettingsWidgetCatalog {
             icon: "network.badge.shield.half.filled"
         ),
         BarWidgetMeta(
+            id: "pomodoro",
+            name: "Pomodoro Timer",
+            description: "Focus & break countdown timer with popout controls",
+            icon: "timer"
+        ),
+        BarWidgetMeta(
+            id: "tailscale",
+            name: "Tailscale Mesh",
+            description: "Tailscale VPN status, exit node picker & mesh peers popout",
+            icon: "network.badge.shield.half.filled"
+        ),
+        BarWidgetMeta(
+            id: "githubNotifications",
+            name: "GitHub Notifications",
+            description: "Unread GitHub notifications counter & feed popout",
+            icon: "bell.badge.fill"
+        ),
+        BarWidgetMeta(
             id: "wifi",
             name: "Wi-Fi",
             description: "Wireless network connection indicator",
@@ -512,6 +530,51 @@ public struct SettingsWidgetCatalog {
             icon: "line.diagonal"
         )
     ]
+
+    // MARK: - Plugin bar-widget mapping (v0.9.9 first-class plugin widgets)
+
+    /// Maps a plugin id to its first-class DankBar widget id. Built-in plugins get
+    /// dedicated widget ids; any other (local/custom) plugin gets `"plugin:<id>"`.
+    public static func barWidgetID(forPluginID pluginID: String) -> String {
+        switch pluginID {
+        case "pomodoro-timer": return "pomodoro"
+        case "tailscale-status": return "tailscale"
+        case "github-notifications": return "githubNotifications"
+        default: return "plugin:\(pluginID)"
+        }
+    }
+
+    /// Inverse of `barWidgetID(forPluginID:)`. Returns the backing plugin id for a
+    /// plugin-backed bar widget id, or nil for built-in non-plugin widgets.
+    public static func pluginID(forBarWidgetID widgetID: String) -> String? {
+        switch widgetID {
+        case "pomodoro": return "pomodoro-timer"
+        case "tailscale": return "tailscale-status"
+        case "githubNotifications": return "github-notifications"
+        default:
+            if widgetID.hasPrefix("plugin:") {
+                return String(widgetID.dropFirst("plugin:".count))
+            }
+            return nil
+        }
+    }
+
+    /// Resolves widget metadata for a bar widget id: the built-in catalog first,
+    /// then a matching local/custom `"plugin:<id>"` entry from the installed plugins.
+    public static func meta(for id: String, plugins: [DMSPlugin] = []) -> BarWidgetMeta? {
+        if let found = all.first(where: { $0.id == id }) {
+            return found
+        }
+        guard id.hasPrefix("plugin:") else { return nil }
+        let pluginID = String(id.dropFirst("plugin:".count))
+        guard let plugin = plugins.first(where: { $0.id == pluginID }) else { return nil }
+        return BarWidgetMeta(
+            id: id,
+            name: plugin.name,
+            description: plugin.description,
+            icon: plugin.icon
+        )
+    }
 
     public static func addWidget(to section: Section, widgetId: String, in layout: inout BarLayout) {
         let meta = all.first(where: { $0.id == widgetId })

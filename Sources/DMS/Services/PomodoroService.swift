@@ -13,11 +13,26 @@ public final class PomodoroService: ObservableObject {
     @Published public private(set) var remainingSeconds: Int = 25 * 60
     @Published public private(set) var endDate: Date? = nil
     @Published public private(set) var completedSessions: Int = 0
+    @Published public private(set) var workMinutes: Int = 25
+    @Published public private(set) var breakMinutes: Int = 5
 
     public var phaseLabel: String { isBreak ? "Break" : "Focus" }
 
     public var formattedRemaining: String {
         String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60)
+    }
+
+    /// Total seconds of the current phase (focus or break) based on the configured durations.
+    public var totalPhaseSeconds: Int {
+        (isBreak ? breakMinutes : workMinutes) * 60
+    }
+
+    /// Elapsed fraction of the current phase, 0.0...1.0.
+    public var progress: Double {
+        let total = totalPhaseSeconds
+        guard total > 0 else { return 0.0 }
+        let elapsed = total - remainingSeconds
+        return min(1.0, max(0.0, Double(elapsed) / Double(total)))
     }
 
     private var timer: Timer?
@@ -52,7 +67,22 @@ public final class PomodoroService: ObservableObject {
         isRunning = false
         stopTimer()
         isBreak = false
-        remainingSeconds = 25 * 60
+        remainingSeconds = workMinutes * 60
+        endDate = nil
+        WidgetSnapshotService.shared.syncNow(forceReload: true)
+    }
+
+    /// Applies a work/break preset: updates the durations and stops/resets cleanly
+    /// to the new work duration, then pushes a fresh widget snapshot.
+    public func applyPreset(workMinutes: Int, breakMinutes: Int) {
+        let clampedWork = max(1, min(180, workMinutes))
+        let clampedBreak = max(1, min(60, breakMinutes))
+        self.workMinutes = clampedWork
+        self.breakMinutes = clampedBreak
+        isRunning = false
+        stopTimer()
+        isBreak = false
+        remainingSeconds = clampedWork * 60
         endDate = nil
         WidgetSnapshotService.shared.syncNow(forceReload: true)
     }
@@ -96,9 +126,10 @@ public final class PomodoroService: ObservableObject {
         }
         isBreak.toggle()
         if isBreak {
-            remainingSeconds = (completedSessions % 4 == 0) ? 15 * 60 : 5 * 60
+            // Long break every 4th session: 3x the configured break (15 min at the 5 min default).
+            remainingSeconds = (completedSessions % 4 == 0) ? breakMinutes * 3 * 60 : breakMinutes * 60
         } else {
-            remainingSeconds = 25 * 60
+            remainingSeconds = workMinutes * 60
         }
         isRunning = false
         stopTimer()
